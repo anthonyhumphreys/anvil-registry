@@ -37,6 +37,47 @@ describe("queue factory", () => {
     });
   });
 
+  it("normalizes queued analysis jobs before storing them", async () => {
+    const queue = new MemoryJobQueue();
+
+    await queue.enqueueAnalysisJob({
+      packageName: " pkg ",
+      version: " 1.0.0 ",
+      requestedBy: " reviewer ",
+      reason: "metadata_request",
+      priority: "normal",
+      createdAt: " 2026-05-20T00:00:00.000Z "
+    });
+
+    const jobs: unknown[] = [];
+    for await (const job of queue.receiveAnalysisJobs()) jobs.push(job);
+
+    expect(jobs).toEqual([
+      expect.objectContaining({
+        id: expect.any(String),
+        packageName: "pkg",
+        version: "1.0.0",
+        requestedBy: "reviewer",
+        reason: "metadata_request",
+        priority: "normal",
+        createdAt: "2026-05-20T00:00:00.000Z"
+      })
+    ]);
+  });
+
+  it("rejects malformed analysis jobs before enqueueing them", async () => {
+    const queue = new MemoryJobQueue();
+    const malformedJob = {
+      packageName: "pkg",
+      version: "1.0.0",
+      reason: "metadata_request",
+      priority: "urgent",
+      createdAt: "2026-05-20T00:00:00.000Z"
+    } as unknown as Parameters<MemoryJobQueue["enqueueAnalysisJob"]>[0];
+
+    await expect(queue.enqueueAnalysisJob(malformedJob)).rejects.toThrow();
+  });
+
   it("sends analysis jobs to SQS", async () => {
     const client = new FakeSqsClient();
     const queue = new SqsJobQueue({ queueUrl: "https://sqs.example.test/queue", region: "us-east-1", client });

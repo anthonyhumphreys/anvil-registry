@@ -24,7 +24,7 @@ export class MemoryJobQueue implements JobQueue {
   async healthCheck(): Promise<void> {}
 
   async enqueueAnalysisJob(job: AnalysisJob): Promise<void> {
-    this.jobs.push({ ...job, id: job.id ?? crypto.randomUUID() });
+    this.jobs.push(normalizeAnalysisJob(job, crypto.randomUUID()));
   }
 
   async *receiveAnalysisJobs(): AsyncIterable<AnalysisJob> {
@@ -50,7 +50,8 @@ export class BullMqJobQueue implements JobQueue {
   }
 
   async enqueueAnalysisJob(job: AnalysisJob): Promise<void> {
-    await this.queue.add("analysis", { ...job, id: job.id ?? crypto.randomUUID() }, { priority: priorityValue(job.priority) });
+    const normalized = normalizeAnalysisJob(job, crypto.randomUUID());
+    await this.queue.add("analysis", normalized, { priority: priorityValue(normalized.priority) });
   }
 
   async healthCheck(): Promise<void> {
@@ -82,7 +83,7 @@ export class SqsJobQueue implements JobQueue {
   }
 
   async enqueueAnalysisJob(job: AnalysisJob): Promise<void> {
-    const jobWithId = { ...job, id: job.id ?? crypto.randomUUID() };
+    const jobWithId = normalizeAnalysisJob(job, crypto.randomUUID());
     await this.client.send(
       new SendMessageCommand({
         QueueUrl: this.queueUrl,
@@ -136,7 +137,7 @@ export async function createBullMqAnalysisWorker(options: {
   const worker = new Worker<AnalysisJob>(
     options.queueName,
     async (job: Job<AnalysisJob>) => {
-      await options.handler({ ...job.data, id: job.data.id ?? job.id });
+      await options.handler(normalizeAnalysisJob(job.data, job.id));
     },
     workerOptions
   );
@@ -233,8 +234,12 @@ function priorityValue(priority: AnalysisJob["priority"]): number {
 }
 
 function parseSqsAnalysisJob(body: string, messageId?: string): AnalysisJob {
-  const parsed = analysisJobSchema.parse(JSON.parse(body));
-  return { ...parsed, id: parsed.id ?? messageId };
+  return normalizeAnalysisJob(JSON.parse(body), messageId);
+}
+
+function normalizeAnalysisJob(job: unknown, fallbackId?: string): AnalysisJob {
+  const candidate = typeof job === "object" && job ? { ...job, id: (job as AnalysisJob).id ?? fallbackId } : job;
+  return analysisJobSchema.parse(candidate);
 }
 
 export type SqsClientLike = {
