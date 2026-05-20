@@ -18,10 +18,12 @@ import { createObjectStore, type ObjectStore } from "@anvil/object-store";
 import { createPersistence, type AnvilPersistence } from "@anvil/persistence";
 import { evaluatePolicy } from "@anvil/policy-engine";
 import { createJobQueue, type JobQueue } from "@anvil/queue";
-import { buildAnvilError, buildPolicyDecisionAuditEvent, isDecisionBlockingInstall, type PolicyDecision } from "@anvil/shared";
+import { buildAnvilError, buildPolicyDecisionAuditEvent, isDecisionBlockingInstall, type AnalysisJob, type PolicyDecision } from "@anvil/shared";
 
 const metadataPolicyAnalyserVersion = "metadata-policy-2026-05-20.1";
 type ReadinessComponent = "persistence" | "objectStore" | "queue";
+const analysisReasons = new Set<AnalysisJob["reason"]>(["metadata_request", "tarball_request", "lockfile_scan", "manual_review"]);
+const analysisPriorities = new Set<AnalysisJob["priority"]>(["low", "normal", "high"]);
 
 export type GatewayDependencies = {
   config?: AnvilConfig;
@@ -55,6 +57,52 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
     return { ok, upstream: config.UPSTREAM_NPM_REGISTRY, checks };
   });
   app.get("/-/anvil/policy", async () => ({ runtimeMode: config.RUNTIME_MODE, policy: config.policy }));
+
+  app.post<{
+    Body: {
+      packageName?: string;
+      version?: string;
+      targets?: Array<{ packageName?: string; version?: string }>;
+      reason?: AnalysisJob["reason"];
+      priority?: AnalysisJob["priority"];
+      requestedBy?: string;
+    };
+  }>("/-/anvil/analyze", async (request, reply) => {
+    if (config.ADMIN_TOKEN && request.headers.authorization !== `Bearer ${config.ADMIN_TOKEN}`) {
+      return reply.code(401).send({ error: "ANVIL_ADMIN_TOKEN_REQUIRED" });
+    }
+
+    const body = request.body ?? {};
+    const targets = analysisTargetsFromBody(body);
+    if (targets.length === 0) return reply.code(400).send({ error: "ANVIL_ANALYZE_REQUIRES_TARGETS" });
+
+    const reason = body.reason && analysisReasons.has(body.reason) ? body.reason : "manual_review";
+    const priority = body.priority && analysisPriorities.has(body.priority) ? body.priority : "normal";
+    const createdAt = new Date().toISOString();
+    const jobs = targets.map((target) => ({
+      packageName: target.packageName,
+      version: target.version,
+      requestedBy: body.requestedBy ?? "anvil-gateway",
+      reason,
+      priority,
+      createdAt
+    }));
+
+    await Promise.all(jobs.map((job) => queue.enqueueAnalysisJob(job)));
+    await Promise.all(
+      jobs.map((job) =>
+        persistence.putAuditEvent({
+          actor: job.requestedBy,
+          eventType: "analysis.enqueued",
+          targetType: "package",
+          targetId: `${job.packageName}@${job.version}`,
+          metadata: { source: "gateway", reason: job.reason, priority: job.priority }
+        })
+      )
+    );
+
+    return reply.code(202).send({ ok: true, queued: jobs.length, jobs });
+  });
 
   app.post<{
     Body: { packageName: string; version: string };
@@ -356,4 +404,25 @@ function tarballCacheKey(packageName: string, version: string, integrity: string
   const safeName = packageName.replace(/^@/, "").replace(/[\/:]/g, "__");
   const safeIntegrity = integrity.replace(/[\/:+=]/g, "_");
   return `tarballs/${safeName}/${version}/${safeIntegrity}.tgz`;
+}
+
+function analysisTargetsFromBody(body: {
+  packageName?: string;
+  version?: string;
+  targets?: Array<{ packageName?: string; version?: string }>;
+}) {
+  const targets = body.targets?.length ? body.targets : body.packageName ? [{ packageName: body.packageName, version: body.version }] : [];
+  const seen = new Set<string>();
+  return targets
+    .map((target) => ({
+      packageName: target.packageName?.trim(),
+      version: target.version?.trim() || "latest"
+    }))
+    .filter((target): target is { packageName: string; version: string } => Boolean(target.packageName))
+    .filter((target) => {
+      const key = `${target.packageName}@${target.version}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 }

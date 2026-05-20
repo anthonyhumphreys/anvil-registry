@@ -176,6 +176,56 @@ importers:
     await expect(run(["scan", "package-lock.json"], dependencies)).resolves.toBe(1);
   });
 
+  it("warms metadata and queues lockfile analysis jobs", async () => {
+    const writes: string[] = [];
+    const fetch = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === "http://anvil.test/pkg" || url === "http://anvil.test/%40scope/pkg") return jsonResponse({ ok: true });
+      if (url === "http://anvil.test/-/anvil/analyze") {
+        expect(init).toMatchObject({
+          method: "POST",
+          headers: expect.objectContaining({ authorization: "Bearer secret" })
+        });
+        expect(JSON.parse(String(init?.body))).toEqual({
+          targets: [
+            { packageName: "@scope/pkg", version: "2.0.0" },
+            { packageName: "pkg", version: "1.0.0" }
+          ],
+          reason: "lockfile_scan",
+          priority: "normal",
+          requestedBy: "anvil-cli"
+        });
+        return jsonResponse({ ok: true, queued: 2 });
+      }
+      throw new Error(`Unexpected URL ${url}`);
+    });
+    const dependencies = fakeDependencies({
+      env: { ANVIL_REGISTRY_URL: "http://anvil.test", ADMIN_TOKEN: "secret" },
+      readFile: vi.fn(async () =>
+        JSON.stringify({
+          packages: {
+            "node_modules/pkg": { version: "1.0.0" },
+            "node_modules/@scope/pkg": { version: "2.0.0" }
+          }
+        })
+      ),
+      fetch: fetch as unknown as typeof globalThis.fetch,
+      stdout: {
+        write: (value: string) => {
+          writes.push(value);
+          return true;
+        }
+      }
+    });
+
+    const exitCode = await run(["warm", "package-lock.json"], dependencies);
+
+    expect(exitCode).toBe(0);
+    expect(fetch).toHaveBeenCalledWith("http://anvil.test/pkg", undefined);
+    expect(fetch).toHaveBeenCalledWith("http://anvil.test/%40scope/pkg", undefined);
+    expect(writes.join("")).toContain("Warmed metadata and policy decisions for 2 packages from package-lock.json.");
+    expect(writes.join("")).toContain("Queued analysis for 2 package versions from package-lock.json.");
+  });
+
   it("tests package.json dependency policy through the gateway", async () => {
     const writes: string[] = [];
     const dependencies = fakeDependencies({

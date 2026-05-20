@@ -162,7 +162,9 @@ async function warm(args: string[], dependencies: CliDependencies): Promise<numb
   const registryUrl = registryBaseUrl(dependencies.env);
 
   await Promise.all(packages.map((packageName) => requestJson(dependencies, `${registryUrl}/${encodePackagePath(packageName)}`)));
+  const queued = await enqueueAnalysisTargets(targets, dependencies, registryUrl);
   dependencies.stdout.write(`Warmed metadata and policy decisions for ${packages.length} packages from ${path}.\n`);
+  dependencies.stdout.write(`Queued analysis for ${queued} package versions from ${path}.\n`);
   return 0;
 }
 
@@ -285,6 +287,19 @@ async function explainTarget(target: PackageTarget, dependencies: CliDependencie
     headers: { "content-type": "application/json" },
     body: JSON.stringify(target)
   });
+}
+
+async function enqueueAnalysisTargets(targets: PackageTarget[], dependencies: CliDependencies, registryUrl: string): Promise<number> {
+  if (targets.length === 0) return 0;
+  const result = await requestJson<{ queued: number }>(dependencies, `${registryUrl}/-/anvil/analyze`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      ...(dependencies.env.ADMIN_TOKEN ? { authorization: `Bearer ${dependencies.env.ADMIN_TOKEN}` } : {})
+    },
+    body: JSON.stringify({ targets, reason: "lockfile_scan", priority: "normal", requestedBy: "anvil-cli" })
+  });
+  return result.queued ?? targets.length;
 }
 
 function printDecision(result: ExplainResult, dependencies: CliDependencies) {

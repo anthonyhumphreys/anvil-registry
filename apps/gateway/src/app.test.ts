@@ -407,6 +407,59 @@ describe("gateway policy enforcement", () => {
     await app.close();
   });
 
+  it("enqueues manual analysis jobs for package targets", async () => {
+    const persistence = new MemoryPersistence();
+    const queue = new MemoryJobQueue();
+    const app = buildGateway({
+      config: loadConfig({ ...process.env, ADMIN_TOKEN: "secret", PERSISTENCE_DRIVER: "memory" }),
+      persistence,
+      queue,
+      registry: {
+        fetchMetadata: vi.fn(),
+        fetchTarball: vi.fn()
+      },
+      downloadStats: noDownloadStats()
+    });
+
+    const rejected = await app.inject({
+      method: "POST",
+      url: "/-/anvil/analyze",
+      payload: { targets: [{ packageName: "pkg", version: "1.0.0" }], reason: "lockfile_scan" }
+    });
+    const accepted = await app.inject({
+      method: "POST",
+      url: "/-/anvil/analyze",
+      headers: { authorization: "Bearer secret" },
+      payload: {
+        targets: [
+          { packageName: "pkg", version: "1.0.0" },
+          { packageName: "pkg", version: "1.0.0" },
+          { packageName: "@scope/pkg", version: "2.0.0" }
+        ],
+        reason: "lockfile_scan",
+        requestedBy: "anvil-cli"
+      }
+    });
+    const queuedJobs = [];
+    for await (const job of queue.receiveAnalysisJobs()) queuedJobs.push(job);
+
+    expect(rejected.statusCode).toBe(401);
+    expect(accepted.statusCode).toBe(202);
+    expect(accepted.json()).toMatchObject({ ok: true, queued: 2 });
+    expect(queuedJobs).toEqual([
+      expect.objectContaining({ packageName: "pkg", version: "1.0.0", reason: "lockfile_scan", priority: "normal", requestedBy: "anvil-cli" }),
+      expect.objectContaining({ packageName: "@scope/pkg", version: "2.0.0", reason: "lockfile_scan", priority: "normal", requestedBy: "anvil-cli" })
+    ]);
+    expect(await persistence.listAuditEvents()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ eventType: "analysis.enqueued", targetId: "pkg@1.0.0" }),
+        expect.objectContaining({ eventType: "analysis.enqueued", targetId: "@scope/pkg@2.0.0" })
+      ])
+    );
+
+    await app.close();
+  });
+
   it("writes an audit event when an override is created", async () => {
     const persistence = new MemoryPersistence();
     const app = buildGateway({

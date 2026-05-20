@@ -201,6 +201,7 @@ GET /:packageName/-/:tarballName
 GET /@:scope/:packageName/-/:tarballName
 
 POST /-/anvil/explain
+POST /-/anvil/analyze
 POST /-/anvil/override
 GET  /-/anvil/policy
 ```
@@ -303,6 +304,10 @@ node apps/worker/dist/index.js --health-check
 ```
 
 The command must exit `0` only when the worker can reach required runtime dependencies for consuming jobs and persisting results. At minimum that means persistence and the configured analysis queue. Docker Compose and SST should use this as the worker container health check.
+
+### Manual and lockfile analysis enqueue
+
+The gateway exposes `POST /-/anvil/analyze` so developer tools can enqueue explicit package analysis without waiting for a blocked metadata or tarball request. It accepts either a single `packageName`/`version` pair or a `targets` array, deduplicates exact package/version pairs, and enqueues `AnalysisJob` messages with `manual_review` by default. CLI lockfile warming uses `reason: "lockfile_scan"` so worker output can be traced back to preinstall review rather than install-path enforcement.
 
 ---
 
