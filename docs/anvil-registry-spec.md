@@ -1239,6 +1239,8 @@ The `DatabaseMigration` task uses the same Drizzle migration runner as local Doc
 
 The gateway service uses `/-/health` for the ECS container health check and `/-/ready` for the load-balancer target health check. The process can stay alive while a dependency is unavailable, but traffic should not be routed to a target that cannot reach Postgres, object storage, or the analysis queue.
 
+The SST deployment also creates an admin Fargate service using `apps/admin/Dockerfile`, exposes `/-/health` as its load-balancer health check, and links an `AdminToken` secret into both gateway and admin as `ADMIN_TOKEN`. That keeps override creation, index uploads, and manual analysis enqueueing token-gated in production.
+
 Run the deployed migration task through SST's linked resource shell:
 
 ```bash

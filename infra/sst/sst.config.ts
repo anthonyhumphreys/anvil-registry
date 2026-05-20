@@ -12,6 +12,7 @@ export default $config({
     const cluster = new sst.aws.Cluster("Cluster", { vpc });
     const bucket = new sst.aws.Bucket("PackageCache");
     const queue = new sst.aws.Queue("AnalysisQueue");
+    const adminToken = new sst.Secret("AdminToken");
     const database = new sst.aws.Postgres("Database", {
       vpc,
       database: "anvil",
@@ -88,8 +89,43 @@ export default $config({
       environment: {
         ...commonServiceEnvironment,
         PUBLIC_BASE_URL: "https://npm.anvil.example.com",
+        ADMIN_TOKEN: adminToken.value
       },
-      link: [bucket, queue, database]
+      link: [bucket, queue, database, adminToken]
+    });
+
+    const admin = new sst.aws.Service("Admin", {
+      cluster,
+      image: {
+        context: "../..",
+        dockerfile: "apps/admin/Dockerfile"
+      },
+      loadBalancer: {
+        rules: [{ listen: "443/https", forward: "3000/http" }],
+        health: {
+          "3000/http": {
+            path: "/-/health",
+            successCodes: "200",
+            interval: "30 seconds",
+            timeout: "5 seconds",
+            healthyThreshold: 2,
+            unhealthyThreshold: 2
+          }
+        }
+      },
+      health: {
+        command: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/-/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""],
+        startPeriod: "30 seconds",
+        interval: "30 seconds",
+        timeout: "5 seconds",
+        retries: 3
+      },
+      environment: {
+        ...commonServiceEnvironment,
+        ANVIL_API_BASE_URL: "https://npm.anvil.example.com",
+        ADMIN_TOKEN: adminToken.value
+      },
+      link: [bucket, database, adminToken]
     });
 
     new sst.aws.Service("Worker", {
@@ -111,6 +147,7 @@ export default $config({
 
     return {
       gatewayUrl: gateway.url,
+      adminUrl: admin.url,
       migrationTask: "DatabaseMigration",
       databaseHost: database.host
     };
