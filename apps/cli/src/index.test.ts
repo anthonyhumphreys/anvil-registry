@@ -489,6 +489,23 @@ importers:
     );
   });
 
+  it("prefers ANVIL_ADMIN_TOKEN for admin-gated CLI requests", async () => {
+    const dependencies = fakeDependencies({
+      fetch: vi.fn(async () => jsonResponse({ ok: true })),
+      env: { ANVIL_REGISTRY_URL: "http://anvil.test", ADMIN_TOKEN: "legacy-secret", ANVIL_ADMIN_TOKEN: "anvil-secret" }
+    });
+
+    const exitCode = await run(["approve", "pkg@1.0.0", "--reason", "intentional"], dependencies);
+
+    expect(exitCode).toBe(0);
+    expect(dependencies.fetch).toHaveBeenCalledWith(
+      "http://anvil.test/-/anvil/override",
+      expect.objectContaining({
+        headers: expect.objectContaining({ authorization: "Bearer anvil-secret" })
+      })
+    );
+  });
+
   it("revokes approval overrides with admin token", async () => {
     const writes: string[] = [];
     const dependencies = fakeDependencies({

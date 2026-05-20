@@ -232,7 +232,7 @@ async function approve(args: string[], dependencies: CliDependencies): Promise<n
     method: "POST",
     headers: {
       "content-type": "application/json",
-      ...(dependencies.env.ADMIN_TOKEN ? { authorization: `Bearer ${dependencies.env.ADMIN_TOKEN}` } : {})
+      ...adminAuthHeader(dependencies.env)
     },
     body: JSON.stringify({ ...target, reason, action: action ?? "allow", ...(expiresAt ? { expiresAt } : {}) })
   });
@@ -251,7 +251,7 @@ async function revoke(args: string[], dependencies: CliDependencies): Promise<nu
     method: "POST",
     headers: {
       "content-type": "application/json",
-      ...(dependencies.env.ADMIN_TOKEN ? { authorization: `Bearer ${dependencies.env.ADMIN_TOKEN}` } : {})
+      ...adminAuthHeader(dependencies.env)
     },
     body: JSON.stringify({ ...target, revokedBy })
   });
@@ -270,7 +270,7 @@ async function llmReview(args: string[], dependencies: CliDependencies): Promise
     method: "POST",
     headers: {
       "content-type": "application/json",
-      ...(dependencies.env.ADMIN_TOKEN ? { authorization: `Bearer ${dependencies.env.ADMIN_TOKEN}` } : {})
+      ...adminAuthHeader(dependencies.env)
     },
     body: JSON.stringify({ ...target, requestedBy, ...(priority ? { priority } : {}) })
   });
@@ -298,7 +298,7 @@ async function popularIndexUpload(args: string[], dependencies: CliDependencies)
     method: "POST",
     headers: {
       "content-type": "application/json",
-      ...(dependencies.env.ADMIN_TOKEN ? { authorization: `Bearer ${dependencies.env.ADMIN_TOKEN}` } : {})
+      ...adminAuthHeader(dependencies.env)
     },
     body: JSON.stringify({ ...index, ...(generatedAt ? { generatedAt } : index.generatedAt ? { generatedAt: index.generatedAt } : {}), uploadedBy })
   });
@@ -379,7 +379,7 @@ async function enqueueAnalysisTargets(targets: PackageTarget[], dependencies: Cl
     method: "POST",
     headers: {
       "content-type": "application/json",
-      ...(dependencies.env.ADMIN_TOKEN ? { authorization: `Bearer ${dependencies.env.ADMIN_TOKEN}` } : {})
+      ...adminAuthHeader(dependencies.env)
     },
     body: JSON.stringify({ targets, reason: "lockfile_scan", priority: "normal", requestedBy: "anvil-cli" })
   });
@@ -529,6 +529,11 @@ function adminBaseUrl(env: NodeJS.ProcessEnv): string {
   return (env.ANVIL_ADMIN_URL || "http://localhost:3000").replace(/\/+$/, "");
 }
 
+function adminAuthHeader(env: NodeJS.ProcessEnv): { authorization?: string } {
+  const token = env.ANVIL_ADMIN_TOKEN || env.ADMIN_TOKEN;
+  return token ? { authorization: `Bearer ${token}` } : {};
+}
+
 type NodeBaseReportRecord = {
   id?: string;
   source: string;
@@ -672,6 +677,8 @@ function usage() {
   anvil node-base reports [--type dependency|lifecycle|ioc|network] [--risk risky|high|medium] [--limit 20]
   anvil node-base report <id>
   anvil policy test package.json
+
+Admin-gated commands read ANVIL_ADMIN_TOKEN, falling back to ADMIN_TOKEN.
 `;
 }
 
