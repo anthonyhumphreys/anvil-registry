@@ -45,6 +45,8 @@ ANVIL_STRICT_LIFECYCLE_MODE=any
 
 `ANVIL_STRICT_LIFECYCLE_MODE=any` preserves the safe-mode default: any dependency lifecycle script fails strict safe installs. Set it to `risk` to fail only when lifecycle script findings meet `ANVIL_STRICT_RISK_LEVEL`, or `off` to report lifecycle scripts without failing.
 
+The gate counts both summary fields and the finding arrays themselves, so reports cannot bypass strict mode just because a producer forgot to fill in a summary counter. Tiny paperwork errors should not become policy decisions.
+
 ## Registry Integration
 
 Set `ANVIL_REGISTRY_URL` or pass a URL directly:

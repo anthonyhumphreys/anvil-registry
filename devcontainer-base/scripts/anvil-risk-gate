@@ -56,8 +56,20 @@ case "$STRICT_LIFECYCLE_MODE" in
     ;;
 esac
 
-HIGH_COUNT="$(jq '[.highConfidenceFindings[]?, .summary.high?, .summary.highConfidenceFindings?] | map(select(type == "number")) | add // 0' "$REPORT_PATH")"
-MEDIUM_COUNT="$(jq '[.mediumConfidenceFindings[]?, .summary.medium?, .summary.mediumConfidenceFindings?] | map(select(type == "number")) | add // 0' "$REPORT_PATH")"
+HIGH_COUNT="$(
+  jq '[
+    (.highConfidenceFindings | if type == "array" then length else 0 end),
+    (.summary.high // 0),
+    (.summary.highConfidenceFindings // 0)
+  ] | map(select(type == "number")) | add // 0' "$REPORT_PATH"
+)"
+MEDIUM_COUNT="$(
+  jq '[
+    (.mediumConfidenceFindings | if type == "array" then length else 0 end),
+    (.summary.medium // 0),
+    (.summary.mediumConfidenceFindings // 0)
+  ] | map(select(type == "number")) | add // 0' "$REPORT_PATH"
+)"
 LIFECYCLE_COUNT="$(jq '(.summary.packagesWithLifecycleScripts // (.packages | length) // 0)' "$REPORT_PATH")"
 
 should_block_for_risk=false

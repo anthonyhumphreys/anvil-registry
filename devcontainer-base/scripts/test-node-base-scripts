@@ -115,6 +115,37 @@ ANVIL_STRICT=true ANVIL_STRICT_RISK_LEVEL=medium anvil-risk-gate "$WORK_DIR/logs
 }
 test "$?" = "22"
 
+cat > "$WORK_DIR/logs/array-only-high-report.json" <<'JSON'
+{
+  "highConfidenceFindings": [
+    { "code": "CREDENTIAL_FILE_ACCESS" }
+  ],
+  "mediumConfidenceFindings": [],
+  "summary": {}
+}
+JSON
+ANVIL_STRICT=true anvil-risk-gate "$WORK_DIR/logs/array-only-high-report.json" ioc >/tmp/anvil-risk-gate-array-high.out && {
+  echo "[anvil] Expected array-only high-risk IOC gate to fail" >&2
+  exit 1
+}
+test "$?" = "21"
+
+cat > "$WORK_DIR/logs/array-only-medium-report.json" <<'JSON'
+{
+  "highConfidenceFindings": [],
+  "mediumConfidenceFindings": [
+    { "code": "NON_STANDARD_PORT" }
+  ],
+  "summary": {}
+}
+JSON
+ANVIL_STRICT=true anvil-risk-gate "$WORK_DIR/logs/array-only-medium-report.json" network
+ANVIL_STRICT=true ANVIL_STRICT_RISK_LEVEL=medium anvil-risk-gate "$WORK_DIR/logs/array-only-medium-report.json" network >/tmp/anvil-risk-gate-array-medium.out && {
+  echo "[anvil] Expected array-only medium-risk network gate to fail" >&2
+  exit 1
+}
+test "$?" = "22"
+
 ANVIL_STRICT=true anvil-risk-gate "$WORK_DIR/project/lifecycle.json" lifecycle >/tmp/anvil-risk-gate-lifecycle-any.out && {
   echo "[anvil] Expected lifecycle-any gate to fail" >&2
   exit 1
