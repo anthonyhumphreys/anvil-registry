@@ -18,7 +18,15 @@ import { createObjectStore, type ObjectStore } from "@anvil/object-store";
 import { createPersistence, type AnvilPersistence } from "@anvil/persistence";
 import { evaluatePolicy } from "@anvil/policy-engine";
 import { createJobQueue, type JobQueue } from "@anvil/queue";
-import { buildAnvilError, buildPolicyDecisionAuditEvent, isDecisionBlockingInstall, resolveOverrideExpiry, type AnalysisJob, type PolicyDecision } from "@anvil/shared";
+import {
+  buildAnvilError,
+  buildPolicyDecisionAuditEvent,
+  isDecisionBlockingInstall,
+  nodeBaseReportSubmissionSchema,
+  resolveOverrideExpiry,
+  type AnalysisJob,
+  type PolicyDecision
+} from "@anvil/shared";
 
 const metadataPolicyAnalyserVersion = "metadata-policy-2026-05-20.1";
 type ReadinessComponent = "persistence" | "objectStore" | "queue";
@@ -225,24 +233,31 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
   });
 
   app.post<{
-    Body: { source?: string; projectName?: string; reportType?: string; summary?: Record<string, unknown>; report?: unknown };
+    Body: unknown;
   }>("/-/anvil/node-base/reports", async (request, reply) => {
     if (config.ADMIN_TOKEN && request.headers.authorization !== `Bearer ${config.ADMIN_TOKEN}`) {
       return reply.code(401).send({ error: "ANVIL_ADMIN_TOKEN_REQUIRED" });
     }
-    if (!request.body || !request.body.reportType || request.body.report === undefined) {
-      return reply.code(400).send({ error: "ANVIL_NODE_BASE_REPORT_REQUIRES_TYPE_AND_REPORT" });
+    const parsed = nodeBaseReportSubmissionSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "ANVIL_NODE_BASE_REPORT_INVALID",
+        issues: parsed.error.issues.map((issue) => ({ path: issue.path.join("."), message: issue.message }))
+      });
     }
+    const body = parsed.data;
+    const embeddedSummary = body.report.summary;
+    const summary = body.summary ?? (embeddedSummary && typeof embeddedSummary === "object" && !Array.isArray(embeddedSummary) ? (embeddedSummary as Record<string, unknown>) : undefined);
 
     const record = await persistence.putNodeBaseReport({
-      source: request.body.source || "anvil-node-base",
-      projectName: request.body.projectName || undefined,
-      reportType: request.body.reportType,
-      summary: request.body.summary,
-      report: request.body.report
+      source: body.source || "anvil-node-base",
+      projectName: body.projectName,
+      reportType: body.reportType,
+      summary,
+      report: body.report
     });
     await persistence.putAuditEvent({
-      actor: request.body.source || "anvil-node-base",
+      actor: body.source || "anvil-node-base",
       eventType: "node_base_report.submitted",
       targetType: "node_base_report",
       targetId: record.id ?? `${record.source}:${record.createdAt ?? ""}`,

@@ -773,7 +773,7 @@ save-exact=true
 
 - Support `ANVIL_REGISTRY_URL`.
 - Generate `.npmrc` pointing to Anvil Registry.
-- Send reports to Anvil Registry or Admin API.
+- Send validated JSON reports to Anvil Registry via `POST /-/anvil/node-base/reports`, passing `ANVIL_ADMIN_TOKEN` when the gateway is token-gated.
 
 ## Phase 5: Publish image
 
@@ -783,4 +783,3 @@ save-exact=true
   - `22`
   - `22-bookworm`
   - `latest`
-

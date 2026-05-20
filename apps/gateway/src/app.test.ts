@@ -653,14 +653,22 @@ describe("gateway policy enforcement", () => {
       url: "/-/anvil/node-base/reports",
       payload: { source: "devcontainer", reportType: "dependency", report: { summary: { high: 1 } } }
     });
+    const invalid = await app.inject({
+      method: "POST",
+      url: "/-/anvil/node-base/reports",
+      headers: { authorization: "Bearer secret" },
+      payload: { source: "devcontainer", reportType: "../dependency", report: "not-json-object" }
+    });
     const accepted = await app.inject({
       method: "POST",
       url: "/-/anvil/node-base/reports",
       headers: { authorization: "Bearer secret" },
-      payload: { source: "devcontainer", projectName: "demo", reportType: "dependency", summary: { high: 1 }, report: { summary: { high: 1 } } }
+      payload: { source: " devcontainer ", projectName: " demo ", reportType: "dependency", report: { summary: { high: 1 } } }
     });
 
     expect(rejected.statusCode).toBe(401);
+    expect(invalid.statusCode).toBe(400);
+    expect(invalid.json()).toMatchObject({ error: "ANVIL_NODE_BASE_REPORT_INVALID" });
     expect(accepted.statusCode).toBe(201);
     expect(await persistence.listNodeBaseReports()).toEqual([
       expect.objectContaining({ source: "devcontainer", projectName: "demo", reportType: "dependency", summary: { high: 1 } })

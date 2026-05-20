@@ -241,6 +241,23 @@ export type AnalysisJob = {
   createdAt: string;
 };
 
+export const nodeBaseReportSubmissionSchema = z
+  .object({
+    source: z.string().trim().min(1).max(100).optional(),
+    projectName: z.string().trim().min(1).max(200).optional(),
+    reportType: z
+      .string()
+      .trim()
+      .min(1)
+      .max(40)
+      .regex(/^[a-z][a-z0-9_-]*$/),
+    summary: z.record(z.unknown()).optional(),
+    report: z.record(z.unknown())
+  })
+  .strict();
+
+export type NodeBaseReportSubmission = z.infer<typeof nodeBaseReportSubmissionSchema>;
+
 export type AnvilErrorResponse = {
   error: "ANVIL_PACKAGE_BLOCKED" | "ANVIL_PACKAGE_QUARANTINED";
   package: string;

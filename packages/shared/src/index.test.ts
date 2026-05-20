@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildPolicyDecisionAuditEvent, resolveOverrideExpiry } from "./index.js";
+import { buildPolicyDecisionAuditEvent, nodeBaseReportSubmissionSchema, resolveOverrideExpiry } from "./index.js";
 
 describe("buildPolicyDecisionAuditEvent", () => {
   it("builds the shared policy decision audit event shape", () => {
@@ -52,5 +52,31 @@ describe("resolveOverrideExpiry", () => {
 
   it("rejects invalid explicit expiry timestamps", () => {
     expect(resolveOverrideExpiry("next whenever-ish", 30)).toBeNull();
+  });
+});
+
+describe("nodeBaseReportSubmissionSchema", () => {
+  it("normalizes valid Node Base report submissions", () => {
+    expect(
+      nodeBaseReportSubmissionSchema.parse({
+        source: " devcontainer ",
+        projectName: " demo ",
+        reportType: "network",
+        summary: { medium: 1 },
+        report: { summary: { medium: 1 } }
+      })
+    ).toEqual({
+      source: "devcontainer",
+      projectName: "demo",
+      reportType: "network",
+      summary: { medium: 1 },
+      report: { summary: { medium: 1 } }
+    });
+  });
+
+  it("rejects blank, malformed, or non-object report submissions", () => {
+    expect(nodeBaseReportSubmissionSchema.safeParse({ reportType: "", report: {} }).success).toBe(false);
+    expect(nodeBaseReportSubmissionSchema.safeParse({ reportType: "../dependency", report: {} }).success).toBe(false);
+    expect(nodeBaseReportSubmissionSchema.safeParse({ reportType: "dependency", report: "not-json-object" }).success).toBe(false);
   });
 });
