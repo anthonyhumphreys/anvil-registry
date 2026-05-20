@@ -67,6 +67,34 @@ const optionalTrimmedString = (max: number) =>
     return trimmed.length > 0 ? trimmed : undefined;
   }, z.string().max(max).optional());
 
+export const analysisJobReasonSchema = z.enum(["metadata_request", "tarball_request", "lockfile_scan", "manual_review"]);
+export type AnalysisJobReason = z.infer<typeof analysisJobReasonSchema>;
+
+export const analysisJobPrioritySchema = z.enum(["low", "normal", "high"]);
+export type AnalysisJobPriority = z.infer<typeof analysisJobPrioritySchema>;
+
+export const packageTargetSchema = z
+  .object({
+    packageName: requiredTrimmedString(214),
+    version: optionalTrimmedString(128)
+  })
+  .strict();
+
+export type PackageTarget = z.infer<typeof packageTargetSchema>;
+
+export const packageTargetRequestSchema = z
+  .object({
+    packageName: optionalTrimmedString(214),
+    version: optionalTrimmedString(128),
+    targets: z.array(packageTargetSchema).max(100).optional(),
+    reason: analysisJobReasonSchema.optional(),
+    priority: analysisJobPrioritySchema.optional(),
+    requestedBy: optionalTrimmedString(200)
+  })
+  .strict();
+
+export type PackageTargetRequest = z.infer<typeof packageTargetRequestSchema>;
+
 export const overrideCreateRequestSchema = z
   .object({
     packageName: requiredTrimmedString(214),

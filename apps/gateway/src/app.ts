@@ -25,15 +25,15 @@ import {
   nodeBaseReportSubmissionSchema,
   overrideCreateRequestSchema,
   overrideRevokeRequestSchema,
+  packageTargetRequestSchema,
   resolveOverrideExpiry,
   type AnalysisJob,
+  type PackageTargetRequest,
   type PolicyDecision
 } from "@anvil/shared";
 
 const metadataPolicyAnalyserVersion = "metadata-policy-2026-05-20.1";
 type ReadinessComponent = "persistence" | "objectStore" | "queue";
-const analysisReasons = new Set<AnalysisJob["reason"]>(["metadata_request", "tarball_request", "lockfile_scan", "manual_review"]);
-const analysisPriorities = new Set<AnalysisJob["priority"]>(["low", "normal", "high"]);
 
 export type GatewayDependencies = {
   config?: AnvilConfig;
@@ -74,25 +74,22 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
   app.get("/-/anvil/policy", async () => ({ runtimeMode: config.RUNTIME_MODE, policy: config.policy }));
 
   app.post<{
-    Body: {
-      packageName?: string;
-      version?: string;
-      targets?: Array<{ packageName?: string; version?: string }>;
-      reason?: AnalysisJob["reason"];
-      priority?: AnalysisJob["priority"];
-      requestedBy?: string;
-    };
+    Body: unknown;
   }>("/-/anvil/analyze", async (request, reply) => {
     if (config.ADMIN_TOKEN && request.headers.authorization !== `Bearer ${config.ADMIN_TOKEN}`) {
       return reply.code(401).send({ error: "ANVIL_ADMIN_TOKEN_REQUIRED" });
     }
 
-    const body = request.body ?? {};
+    const parsed = packageTargetRequestSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "ANVIL_ANALYZE_INVALID", issues: validationIssues(parsed.error) });
+    }
+    const body = parsed.data;
     const targets = analysisTargetsFromBody(body);
     if (targets.length === 0) return reply.code(400).send({ error: "ANVIL_ANALYZE_REQUIRES_TARGETS" });
 
-    const reason = body.reason && analysisReasons.has(body.reason) ? body.reason : "manual_review";
-    const priority = body.priority && analysisPriorities.has(body.priority) ? body.priority : "normal";
+    const reason = body.reason ?? "manual_review";
+    const priority = body.priority ?? "normal";
     const createdAt = new Date().toISOString();
     const jobs = targets.map((target) => ({
       packageName: target.packageName,
@@ -120,13 +117,7 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
   });
 
   app.post<{
-    Body: {
-      packageName?: string;
-      version?: string;
-      targets?: Array<{ packageName?: string; version?: string }>;
-      priority?: AnalysisJob["priority"];
-      requestedBy?: string;
-    };
+    Body: unknown;
   }>("/-/anvil/llm-review", async (request, reply) => {
     if (config.ADMIN_TOKEN && request.headers.authorization !== `Bearer ${config.ADMIN_TOKEN}`) {
       return reply.code(401).send({ error: "ANVIL_ADMIN_TOKEN_REQUIRED" });
@@ -135,11 +126,15 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
       return reply.code(409).send({ error: "ANVIL_LLM_REVIEW_DISABLED" });
     }
 
-    const body = request.body ?? {};
+    const parsed = packageTargetRequestSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "ANVIL_LLM_REVIEW_INVALID", issues: validationIssues(parsed.error) });
+    }
+    const body = parsed.data;
     const targets = analysisTargetsFromBody(body);
     if (targets.length === 0) return reply.code(400).send({ error: "ANVIL_LLM_REVIEW_REQUIRES_TARGETS" });
 
-    const priority = body.priority && analysisPriorities.has(body.priority) ? body.priority : "high";
+    const priority = body.priority ?? "high";
     const createdAt = new Date().toISOString();
     const jobs = targets.map((target) => ({
       packageName: target.packageName,
@@ -168,9 +163,13 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
   });
 
   app.post<{
-    Body: { packageName?: string; version?: string };
+    Body: unknown;
   }>("/-/anvil/explain", async (request, reply) => {
-    const targets = analysisTargetsFromBody(request.body ?? {});
+    const parsed = packageTargetRequestSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "ANVIL_EXPLAIN_INVALID", issues: validationIssues(parsed.error) });
+    }
+    const targets = analysisTargetsFromBody(parsed.data);
     const target = targets[0];
     if (!target) return reply.code(400).send({ error: "ANVIL_EXPLAIN_REQUIRES_TARGET" });
 
@@ -495,11 +494,7 @@ function tarballCacheKey(packageName: string, version: string, integrity: string
   return `tarballs/${safeName}/${version}/${safeIntegrity}.tgz`;
 }
 
-function analysisTargetsFromBody(body: {
-  packageName?: string;
-  version?: string;
-  targets?: Array<{ packageName?: string; version?: string }>;
-}) {
+function analysisTargetsFromBody(body: PackageTargetRequest) {
   const targets = body.targets?.length ? body.targets : body.packageName ? [{ packageName: body.packageName, version: body.version }] : [];
   const seen = new Set<string>();
   return targets

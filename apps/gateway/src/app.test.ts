@@ -480,9 +480,16 @@ describe("gateway policy enforcement", () => {
       url: "/-/anvil/explain",
       payload: { version: "1.0.0" }
     });
+    const invalid = await app.inject({
+      method: "POST",
+      url: "/-/anvil/explain",
+      payload: { targets: [null] }
+    });
 
     expect(response.statusCode).toBe(400);
     expect(response.json()).toMatchObject({ error: "ANVIL_EXPLAIN_REQUIRES_TARGET" });
+    expect(invalid.statusCode).toBe(400);
+    expect(invalid.json()).toMatchObject({ error: "ANVIL_EXPLAIN_INVALID" });
     expect(fetchMetadata).not.toHaveBeenCalled();
     await app.close();
   });
@@ -520,11 +527,19 @@ describe("gateway policy enforcement", () => {
         requestedBy: "anvil-cli"
       }
     });
+    const invalid = await app.inject({
+      method: "POST",
+      url: "/-/anvil/analyze",
+      headers: { authorization: "Bearer secret" },
+      payload: { targets: [null] }
+    });
     const queuedJobs = [];
     for await (const job of queue.receiveAnalysisJobs()) queuedJobs.push(job);
 
     expect(rejected.statusCode).toBe(401);
     expect(accepted.statusCode).toBe(202);
+    expect(invalid.statusCode).toBe(400);
+    expect(invalid.json()).toMatchObject({ error: "ANVIL_ANALYZE_INVALID" });
     expect(accepted.json()).toMatchObject({ ok: true, queued: 2 });
     expect(queuedJobs).toEqual([
       expect.objectContaining({ packageName: "pkg", version: "1.0.0", reason: "lockfile_scan", priority: "normal", requestedBy: "anvil-cli" }),
@@ -578,11 +593,19 @@ describe("gateway policy enforcement", () => {
         requestedBy: "reviewer"
       }
     });
+    const invalid = await app.inject({
+      method: "POST",
+      url: "/-/anvil/llm-review",
+      headers: { authorization: "Bearer secret" },
+      payload: { packageName: "pkg", priority: "urgent" }
+    });
     const queuedJobs = [];
     for await (const job of queue.receiveAnalysisJobs()) queuedJobs.push(job);
 
     expect(rejected.statusCode).toBe(401);
     expect(accepted.statusCode).toBe(202);
+    expect(invalid.statusCode).toBe(400);
+    expect(invalid.json()).toMatchObject({ error: "ANVIL_LLM_REVIEW_INVALID" });
     expect(accepted.json()).toMatchObject({ ok: true, queued: 2 });
     expect(queuedJobs).toEqual([
       expect.objectContaining({ packageName: "pkg", version: "1.0.0", reason: "manual_review", priority: "high", requestedBy: "reviewer", runLlmReview: true }),

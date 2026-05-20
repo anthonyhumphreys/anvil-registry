@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { buildPolicyDecisionAuditEvent, nodeBaseReportSubmissionSchema, overrideCreateRequestSchema, overrideRevokeRequestSchema, resolveOverrideExpiry } from "./index.js";
+import {
+  buildPolicyDecisionAuditEvent,
+  nodeBaseReportSubmissionSchema,
+  overrideCreateRequestSchema,
+  overrideRevokeRequestSchema,
+  packageTargetRequestSchema,
+  resolveOverrideExpiry
+} from "./index.js";
 
 describe("buildPolicyDecisionAuditEvent", () => {
   it("builds the shared policy decision audit event shape", () => {
@@ -84,6 +91,34 @@ describe("override request schemas", () => {
       packageName: "pkg",
       revokedBy: "reviewer"
     });
+  });
+});
+
+describe("package target request schema", () => {
+  it("normalizes package target request fields", () => {
+    expect(
+      packageTargetRequestSchema.parse({
+        targets: [
+          { packageName: " pkg ", version: " 1.0.0 " },
+          { packageName: "@scope/pkg", version: "" }
+        ],
+        reason: "lockfile_scan",
+        priority: "high",
+        requestedBy: " reviewer "
+      })
+    ).toEqual({
+      targets: [{ packageName: "pkg", version: "1.0.0" }, { packageName: "@scope/pkg" }],
+      reason: "lockfile_scan",
+      priority: "high",
+      requestedBy: "reviewer"
+    });
+  });
+
+  it("rejects malformed package target requests", () => {
+    expect(packageTargetRequestSchema.safeParse({ targets: [null] }).success).toBe(false);
+    expect(packageTargetRequestSchema.safeParse({ targets: [{ packageName: "" }] }).success).toBe(false);
+    expect(packageTargetRequestSchema.safeParse({ packageName: "pkg", priority: "urgent" }).success).toBe(false);
+    expect(packageTargetRequestSchema.safeParse({ packageName: "pkg", unexpected: true }).success).toBe(false);
   });
 });
 

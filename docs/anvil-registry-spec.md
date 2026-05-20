@@ -212,6 +212,8 @@ GET  /-/anvil/policy
 
 `POST /-/anvil/explain` requires a package target (`packageName`, with optional `version` defaulting to `latest`) and should reject malformed input before fetching upstream metadata.
 
+`POST /-/anvil/analyze` and `POST /-/anvil/llm-review` accept either one target (`packageName`, optional `version`) or a `targets` array. Target request bodies are validated, trimmed, deduplicated, and rejected with HTTP 400 when malformed rather than being allowed to wander into queueing code wearing a false moustache.
+
 `POST /-/anvil/override` and `POST /-/anvil/override/revoke` are token-gated mutation routes. Create requests must include a non-empty `packageName` and `reason`, default `action` to `allow`, trim string fields, reject unknown actions, and validate payloads before writing overrides or audit events.
 
 `POST /-/anvil/node-base/reports` accepts token-gated Anvil Node Base JSON reports for Admin visibility. The body is validated with Zod, requires a simple report type and JSON object report, and may include `source`, `projectName`, and `summary`. If `summary` is omitted, the gateway can lift `report.summary` into the persisted report summary.
