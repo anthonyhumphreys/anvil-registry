@@ -357,6 +357,8 @@ anvil explain react@19.0.0
 anvil explain @tanstack/react-query@latest
 anvil warm package-lock.json
 anvil approve package@version --reason "intentional dependency" --expires-at 2026-06-20T00:00:00Z
+anvil popular-index show
+anvil popular-index upload popular-index.json --generated-at 2026-05-20T00:00:00Z
 anvil policy test package.json
 anvil doctor
 ```
@@ -1471,6 +1473,7 @@ When blocked, return useful JSON.
 - `anvil scan`.
 - `anvil explain`.
 - `anvil warm`.
+- `anvil popular-index show/upload`.
 
 ## Phase 6: SST production deployment
 

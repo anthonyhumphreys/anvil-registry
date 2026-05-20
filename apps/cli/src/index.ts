@@ -2,6 +2,7 @@
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { loadConfig } from "@anvil/config";
+import { parsePopularPackageIndex, type PopularPackageIndex } from "@anvil/name-squatting";
 import type { AnalysisReport, LlmRiskReview, Override, PolicyDecision } from "@anvil/shared";
 
 type ReadTextFile = (path: string) => Promise<string>;
@@ -30,6 +31,8 @@ export async function run(argv: string[], dependencies: CliDependencies = defaul
     if (command === "warm") return await warm(args, dependencies);
     if (command === "smoke") return await smoke(args, dependencies);
     if (command === "approve") return await approve(args, dependencies);
+    if (command === "popular-index" && args[0] === "show") return await popularIndexShow(args.slice(1), dependencies);
+    if (command === "popular-index" && args[0] === "upload") return await popularIndexUpload(args.slice(1), dependencies);
     if (command === "node-base" && args[0] === "reports") return await nodeBaseReports(args.slice(1), dependencies);
     if (command === "node-base" && args[0] === "report") return await nodeBaseReport(args.slice(1), dependencies);
     if (command === "policy" && args[0] === "test") return await policyTest(args.slice(1), dependencies);
@@ -235,6 +238,36 @@ async function approve(args: string[], dependencies: CliDependencies): Promise<n
   return 0;
 }
 
+async function popularIndexShow(_args: string[], dependencies: CliDependencies): Promise<number> {
+  const adminUrl = adminBaseUrl(dependencies.env);
+  const index = await requestJson<PopularPackageIndex>(dependencies, `${adminUrl}/api/popular-package-index`);
+  printPopularPackageIndex(index, dependencies);
+  return 0;
+}
+
+async function popularIndexUpload(args: string[], dependencies: CliDependencies): Promise<number> {
+  const path = args[0];
+  if (!path) throw new Error("Usage: anvil popular-index upload popular-index.json [--generated-at 2026-05-20T00:00:00Z]");
+  const generatedAt = readFlag(args, "--generated-at");
+  const uploadedBy = readFlag(args, "--uploaded-by") ?? "anvil-cli";
+  const index = parsePopularPackageIndex(JSON.parse(await dependencies.readFile(path)) as unknown, path);
+  const adminUrl = adminBaseUrl(dependencies.env);
+  const result = await requestJson<{ activeKey: string; datedKey: string; index: PopularPackageIndex }>(dependencies, `${adminUrl}/api/popular-package-index`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      ...(dependencies.env.ADMIN_TOKEN ? { authorization: `Bearer ${dependencies.env.ADMIN_TOKEN}` } : {})
+    },
+    body: JSON.stringify({ ...index, ...(generatedAt ? { generatedAt } : index.generatedAt ? { generatedAt: index.generatedAt } : {}), uploadedBy })
+  });
+
+  dependencies.stdout.write(`Uploaded popular package index from ${path}.\n`);
+  dependencies.stdout.write(`Active key: ${result.activeKey}\n`);
+  dependencies.stdout.write(`Dated key: ${result.datedKey}\n`);
+  printPopularPackageIndex(result.index, dependencies);
+  return 0;
+}
+
 async function policyTest(args: string[], dependencies: CliDependencies): Promise<number> {
   const path = args[0] ?? "package.json";
   const targets = await parseLockfile(path, dependencies.readFile);
@@ -318,6 +351,11 @@ function printDecision(result: ExplainResult, dependencies: CliDependencies) {
     dependencies.stdout.write("Reasons:\n");
     for (const reason of result.decision.reasons) dependencies.stdout.write(`- ${reason.message}\n`);
   }
+  const suggestedPackages = suggestedPackagesFromDecision(result.decision);
+  if (suggestedPackages.length > 0) {
+    dependencies.stdout.write("Suggested package:\n");
+    for (const packageName of suggestedPackages) dependencies.stdout.write(`- ${packageName}\n`);
+  }
   if (result.analysisReport) printAnalysisSummary(result.analysisReport, dependencies);
   if (result.llmRiskReviews?.length) printLlmRiskReviewSummary(result.llmRiskReviews, dependencies);
   if (result.override) {
@@ -327,6 +365,24 @@ function printDecision(result: ExplainResult, dependencies: CliDependencies) {
   if (result.decision.action === "block" || result.decision.action === "quarantine") {
     dependencies.stdout.write(`Override:\n- anvil approve ${result.packageName}@${result.version} --reason "intentional dependency"\n`);
   }
+}
+
+function printPopularPackageIndex(index: PopularPackageIndex, dependencies: CliDependencies) {
+  dependencies.stdout.write(`Popular package index: ${index.source}\n`);
+  dependencies.stdout.write(`Generated: ${index.generatedAt ?? "unknown"}\n`);
+  dependencies.stdout.write(`Packages: ${index.popularPackages.length}\n`);
+  dependencies.stdout.write(`Known confusions: ${Object.keys(index.knownConfusions).length}\n`);
+  for (const record of index.popularPackages.slice(0, 10)) {
+    dependencies.stdout.write(`- ${record.name}${record.weeklyDownloads !== undefined ? ` downloads=${record.weeklyDownloads}` : ""}${record.aliases?.length ? ` aliases=${record.aliases.join(",")}` : ""}\n`);
+  }
+  if (index.popularPackages.length > 10) dependencies.stdout.write(`- ... ${index.popularPackages.length - 10} more packages\n`);
+}
+
+function suggestedPackagesFromDecision(decision: PolicyDecision): string[] {
+  const suggestions = decision.reasons
+    .map((reason) => reason.evidence?.suggestedPackage)
+    .filter((packageName): packageName is string => typeof packageName === "string" && packageName.length > 0);
+  return [...new Set(suggestions)];
 }
 
 function printAnalysisSummary(report: AnalysisReport, dependencies: CliDependencies) {
@@ -559,6 +615,8 @@ function usage() {
   anvil warm package-lock.json
   anvil smoke [package]
   anvil approve package@version --reason "intentional dependency" [--expires-at 2026-06-20T00:00:00Z]
+  anvil popular-index show
+  anvil popular-index upload popular-index.json [--generated-at 2026-05-20T00:00:00Z]
   anvil node-base reports [--type dependency|lifecycle|ioc|network] [--risk risky|high|medium] [--limit 20]
   anvil node-base report <id>
   anvil policy test package.json

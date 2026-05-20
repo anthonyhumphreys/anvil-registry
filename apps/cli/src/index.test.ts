@@ -352,6 +352,124 @@ importers:
     expect(writes.join("")).toContain("Anvil warned warn-pkg@latest");
   });
 
+  it("prints suggested package evidence from policy decisions", async () => {
+    const writes: string[] = [];
+    const dependencies = fakeDependencies({
+      fetch: vi.fn(async () =>
+        jsonResponse({
+          packageName: "@tenstack/react-query",
+          version: "1.0.0",
+          decision: {
+            action: "block",
+            score: 95,
+            reasons: [
+              {
+                code: "SIMILAR_TO_POPULAR_PACKAGE",
+                message: "Package name is similar to @tanstack/react-query.",
+                severity: "critical",
+                evidence: { suggestedPackage: "@tanstack/react-query" }
+              }
+            ],
+            explanation: "@tenstack/react-query@1.0.0 is blocked by deterministic policy."
+          }
+        })
+      ),
+      stdout: {
+        write: (value: string) => {
+          writes.push(value);
+          return true;
+        }
+      }
+    });
+
+    const exitCode = await run(["explain", "@tenstack/react-query@1.0.0"], dependencies);
+
+    expect(exitCode).toBe(1);
+    expect(writes.join("")).toContain("Suggested package:");
+    expect(writes.join("")).toContain("@tanstack/react-query");
+  });
+
+  it("shows the active popular package index through the admin API", async () => {
+    const writes: string[] = [];
+    const dependencies = fakeDependencies({
+      env: { ANVIL_ADMIN_URL: "http://admin.test" },
+      fetch: vi.fn(async (url: string) => {
+        expect(url).toBe("http://admin.test/api/popular-package-index");
+        return jsonResponse({
+          source: "object:popular-index/npm/latest.json",
+          generatedAt: "2026-05-20T00:00:00.000Z",
+          popularPackages: [{ name: "lodash", weeklyDownloads: 60_000_000 }],
+          knownConfusions: { loadash: "lodash" }
+        });
+      }) as unknown as typeof globalThis.fetch,
+      stdout: {
+        write: (value: string) => {
+          writes.push(value);
+          return true;
+        }
+      }
+    });
+
+    const exitCode = await run(["popular-index", "show"], dependencies);
+
+    expect(exitCode).toBe(0);
+    expect(writes.join("")).toContain("Popular package index: object:popular-index/npm/latest.json");
+    expect(writes.join("")).toContain("Packages: 1");
+    expect(writes.join("")).toContain("Known confusions: 1");
+    expect(writes.join("")).toContain("lodash downloads=60000000");
+  });
+
+  it("uploads a validated popular package index through the admin API", async () => {
+    const writes: string[] = [];
+    const fetch = vi.fn(async (url: string, init?: RequestInit) => {
+      expect(url).toBe("http://admin.test/api/popular-package-index");
+      expect(init).toMatchObject({
+        method: "POST",
+        headers: expect.objectContaining({ authorization: "Bearer secret" })
+      });
+      expect(JSON.parse(String(init?.body))).toEqual({
+        generatedAt: "2026-05-20T00:00:00.000Z",
+        source: "popular-index.json",
+        popularPackages: [{ name: "real-package", weeklyDownloads: 100000 }],
+        knownConfusions: { "rea1-package": "real-package" },
+        uploadedBy: "security"
+      });
+      return jsonResponse({
+        activeKey: "popular-index/npm/latest.json",
+        datedKey: "popular-index/npm/2026-05-20.json",
+        index: {
+          source: "object:popular-index/npm/latest.json",
+          generatedAt: "2026-05-20T00:00:00.000Z",
+          popularPackages: [{ name: "real-package", weeklyDownloads: 100000 }],
+          knownConfusions: { "rea1-package": "real-package" }
+        }
+      });
+    });
+    const dependencies = fakeDependencies({
+      env: { ANVIL_ADMIN_URL: "http://admin.test", ADMIN_TOKEN: "secret" },
+      readFile: vi.fn(async () =>
+        JSON.stringify({
+          popularPackages: [{ name: "real-package", weeklyDownloads: 100000 }],
+          knownConfusions: { "rea1-package": "real-package" }
+        })
+      ),
+      fetch: fetch as unknown as typeof globalThis.fetch,
+      stdout: {
+        write: (value: string) => {
+          writes.push(value);
+          return true;
+        }
+      }
+    });
+
+    const exitCode = await run(["popular-index", "upload", "popular-index.json", "--generated-at", "2026-05-20T00:00:00.000Z", "--uploaded-by", "security"], dependencies);
+
+    expect(exitCode).toBe(0);
+    expect(writes.join("")).toContain("Uploaded popular package index from popular-index.json.");
+    expect(writes.join("")).toContain("Active key: popular-index/npm/latest.json");
+    expect(writes.join("")).toContain("real-package downloads=100000");
+  });
+
   it("posts approval overrides with admin token", async () => {
     const dependencies = fakeDependencies({
       fetch: vi.fn(async () => jsonResponse({ ok: true })),

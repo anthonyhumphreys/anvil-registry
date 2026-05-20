@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@anvil/config": "workspace:*",
+    "@anvil/name-squatting": "workspace:*",
     "@anvil/shared": "workspace:*"
   }
 }
