@@ -515,6 +515,88 @@ describe("gateway policy enforcement", () => {
     await app.close();
   });
 
+  it("enqueues forced LLM review jobs behind the admin token", async () => {
+    const persistence = new MemoryPersistence();
+    const queue = new MemoryJobQueue();
+    const app = buildGateway({
+      config: loadConfig({
+        ...process.env,
+        ADMIN_TOKEN: "secret",
+        LLM_REVIEW_ENABLED: "true",
+        LLM_REVIEW_ENDPOINT: "https://llm.example.test/review",
+        PERSISTENCE_DRIVER: "memory"
+      }),
+      persistence,
+      queue,
+      registry: {
+        fetchMetadata: vi.fn(),
+        fetchTarball: vi.fn()
+      },
+      downloadStats: noDownloadStats()
+    });
+
+    const rejected = await app.inject({
+      method: "POST",
+      url: "/-/anvil/llm-review",
+      payload: { targets: [{ packageName: "pkg", version: "1.0.0" }] }
+    });
+    const accepted = await app.inject({
+      method: "POST",
+      url: "/-/anvil/llm-review",
+      headers: { authorization: "Bearer secret" },
+      payload: {
+        targets: [
+          { packageName: "pkg", version: "1.0.0" },
+          { packageName: "pkg", version: "1.0.0" },
+          { packageName: "@scope/pkg", version: "latest" }
+        ],
+        requestedBy: "reviewer"
+      }
+    });
+    const queuedJobs = [];
+    for await (const job of queue.receiveAnalysisJobs()) queuedJobs.push(job);
+
+    expect(rejected.statusCode).toBe(401);
+    expect(accepted.statusCode).toBe(202);
+    expect(accepted.json()).toMatchObject({ ok: true, queued: 2 });
+    expect(queuedJobs).toEqual([
+      expect.objectContaining({ packageName: "pkg", version: "1.0.0", reason: "manual_review", priority: "high", requestedBy: "reviewer", runLlmReview: true }),
+      expect.objectContaining({ packageName: "@scope/pkg", version: "latest", reason: "manual_review", priority: "high", requestedBy: "reviewer", runLlmReview: true })
+    ]);
+    expect(await persistence.listAuditEvents()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ eventType: "llm_review.enqueued", targetId: "pkg@1.0.0" }),
+        expect.objectContaining({ eventType: "llm_review.enqueued", targetId: "@scope/pkg@latest" })
+      ])
+    );
+
+    await app.close();
+  });
+
+  it("rejects forced LLM review requests when LLM review is disabled", async () => {
+    const app = buildGateway({
+      config: loadConfig({ ...process.env, PERSISTENCE_DRIVER: "memory" }),
+      persistence: new MemoryPersistence(),
+      queue: new MemoryJobQueue(),
+      registry: {
+        fetchMetadata: vi.fn(),
+        fetchTarball: vi.fn()
+      },
+      downloadStats: noDownloadStats()
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/-/anvil/llm-review",
+      payload: { packageName: "pkg", version: "1.0.0" }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ error: "ANVIL_LLM_REVIEW_DISABLED" });
+
+    await app.close();
+  });
+
   it("writes an audit event when an override is created", async () => {
     const now = vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-05-20T00:00:00.000Z"));
     const persistence = new MemoryPersistence();

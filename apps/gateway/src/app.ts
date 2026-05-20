@@ -110,6 +110,54 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
   });
 
   app.post<{
+    Body: {
+      packageName?: string;
+      version?: string;
+      targets?: Array<{ packageName?: string; version?: string }>;
+      priority?: AnalysisJob["priority"];
+      requestedBy?: string;
+    };
+  }>("/-/anvil/llm-review", async (request, reply) => {
+    if (config.ADMIN_TOKEN && request.headers.authorization !== `Bearer ${config.ADMIN_TOKEN}`) {
+      return reply.code(401).send({ error: "ANVIL_ADMIN_TOKEN_REQUIRED" });
+    }
+    if (!config.policy.llmReview.enabled) {
+      return reply.code(409).send({ error: "ANVIL_LLM_REVIEW_DISABLED" });
+    }
+
+    const body = request.body ?? {};
+    const targets = analysisTargetsFromBody(body);
+    if (targets.length === 0) return reply.code(400).send({ error: "ANVIL_LLM_REVIEW_REQUIRES_TARGETS" });
+
+    const priority = body.priority && analysisPriorities.has(body.priority) ? body.priority : "high";
+    const createdAt = new Date().toISOString();
+    const jobs = targets.map((target) => ({
+      packageName: target.packageName,
+      version: target.version,
+      requestedBy: body.requestedBy ?? "anvil-gateway",
+      reason: "manual_review" as const,
+      priority,
+      runLlmReview: true,
+      createdAt
+    }));
+
+    await Promise.all(jobs.map((job) => queue.enqueueAnalysisJob(job)));
+    await Promise.all(
+      jobs.map((job) =>
+        persistence.putAuditEvent({
+          actor: job.requestedBy,
+          eventType: "llm_review.enqueued",
+          targetType: "package",
+          targetId: `${job.packageName}@${job.version}`,
+          metadata: { source: "gateway", priority: job.priority }
+        })
+      )
+    );
+
+    return reply.code(202).send({ ok: true, queued: jobs.length, jobs });
+  });
+
+  app.post<{
     Body: { packageName: string; version: string };
   }>("/-/anvil/explain", async (request, reply) => {
     const result = await explainVersion(request.body.packageName, request.body.version);

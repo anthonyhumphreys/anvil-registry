@@ -28,10 +28,14 @@ export async function analysePackageTarget(target: string, dependencies: WorkerA
 }
 
 export async function analyseAnalysisJob(job: AnalysisJob, dependencies: WorkerAnalysisDependencies) {
-  return analysePackageVersion({ packageName: job.packageName, version: job.version }, dependencies);
+  return analysePackageVersion({ packageName: job.packageName, version: job.version }, dependencies, { forceLlmReview: job.runLlmReview === true });
 }
 
-async function analysePackageVersion(target: { packageName: string; version: string }, dependencies: WorkerAnalysisDependencies) {
+async function analysePackageVersion(
+  target: { packageName: string; version: string },
+  dependencies: WorkerAnalysisDependencies,
+  options: { forceLlmReview?: boolean } = {}
+) {
   const metadata = await dependencies.registry.fetchMetadata(target.packageName);
   const version = target.version === "latest" ? metadata["dist-tags"]?.latest : target.version;
   if (!version) throw new Error(`Cannot resolve version for ${target.packageName}@${target.version}`);
@@ -124,7 +128,8 @@ async function analysePackageVersion(target: { packageName: string; version: str
       previousMetadata,
       targetMetadata,
       preliminaryDecision,
-      dependencies
+      dependencies,
+      forceLlmReview: options.forceLlmReview
     }
   );
   if (llmRiskReview) {
@@ -185,11 +190,18 @@ async function maybeReviewWithLlm(
     targetMetadata: PackageVersionMetadata;
     preliminaryDecision: ReturnType<typeof evaluatePolicy>;
     dependencies: WorkerAnalysisDependencies;
+    forceLlmReview?: boolean;
   }
 ): Promise<LlmRiskReview | undefined> {
   const policy = context.dependencies.config.policy.llmReview;
   if (!policy.enabled) return undefined;
-  if (!shouldRunLlmReview(context.report, context.previousMetadata, context.targetMetadata, context.preliminaryDecision, context.dependencies.config)) return undefined;
+  if (
+    !shouldRunLlmReview(context.report, context.previousMetadata, context.targetMetadata, context.preliminaryDecision, context.dependencies.config, {
+      forceLlmReview: context.forceLlmReview
+    })
+  ) {
+    return undefined;
+  }
 
   const provider =
     context.dependencies.llmRiskReviewProvider ??
@@ -212,11 +224,13 @@ function shouldRunLlmReview(
   previousMetadata: PackageVersionMetadata | undefined,
   targetMetadata: PackageVersionMetadata,
   preliminaryDecision: ReturnType<typeof evaluatePolicy>,
-  config: AnvilConfig
+  config: AnvilConfig,
+  options: { forceLlmReview?: boolean } = {}
 ) {
   const policy = config.policy.llmReview;
   if (!policy.enabled) return false;
   if (targetMetadata.private && !policy.includePrivatePackages) return false;
+  if (options.forceLlmReview) return true;
   if (policy.runOnUnknownPackages && !previousMetadata) return true;
   if (policy.runOnQuarantine && (preliminaryDecision.action === "quarantine" || preliminaryDecision.action === "block")) return true;
   return report.signals.some((signal) => signal.severity === "high" || signal.severity === "critical");

@@ -282,6 +282,45 @@ describe("worker analysis", () => {
     ]);
   });
 
+  it("runs LLM review for explicitly flagged analysis jobs", async () => {
+    const persistence = new MemoryPersistence();
+    const config = loadConfig({
+      ...process.env,
+      RUNTIME_MODE: "ci",
+      LLM_REVIEW_ENABLED: "true",
+      LLM_REVIEW_PROVIDER: "test-provider",
+      LLM_REVIEW_MODEL: "test-model"
+    });
+    const registry = { fetchMetadata: vi.fn(async () => metadata()), fetchTarball: vi.fn(async (url: string) => tarballs[url]) };
+    const review = {
+      riskLevel: "high",
+      confidence: "medium",
+      summary: "Manual LLM review requested.",
+      suspectedRiskTypes: ["unknown"],
+      evidence: [{ signal: "MANUAL_REVIEW", explanation: "Reviewer explicitly requested model context.", source: "metadata" }],
+      recommendedAction: "quarantine"
+    } satisfies LlmRiskReview;
+    const llmRiskReviewProvider: LlmRiskReviewProvider = {
+      review: vi.fn(async () => review)
+    };
+
+    const result = await analyseAnalysisJob(
+      {
+        packageName: "pkg",
+        version: "1.0.0",
+        reason: "manual_review",
+        priority: "high",
+        runLlmReview: true,
+        createdAt: "2026-05-20T00:00:00.000Z"
+      },
+      { config, registry, persistence, llmRiskReviewProvider }
+    );
+
+    expect(llmRiskReviewProvider.review).toHaveBeenCalledWith(expect.objectContaining({ packageName: "pkg", version: "1.0.0" }));
+    expect(result.decision.action).toBe("quarantine");
+    expect(await persistence.listLlmRiskReviews({ packageName: "pkg", version: "1.0.0" })).toHaveLength(1);
+  });
+
   it("does not send private package metadata to LLM review unless explicitly enabled", async () => {
     const persistence = new MemoryPersistence();
     const config = loadConfig({

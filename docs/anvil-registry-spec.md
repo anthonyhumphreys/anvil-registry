@@ -202,6 +202,7 @@ GET /@:scope/:packageName/-/:tarballName
 
 POST /-/anvil/explain
 POST /-/anvil/analyze
+POST /-/anvil/llm-review
 POST /-/anvil/override
 GET  /-/anvil/policy
 ```
@@ -276,6 +277,7 @@ export type AnalysisJob = {
   requestedBy?: string;
   reason: "metadata_request" | "tarball_request" | "lockfile_scan" | "manual_review";
   priority: "low" | "normal" | "high";
+  runLlmReview?: boolean;
   createdAt: string;
 };
 ```
@@ -308,6 +310,8 @@ The command must exit `0` only when the worker can reach required runtime depend
 ### Manual and lockfile analysis enqueue
 
 The gateway exposes `POST /-/anvil/analyze` so developer tools can enqueue explicit package analysis without waiting for a blocked metadata or tarball request. It accepts either a single `packageName`/`version` pair or a `targets` array, deduplicates exact package/version pairs, and enqueues `AnalysisJob` messages with `manual_review` by default. CLI lockfile warming uses `reason: "lockfile_scan"` so worker output can be traced back to preinstall review rather than install-path enforcement. `anvil scan --queue-analysis` uses the same route for risky or not-yet-reviewed lockfile targets after printing the policy verdict.
+
+The gateway also exposes token-gated `POST /-/anvil/llm-review` for reviewer-requested model context when LLM review is enabled. It accepts the same single-target or `targets` array shape as `/analyze`, deduplicates exact package/version pairs, enqueues high-priority `manual_review` jobs with `runLlmReview: true`, and records `llm_review.enqueued` audit events. The worker must still respect the private-package opt-in; this route is a review trigger, not a permission slip to leak private source because someone got enthusiastic.
 
 ---
 

@@ -237,6 +237,7 @@ export type AnalysisJob = {
   requestedBy?: string;
   reason: "metadata_request" | "tarball_request" | "lockfile_scan" | "manual_review";
   priority: "low" | "normal" | "high";
+  runLlmReview?: boolean;
   createdAt: string;
 };
 
