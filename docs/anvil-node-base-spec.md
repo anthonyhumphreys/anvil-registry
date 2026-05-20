@@ -617,20 +617,45 @@ echo "[anvil] Dependency report written to $REPORT_DIR"
 
 ## 16. Script: `anvil-network-monitor`
 
-Initial placeholder script:
+Runs an arbitrary command under network syscall tracing and writes:
+
+- `network-strace.log`
+- `network-report.json`
+- `network-report.md`
+
+It is intentionally strace-based so it works in ordinary devcontainers and CI jobs where packet capture tools often need extra container capabilities.
 
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+  echo "Usage: anvil-network-monitor [--] <command> [args...]"
+  exit 0
+fi
+
+if [[ "${1:-}" == "--" ]]; then
+  shift
+fi
+
+if [[ "$#" -eq 0 ]]; then
+  echo "[anvil] Usage: anvil-network-monitor [--] <command> [args...]" >&2
+  exit 64
+fi
+
 REPORT_DIR="${ANVIL_REPORT_DIR:-.anvil/reports}"
 mkdir -p "$REPORT_DIR"
 
-echo "[anvil] Network monitoring placeholder"
-echo "[anvil] Use anvil-npm-ci-observed to capture network syscalls via strace"
+strace -f -e trace=network -o "$REPORT_DIR/network-strace.log" "$@"
+COMMAND_EXIT=$?
+
+anvil-scan-install-logs /dev/null "$REPORT_DIR/network-strace.log" > "$REPORT_DIR/network-report.json"
+# The implementation also writes a Markdown summary, submits the report when configured,
+# and applies the shared strict-mode risk gate before returning the command exit code.
+exit "$COMMAND_EXIT"
 ```
 
-Future versions may use container capabilities to support `tcpdump`, eBPF, or sidecar-based network monitoring.
+Future versions may optionally add `tcpdump`, eBPF, or sidecar-based monitoring when a container has the required capabilities. Those should remain optional because safer defaults should not require privileged containers just to discover that an install script opened a socket.
 
 ---
 
