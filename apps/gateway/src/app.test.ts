@@ -258,17 +258,59 @@ describe("gateway policy enforcement", () => {
 
     const metadataResponse = await app.inject({ method: "GET", url: "/stable-package" });
     const tarballResponse = await app.inject({ method: "GET", url: "/stable-package/-/stable-package-1.0.0.tgz" });
+    const secondTarballResponse = await app.inject({ method: "GET", url: "/stable-package/-/stable-package-1.0.0.tgz" });
     const queuedJobs = [];
     for await (const job of queue.receiveAnalysisJobs()) queuedJobs.push(job);
 
     expect(metadataResponse.statusCode).toBe(200);
     expect(tarballResponse.statusCode).toBe(200);
+    expect(secondTarballResponse.statusCode).toBe(200);
     expect(queuedJobs).toEqual([
       expect.objectContaining({
         packageName: "stable-package",
         version: "1.0.0",
         reason: "tarball_request",
         priority: "normal"
+      })
+    ]);
+
+    await app.close();
+  });
+
+  it("does not treat stale analysis reports as coverage for changed tarballs", async () => {
+    const persistence = new MemoryPersistence();
+    await persistence.putAnalysisReport({
+      packageName: "stable-package",
+      version: "1.0.0",
+      analyserVersion: "static-analysis-test",
+      policyVersion: testConfig("development").policy.version,
+      tarballIntegrity: "sha512-old",
+      score: 70,
+      signals: [{ code: "UNEXPECTED_BINARY_FILE", message: "Old tarball had a binary.", severity: "high" }],
+      createdAt: "2026-05-20T12:00:00.000Z"
+    });
+    const queue = new MemoryJobQueue();
+    const app = buildGateway({
+      config: testConfig("development"),
+      persistence,
+      queue,
+      registry: {
+        fetchMetadata: vi.fn(async () => packageMetadata("stable-package", "2020-01-01T00:00:00.000Z")),
+        fetchTarball: vi.fn(async () => new Uint8Array([1, 2, 3]))
+      },
+      downloadStats: noDownloadStats()
+    });
+
+    const response = await app.inject({ method: "GET", url: "/stable-package/-/stable-package-1.0.0.tgz" });
+    const queuedJobs = [];
+    for await (const job of queue.receiveAnalysisJobs()) queuedJobs.push(job);
+
+    expect(response.statusCode).toBe(200);
+    expect(queuedJobs).toEqual([
+      expect.objectContaining({
+        packageName: "stable-package",
+        version: "1.0.0",
+        reason: "tarball_request"
       })
     ]);
 

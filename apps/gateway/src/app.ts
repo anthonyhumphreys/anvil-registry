@@ -413,8 +413,12 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
   async function evaluateAndCache(metadata: NpmPackageMetadata, version: string, reason: "metadata_request" | "tarball_request", weeklyDownloads?: number) {
     const packageName = metadata.name;
     const versionMetadata = toVersionMetadata(metadata, version);
+    const analysisIdentity = {
+      tarballIntegrity: versionMetadata?.integrity,
+      tarballShasum: versionMetadata?.shasum
+    };
     const [analysisReport, latestLlmReview] = await Promise.all([
-      persistence.getAnalysisReport(packageName, version),
+      persistence.getAnalysisReport(packageName, version, analysisIdentity),
       config.policy.llmReview.enabled ? persistence.listLlmRiskReviews({ packageName, version, limit: 1 }) : Promise.resolve([])
     ]);
     const decisionIdentity = {
@@ -425,7 +429,7 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
     const existing = await persistence.getPolicyDecision(packageName, version, config.policy.version, decisionIdentity);
     if (existing) {
       if (reason === "tarball_request" && !analysisReport && existing.action === "allow") {
-        await enqueueAnalysisJob(packageName, version, reason, "normal");
+        await enqueueAnalysisJobIfNeeded(packageName, version, reason, "normal", decisionIdentity);
       }
       return existing;
     }
@@ -465,19 +469,55 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
     }));
 
     if (decision.action !== "allow" || (reason === "tarball_request" && !analysisReport)) {
-      await enqueueAnalysisJob(packageName, version, reason, decision.action === "block" ? "high" : "normal");
+      await enqueueAnalysisJobIfNeeded(packageName, version, reason, decision.action === "block" ? "high" : "normal", decisionIdentity);
     }
 
     return decision;
   }
 
-  async function enqueueAnalysisJob(packageName: string, version: string, reason: "metadata_request" | "tarball_request", priority: AnalysisJob["priority"]) {
+  async function enqueueAnalysisJobIfNeeded(
+    packageName: string,
+    version: string,
+    reason: "metadata_request" | "tarball_request",
+    priority: AnalysisJob["priority"],
+    identity: { tarballIntegrity?: string; tarballShasum?: string; analyserVersion?: string }
+  ) {
+    if (reason === "tarball_request" && (await hasRecentAnalysisEnqueue(packageName, version, reason, identity))) return;
     await queue.enqueueAnalysisJob({
       packageName,
       version,
       reason,
       priority,
       createdAt: new Date().toISOString()
+    });
+    if (reason === "tarball_request") {
+      await persistence.putAuditEvent({
+        actor: "anvil-gateway",
+        eventType: "analysis.enqueued",
+        targetType: "package",
+        targetId: `${packageName}@${version}`,
+        metadata: { source: "gateway-auto", reason, priority, ...identity }
+      });
+    }
+  }
+
+  async function hasRecentAnalysisEnqueue(
+    packageName: string,
+    version: string,
+    reason: "metadata_request" | "tarball_request",
+    identity: { tarballIntegrity?: string; tarballShasum?: string; analyserVersion?: string }
+  ) {
+    const events = await persistence.listAuditEvents({ targetId: `${packageName}@${version}`, limit: 25 });
+    return events.some((event) => {
+      const metadata = event.metadata ?? {};
+      return (
+        event.eventType === "analysis.enqueued" &&
+        metadata.source === "gateway-auto" &&
+        metadata.reason === reason &&
+        metadata.tarballIntegrity === identity.tarballIntegrity &&
+        metadata.tarballShasum === identity.tarballShasum &&
+        metadata.analyserVersion === identity.analyserVersion
+      );
     });
   }
 
