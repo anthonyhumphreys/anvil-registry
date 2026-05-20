@@ -196,10 +196,12 @@ chmod +x "$WORK_DIR/bin/npm"
 (
   cd "$WORK_DIR/project"
   ANVIL_REPORT_DIR="$WORK_DIR/observed" \
+  AWS_ACCESS_KEY_ID="access-key" \
   NPM_TOKEN="very-secret" \
   PATH="$WORK_DIR/bin:$PATH" \
     anvil-npm-ci-observed >/tmp/anvil-npm-ci-observed.out
 )
+assert_jq '.environment.AWS_ACCESS_KEY_ID == "[redacted]"' "$WORK_DIR/observed/environment-snapshot.json"
 assert_jq '.environment.NPM_TOKEN == "[redacted]"' "$WORK_DIR/observed/environment-snapshot.json"
 assert_jq '.redaction | contains("redacted")' "$WORK_DIR/observed/environment-snapshot.json"
 assert_jq '.summary.outboundConnections == 1' "$WORK_DIR/observed/ioc-report.json"

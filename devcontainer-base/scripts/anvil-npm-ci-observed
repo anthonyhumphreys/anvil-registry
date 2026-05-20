@@ -8,7 +8,7 @@ node - "$REPORT_DIR/environment-snapshot.json" <<'NODE'
 const fs = require("fs");
 
 const snapshotPath = process.argv[2];
-const sensitiveName = /(TOKEN|SECRET|PASSWORD|PASSWD|PRIVATE|CREDENTIAL|AUTH|COOKIE|SESSION|DATABASE_URL|KEY)$/i;
+const sensitiveName = /(TOKEN|SECRET|PASSWORD|PASSWD|PRIVATE|CREDENTIAL|AUTH|COOKIE|SESSION|DATABASE_URL|KEY)/i;
 const environment = Object.fromEntries(
   Object.entries(process.env)
     .sort(([left], [right]) => left.localeCompare(right))
