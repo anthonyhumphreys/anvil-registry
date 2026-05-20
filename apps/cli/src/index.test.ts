@@ -489,6 +489,40 @@ importers:
     );
   });
 
+  it("queues forced LLM reviews with admin token", async () => {
+    const writes: string[] = [];
+    const dependencies = fakeDependencies({
+      fetch: vi.fn(async () =>
+        jsonResponse({
+          ok: true,
+          queued: 1,
+          jobs: [{ packageName: "pkg", version: "1.0.0" }]
+        })
+      ),
+      env: { ANVIL_REGISTRY_URL: "http://anvil.test", ADMIN_TOKEN: "secret" },
+      stdout: {
+        write: (value: string) => {
+          writes.push(value);
+          return true;
+        }
+      }
+    });
+
+    const exitCode = await run(["llm-review", "pkg@1.0.0", "--requested-by", "reviewer", "--priority", "high"], dependencies);
+
+    expect(exitCode).toBe(0);
+    expect(dependencies.fetch).toHaveBeenCalledWith(
+      "http://anvil.test/-/anvil/llm-review",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ authorization: "Bearer secret" }),
+        body: JSON.stringify({ packageName: "pkg", version: "1.0.0", requestedBy: "reviewer", priority: "high" })
+      })
+    );
+    expect(writes.join("")).toContain("Queued LLM review for pkg@1.0.0.");
+    expect(writes.join("")).toContain("Jobs queued: 1");
+  });
+
   it("smoke tests gateway metadata and tarball proxying", async () => {
     const writes: string[] = [];
     const fetch = vi.fn(async (url: string) => {

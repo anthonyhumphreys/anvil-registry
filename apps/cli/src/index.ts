@@ -31,6 +31,7 @@ export async function run(argv: string[], dependencies: CliDependencies = defaul
     if (command === "warm") return await warm(args, dependencies);
     if (command === "smoke") return await smoke(args, dependencies);
     if (command === "approve") return await approve(args, dependencies);
+    if (command === "llm-review") return await llmReview(args, dependencies);
     if (command === "popular-index" && args[0] === "show") return await popularIndexShow(args.slice(1), dependencies);
     if (command === "popular-index" && args[0] === "upload") return await popularIndexUpload(args.slice(1), dependencies);
     if (command === "node-base" && args[0] === "reports") return await nodeBaseReports(args.slice(1), dependencies);
@@ -235,6 +236,27 @@ async function approve(args: string[], dependencies: CliDependencies): Promise<n
     body: JSON.stringify({ ...target, reason, action: action ?? "allow", ...(expiresAt ? { expiresAt } : {}) })
   });
   dependencies.stdout.write(`Approved override for ${target.packageName}@${target.version}.\n`);
+  return 0;
+}
+
+async function llmReview(args: string[], dependencies: CliDependencies): Promise<number> {
+  const targetArg = args[0];
+  if (!targetArg) throw new Error("Usage: anvil llm-review package@version [--requested-by reviewer] [--priority high]");
+  const target = parseTarget(targetArg);
+  const requestedBy = readFlag(args, "--requested-by") ?? "anvil-cli";
+  const priority = readFlag(args, "--priority");
+  const registryUrl = registryBaseUrl(dependencies.env);
+  const result = await requestJson<{ queued: number; jobs: Array<{ packageName: string; version: string }> }>(dependencies, `${registryUrl}/-/anvil/llm-review`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      ...(dependencies.env.ADMIN_TOKEN ? { authorization: `Bearer ${dependencies.env.ADMIN_TOKEN}` } : {})
+    },
+    body: JSON.stringify({ ...target, requestedBy, ...(priority ? { priority } : {}) })
+  });
+
+  dependencies.stdout.write(`Queued LLM review for ${target.packageName}@${target.version}.\n`);
+  dependencies.stdout.write(`Jobs queued: ${result.queued}\n`);
   return 0;
 }
 
@@ -615,6 +637,7 @@ function usage() {
   anvil warm package-lock.json
   anvil smoke [package]
   anvil approve package@version --reason "intentional dependency" [--expires-at 2026-06-20T00:00:00Z]
+  anvil llm-review package@version [--requested-by reviewer] [--priority high]
   anvil popular-index show
   anvil popular-index upload popular-index.json [--generated-at 2026-05-20T00:00:00Z]
   anvil node-base reports [--type dependency|lifecycle|ioc|network] [--risk risky|high|medium] [--limit 20]
