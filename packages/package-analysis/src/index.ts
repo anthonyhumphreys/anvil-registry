@@ -418,6 +418,13 @@ function detectSuspiciousScriptPatterns(scripts: Record<string, string>): Policy
       severity: "high"
     });
   }
+  if (/(fs\.(readFileSync|readdirSync)|require\(["']fs["']\)|from\s+["']fs["']|os\.homedir|require\(["']os["']\)|from\s+["']os["']|\.npmrc|\.ssh|\.aws|id_rsa|id_ed25519|\.env(?:\.local)?)/i.test(joined)) {
+    findings.push({
+      code: "SENSITIVE_FILE_ACCESS_IN_INSTALL_PATH",
+      message: "Install script references filesystem or home-directory access patterns often used to inspect credentials.",
+      severity: "high"
+    });
+  }
   if (/(eval\(|new Function|Buffer\.from\(.+base64|base64\s+-d)/i.test(joined)) {
     findings.push({
       code: "OBFUSCATED_CODE_DETECTED",
@@ -457,6 +464,15 @@ function detectSuspiciousCodePatterns(path: string, text: string): FileFinding[]
       reason: "File references environment variables or common secret names.",
       severity: "high",
       evidence: { installPath: true, pattern: "environment" }
+    });
+  }
+  if (/(fs\.(readFileSync|readdirSync)|require\(["']fs["']\)|from\s+["']fs["']|os\.homedir|require\(["']os["']\)|from\s+["']os["']|\.npmrc|\.ssh|\.aws|id_rsa|id_ed25519|\.env(?:\.local)?)/i.test(text)) {
+    findings.push({
+      path,
+      code: "SENSITIVE_FILE_ACCESS_IN_INSTALL_PATH",
+      reason: "File references filesystem or home-directory access patterns often used to inspect credentials.",
+      severity: "high",
+      evidence: { installPath: true, pattern: "sensitive-file-access" }
     });
   }
   if (/(eval\(|new Function|Buffer\.from\([^)]{20,}base64|atob\()/i.test(text)) {

