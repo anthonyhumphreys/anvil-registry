@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { gzipSync } from "node:zlib";
 import { loadConfig } from "@anvil/config";
+import type { LlmRiskReviewProvider } from "@anvil/llm-risk-review";
 import type { NpmPackageMetadata } from "@anvil/npm-registry";
 import { MemoryPersistence } from "@anvil/persistence";
 import { MetadataProvenanceVerifier } from "@anvil/provenance";
@@ -228,6 +229,52 @@ describe("worker analysis", () => {
       })
     );
     expect(result.decision.action).toBe("block");
+  });
+
+  it("persists configured LLM risk reviews and lets policy quarantine without LLM-only blocking", async () => {
+    const persistence = new MemoryPersistence();
+    const config = loadConfig({
+      ...process.env,
+      RUNTIME_MODE: "ci",
+      LLM_REVIEW_ENABLED: "true",
+      LLM_REVIEW_PROVIDER: "test-provider",
+      LLM_REVIEW_MODEL: "test-model",
+      LLM_REVIEW_RUN_ON_UNKNOWN_PACKAGES: "true"
+    });
+    const registry = { fetchMetadata: vi.fn(async () => metadata()), fetchTarball: vi.fn(async (url: string) => tarballs[url]) };
+    const seenInputs: unknown[] = [];
+    const llmRiskReviewProvider: LlmRiskReviewProvider = {
+      async review(input) {
+        seenInputs.push(input);
+        return {
+          riskLevel: "critical",
+          confidence: "high",
+          summary: "The package deserves human review, but the model alone should not be the block button.",
+          suspectedRiskTypes: ["unknown"],
+          evidence: [{ signal: "UNKNOWN", explanation: "No previous version was available for comparison.", source: "metadata" }],
+          recommendedAction: "block"
+        };
+      }
+    };
+
+    const result = await analysePackageTarget("pkg@1.0.0", { config, registry, persistence, llmRiskReviewProvider });
+
+    expect(result.decision.action).toBe("quarantine");
+    expect(result.decision.reasons).toContainEqual(expect.objectContaining({ code: "LLM_RISK_REVIEW_FLAGGED", severity: "critical" }));
+    expect(seenInputs).toEqual([
+      expect.objectContaining({
+        packageName: "pkg",
+        version: "1.0.0",
+        deterministicSignals: []
+      })
+    ]);
+    expect(await persistence.listLlmRiskReviews({ packageName: "pkg", version: "1.0.0" })).toEqual([
+      expect.objectContaining({
+        provider: "test-provider",
+        model: "test-model",
+        review: expect.objectContaining({ riskLevel: "critical", recommendedAction: "block" })
+      })
+    ]);
   });
 });
 

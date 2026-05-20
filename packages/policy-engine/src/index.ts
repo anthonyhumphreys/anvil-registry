@@ -147,7 +147,7 @@ function resolveActiveOverride(input: PolicyInput) {
 }
 
 function decideAction(input: PolicyInput, reasons: PolicyReason[], score: number): PolicyDecision["action"] {
-  if (reasons.some((reason) => reason.severity === "critical")) return "block";
+  if (reasons.some((reason) => reason.severity === "critical" && reason.code !== "LLM_RISK_REVIEW_FLAGGED")) return "block";
   if (reasons.some((reason) => reason.code === "PACKAGE_TOO_NEW" && input.packageAgeDays !== undefined && input.packageAgeDays < 1)) {
     return "block";
   }
@@ -166,6 +166,7 @@ function decideAction(input: PolicyInput, reasons: PolicyReason[], score: number
   if (reasons.some((reason) => reason.code === "PROVENANCE_MISSING") && input.policy.provenance?.quarantineMissingForHighDownloadPackages !== false) {
     return input.runtimeMode === "development" ? "warn" : "quarantine";
   }
+  if (reasons.some((reason) => reason.code === "LLM_RISK_REVIEW_FLAGGED")) return "quarantine";
   if (score >= 70) return input.runtimeMode === "development" ? "quarantine" : "block";
   if (score >= 35) return input.runtimeMode === "development" ? "warn" : "quarantine";
   if (score > 0) return "warn";

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { LlmRiskReview } from "@anvil/shared";
+import type { LlmRiskReview, LlmRiskReviewInput } from "@anvil/shared";
 
 export const llmRiskTypeSchema = z.enum([
   "typosquatting",
@@ -31,11 +31,99 @@ export const llmRiskReviewSchema = z.object({
 }) satisfies z.ZodType<LlmRiskReview>;
 
 export interface LlmRiskReviewProvider {
-  review(input: unknown): Promise<LlmRiskReview | undefined>;
+  review(input: LlmRiskReviewInput): Promise<LlmRiskReview | undefined>;
 }
 
 export class DisabledLlmRiskReviewProvider implements LlmRiskReviewProvider {
   async review(): Promise<undefined> {
     return undefined;
   }
+}
+
+export class HttpLlmRiskReviewProvider implements LlmRiskReviewProvider {
+  private readonly fetch: typeof fetch;
+  private readonly endpoint: string;
+  private readonly apiKey?: string;
+  private readonly model?: string;
+
+  constructor(options: { endpoint: string; apiKey?: string; model?: string; fetch?: typeof fetch }) {
+    this.endpoint = options.endpoint;
+    this.apiKey = options.apiKey;
+    this.model = options.model;
+    this.fetch = options.fetch ?? globalThis.fetch;
+  }
+
+  async review(input: LlmRiskReviewInput): Promise<LlmRiskReview | undefined> {
+    const response = await this.fetch(this.endpoint, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...(this.apiKey ? { authorization: `Bearer ${this.apiKey}` } : {})
+      },
+      body: JSON.stringify({
+        model: this.model,
+        input,
+        instructions:
+          "Return only JSON matching the Anvil LlmRiskReview schema. Do not recommend allow solely because evidence is inconclusive."
+      })
+    });
+
+    if (!response.ok) return undefined;
+    const body = await response.json();
+    const candidate = extractReviewCandidate(body);
+    const parsed = llmRiskReviewSchema.safeParse(candidate);
+    return parsed.success ? parsed.data : undefined;
+  }
+}
+
+export function createLlmRiskReviewProvider(options: {
+  enabled: boolean;
+  endpoint?: string;
+  apiKey?: string;
+  model?: string;
+  fetch?: typeof fetch;
+}): LlmRiskReviewProvider {
+  if (!options.enabled || !options.endpoint) return new DisabledLlmRiskReviewProvider();
+  return new HttpLlmRiskReviewProvider({
+    endpoint: options.endpoint,
+    apiKey: options.apiKey,
+    model: options.model,
+    fetch: options.fetch
+  });
+}
+
+function extractReviewCandidate(body: unknown): unknown {
+  if (!isRecord(body)) return body;
+  if (isRecord(body.review)) return body.review;
+  if (typeof body.output_text === "string") return parseJson(body.output_text);
+
+  const choice = arrayValue(body.choices)[0];
+  if (isRecord(choice)) {
+    const message = isRecord(choice.message) ? choice.message : undefined;
+    if (typeof message?.content === "string") return parseJson(message.content);
+  }
+
+  const output = arrayValue(body.output)[0];
+  if (isRecord(output)) {
+    const content = arrayValue(output.content)[0];
+    if (isRecord(content) && typeof content.text === "string") return parseJson(content.text);
+  }
+
+  return body;
+}
+
+function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
+
+function arrayValue(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }

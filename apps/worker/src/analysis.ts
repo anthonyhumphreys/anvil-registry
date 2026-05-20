@@ -1,5 +1,6 @@
 import semver from "semver";
 import type { AnvilConfig } from "@anvil/config";
+import { createLlmRiskReviewProvider, type LlmRiskReviewProvider } from "@anvil/llm-risk-review";
 import { detectNameSquatting } from "@anvil/name-squatting";
 import type { NpmRegistryClient } from "@anvil/npm-registry";
 import { calculatePackageAgeDays, toVersionMetadata } from "@anvil/npm-registry";
@@ -7,7 +8,7 @@ import { analyseFileTree, analyseManifestChange, mergeAnalysisReports, parseNpmT
 import type { AnvilPersistence } from "@anvil/persistence";
 import { evaluatePolicy } from "@anvil/policy-engine";
 import { FetchingProvenanceVerifier, type ProvenanceVerifier } from "@anvil/provenance";
-import { buildPolicyDecisionAuditEvent, type AnalysisJob, type AnalysisReport, type PackageVersionMetadata, type PolicyReason } from "@anvil/shared";
+import { buildPolicyDecisionAuditEvent, type AnalysisJob, type AnalysisReport, type LlmRiskReview, type LlmRiskReviewInput, type PackageVersionMetadata, type PolicyReason } from "@anvil/shared";
 
 export type WorkerAnalysisDependencies = {
   config: AnvilConfig;
@@ -17,6 +18,7 @@ export type WorkerAnalysisDependencies = {
     getWeeklyDownloads(packageName: string): Promise<number | undefined>;
   };
   provenanceVerifier?: ProvenanceVerifier;
+  llmRiskReviewProvider?: LlmRiskReviewProvider;
 };
 
 export async function analysePackageTarget(target: string, dependencies: WorkerAnalysisDependencies) {
@@ -68,6 +70,13 @@ async function analysePackageVersion(target: { packageName: string; version: str
       )
     : manifestReport;
   const weeklyDownloads = await dependencies.downloadStats?.getWeeklyDownloads(target.packageName);
+  const packageAgeDays = calculatePackageAgeDays(targetMetadata.publishedAt);
+  const similarPackages = detectNameSquatting(target.packageName).map((signal) => ({
+    name: signal.candidate,
+    similarity: signal.similarity,
+    weeklyDownloads: signal.weeklyDownloads,
+    reasons: signal.reasons
+  }));
   const report = mergePolicyContextSignals(
     {
       ...staticReport,
@@ -77,13 +86,8 @@ async function analysePackageVersion(target: { packageName: string; version: str
     },
     {
       weeklyDownloads,
-      packageAgeDays: calculatePackageAgeDays(targetMetadata.publishedAt),
-      similarPackages: detectNameSquatting(target.packageName).map((signal) => ({
-        name: signal.candidate,
-        similarity: signal.similarity,
-        weeklyDownloads: signal.weeklyDownloads,
-        reasons: signal.reasons
-      })),
+      packageAgeDays,
+      similarPackages,
       targetMetadata,
       previousMetadata,
       policy: dependencies.config.policy
@@ -91,12 +95,50 @@ async function analysePackageVersion(target: { packageName: string; version: str
   );
 
   await dependencies.persistence.putAnalysisReport(report);
+  const override = await dependencies.persistence.getOverride(target.packageName, version);
+  const preliminaryDecision = evaluatePolicy({
+    packageName: target.packageName,
+    version,
+    runtimeMode: dependencies.config.RUNTIME_MODE,
+    analysisReport: report,
+    override,
+    policy: dependencies.config.policy
+  });
+  const llmRiskReview = await maybeReviewWithLlm(
+    {
+      packageName: target.packageName,
+      version,
+      packageAgeDays,
+      weeklyDownloads,
+      similarPopularPackages: similarPackages,
+      deterministicSignals: report.signals.map((signal) => signal.code),
+      manifestDiff: report.manifestDiff,
+      dependencyDiff: report.dependencyDiff,
+      suspiciousSnippets: suspiciousSnippetsFromReport(report)
+    },
+    {
+      report,
+      previousMetadata,
+      preliminaryDecision,
+      dependencies
+    }
+  );
+  if (llmRiskReview) {
+    await dependencies.persistence.putLlmRiskReview({
+      packageName: target.packageName,
+      version,
+      provider: dependencies.config.policy.llmReview.provider ?? "http",
+      model: dependencies.config.policy.llmReview.model ?? "unspecified",
+      review: llmRiskReview
+    });
+  }
   const decision = evaluatePolicy({
     packageName: target.packageName,
     version,
     runtimeMode: dependencies.config.RUNTIME_MODE,
     analysisReport: report,
-    override: await dependencies.persistence.getOverride(target.packageName, version),
+    llmRiskReview,
+    override,
     policy: dependencies.config.policy
   });
   const decisionIdentity = {
@@ -129,6 +171,48 @@ async function analysePackageVersion(target: { packageName: string; version: str
   });
 
   return { report, decision, packageName: target.packageName, version };
+}
+
+async function maybeReviewWithLlm(
+  input: LlmRiskReviewInput,
+  context: {
+    report: AnalysisReport;
+    previousMetadata?: PackageVersionMetadata;
+    preliminaryDecision: ReturnType<typeof evaluatePolicy>;
+    dependencies: WorkerAnalysisDependencies;
+  }
+): Promise<LlmRiskReview | undefined> {
+  const policy = context.dependencies.config.policy.llmReview;
+  if (!policy.enabled) return undefined;
+  if (!shouldRunLlmReview(context.report, context.previousMetadata, context.preliminaryDecision, context.dependencies.config)) return undefined;
+
+  const provider =
+    context.dependencies.llmRiskReviewProvider ??
+    createLlmRiskReviewProvider({
+      enabled: policy.enabled,
+      endpoint: context.dependencies.config.LLM_REVIEW_ENDPOINT,
+      apiKey: context.dependencies.config.LLM_REVIEW_API_KEY,
+      model: policy.model
+    });
+
+  try {
+    return await provider.review(input);
+  } catch {
+    return undefined;
+  }
+}
+
+function shouldRunLlmReview(
+  report: AnalysisReport,
+  previousMetadata: PackageVersionMetadata | undefined,
+  preliminaryDecision: ReturnType<typeof evaluatePolicy>,
+  config: AnvilConfig
+) {
+  const policy = config.policy.llmReview;
+  if (!policy.enabled) return false;
+  if (policy.runOnUnknownPackages && !previousMetadata) return true;
+  if (policy.runOnQuarantine && (preliminaryDecision.action === "quarantine" || preliminaryDecision.action === "block")) return true;
+  return report.signals.some((signal) => signal.severity === "high" || signal.severity === "critical");
 }
 
 export function parsePackageTarget(target: string): { packageName: string; version: string } {
@@ -320,4 +404,12 @@ function scoreSignals(signals: PolicyReason[]) {
       total + (signal.severity === "critical" ? 95 : signal.severity === "high" ? 70 : signal.severity === "medium" ? 35 : signal.severity === "low" ? 10 : 0),
     0
   );
+}
+
+function suspiciousSnippetsFromReport(report: AnalysisReport): LlmRiskReviewInput["suspiciousSnippets"] {
+  return report.fileFindings?.slice(0, 20).map((finding) => ({
+    file: finding.path,
+    reason: finding.reason,
+    snippet: typeof finding.evidence?.snippet === "string" ? finding.evidence.snippet : JSON.stringify(finding.evidence ?? {})
+  }));
 }

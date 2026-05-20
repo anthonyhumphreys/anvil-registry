@@ -181,6 +181,26 @@ export type LlmRiskReview = {
   recommendedAction: PolicyAction;
 };
 
+export type LlmRiskReviewInput = {
+  packageName: string;
+  version: string;
+  packageAgeDays?: number;
+  weeklyDownloads?: number;
+  similarPopularPackages: Array<{
+    name: string;
+    similarity: number;
+    weeklyDownloads?: number;
+  }>;
+  deterministicSignals: PolicyReasonCode[];
+  manifestDiff?: Record<string, unknown>;
+  dependencyDiff?: Record<string, unknown>;
+  suspiciousSnippets?: Array<{
+    file: string;
+    reason: string;
+    snippet: string;
+  }>;
+};
+
 export type PolicyInput = {
   packageName: string;
   version: string;

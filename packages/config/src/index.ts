@@ -1,6 +1,13 @@
 import { z } from "zod";
 import { type PolicyConfig, runtimeModeSchema } from "@anvil/shared";
 
+const booleanEnv = z.preprocess((value) => {
+  if (typeof value !== "string") return value;
+  if (["1", "true", "yes", "on"].includes(value.toLowerCase())) return true;
+  if (["0", "false", "no", "off"].includes(value.toLowerCase())) return false;
+  return value;
+}, z.boolean());
+
 const envSchema = z.object({
   RUNTIME_MODE: runtimeModeSchema.default("development"),
   HOST: z.string().default("0.0.0.0"),
@@ -28,7 +35,15 @@ const envSchema = z.object({
   S3_ACCESS_KEY_ID: z.string().optional(),
   S3_SECRET_ACCESS_KEY: z.string().optional(),
   AWS_REGION: z.string().default("us-east-1"),
-  ADMIN_TOKEN: z.string().optional()
+  ADMIN_TOKEN: z.string().optional(),
+  LLM_REVIEW_ENABLED: booleanEnv.default(false),
+  LLM_REVIEW_PROVIDER: z.string().optional(),
+  LLM_REVIEW_MODEL: z.string().optional(),
+  LLM_REVIEW_ENDPOINT: z.string().url().optional(),
+  LLM_REVIEW_API_KEY: z.string().optional(),
+  LLM_REVIEW_INCLUDE_PRIVATE_PACKAGES: booleanEnv.default(false),
+  LLM_REVIEW_RUN_ON_UNKNOWN_PACKAGES: booleanEnv.default(false),
+  LLM_REVIEW_RUN_ON_QUARANTINE: booleanEnv.default(false)
 });
 
 export type AnvilConfig = ReturnType<typeof loadConfig>;
@@ -72,7 +87,17 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
   return {
     ...parsed,
     DATABASE_URL: databaseUrl,
-    policy: defaultPolicyConfig
+    policy: {
+      ...defaultPolicyConfig,
+      llmReview: {
+        enabled: parsed.LLM_REVIEW_ENABLED,
+        includePrivatePackages: parsed.LLM_REVIEW_INCLUDE_PRIVATE_PACKAGES,
+        runOnUnknownPackages: parsed.LLM_REVIEW_RUN_ON_UNKNOWN_PACKAGES,
+        runOnQuarantine: parsed.LLM_REVIEW_RUN_ON_QUARANTINE,
+        provider: parsed.LLM_REVIEW_PROVIDER,
+        model: parsed.LLM_REVIEW_MODEL
+      }
+    }
   };
 }
 

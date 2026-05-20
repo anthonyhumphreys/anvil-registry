@@ -242,4 +242,57 @@ describe("evaluatePolicy", () => {
 
     expect(decision.action).toBe("warn");
   });
+
+  it("quarantines high-risk LLM reviews without making the LLM a block authority", () => {
+    const decision = evaluatePolicy({
+      packageName: "model-reviewed-package",
+      version: "1.0.0",
+      runtimeMode: "ci",
+      llmRiskReview: {
+        riskLevel: "critical",
+        confidence: "high",
+        summary: "The review suspects credential exfiltration, but deterministic evidence has not found a hard block.",
+        suspectedRiskTypes: ["credential_exfiltration"],
+        evidence: [{ signal: "USES_PROCESS_ENV", explanation: "The model saw environment access.", source: "code_snippet" }],
+        recommendedAction: "block"
+      },
+      policy: defaultPolicyConfig
+    });
+
+    expect(decision.action).toBe("quarantine");
+    expect(decision.reasons).toContainEqual(
+      expect.objectContaining({
+        code: "LLM_RISK_REVIEW_FLAGGED",
+        severity: "critical"
+      })
+    );
+  });
+
+  it("still blocks when deterministic evidence supports a hard block alongside LLM review", () => {
+    const decision = evaluatePolicy({
+      packageName: "haunted-tarball",
+      version: "1.0.0",
+      runtimeMode: "ci",
+      analysisReport: {
+        packageName: "haunted-tarball",
+        version: "1.0.0",
+        analyserVersion: "static",
+        policyVersion: defaultPolicyConfig.version,
+        score: 70,
+        signals: [{ code: "UNSAFE_TARBALL_PATH", message: "Tarball contains an unsafe path.", severity: "high" }],
+        createdAt: new Date().toISOString()
+      },
+      llmRiskReview: {
+        riskLevel: "high",
+        confidence: "medium",
+        summary: "The review agrees the package looks risky.",
+        suspectedRiskTypes: ["unknown"],
+        evidence: [{ signal: "UNSAFE_TARBALL_PATH", explanation: "Unsafe extraction path.", source: "diff" }],
+        recommendedAction: "block"
+      },
+      policy: defaultPolicyConfig
+    });
+
+    expect(decision.action).toBe("block");
+  });
 });

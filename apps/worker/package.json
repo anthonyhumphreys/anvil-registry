@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@anvil/config": "workspace:*",
+    "@anvil/llm-risk-review": "workspace:*",
     "@anvil/logger": "workspace:*",
     "@anvil/name-squatting": "workspace:*",
     "@anvil/npm-registry": "workspace:*",
