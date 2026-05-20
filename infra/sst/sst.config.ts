@@ -11,7 +11,11 @@ export default $config({
     const vpc = new sst.aws.Vpc("Vpc");
     const cluster = new sst.aws.Cluster("Cluster", { vpc });
     const bucket = new sst.aws.Bucket("PackageCache");
-    const queue = new sst.aws.Queue("AnalysisQueue");
+    const queue = new sst.aws.Queue("AnalysisQueue", {
+      dlq: {
+        retry: 3
+      }
+    });
     const adminToken = new sst.Secret("AdminToken");
     const database = new sst.aws.Postgres("Database", {
       vpc,
