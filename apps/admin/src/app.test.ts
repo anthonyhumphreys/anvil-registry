@@ -317,6 +317,32 @@ describe("admin app", () => {
     await app.close();
   });
 
+  it("handles scoped package names in review URLs", async () => {
+    const persistence = new MemoryPersistence();
+    await persistence.putPolicyDecision("@scope/pkg", "1.0.0", "policy", {
+      action: "warn",
+      score: 12,
+      reasons: [{ code: "LOW_WEEKLY_DOWNLOADS", message: "Low downloads.", severity: "low" }],
+      explanation: "scoped package needs review"
+    });
+    const app = buildAdmin({ persistence });
+
+    const dashboard = await app.inject({ method: "GET", url: "/" });
+    const api = await app.inject({ method: "GET", url: "/api/packages/%40scope%2Fpkg/1.0.0/review" });
+    const page = await app.inject({ method: "GET", url: "/packages/%40scope%2Fpkg/1.0.0" });
+    const decisions = await app.inject({ method: "GET", url: "/packages/%40scope%2Fpkg/1.0.0/decisions" });
+
+    expect(dashboard.statusCode).toBe(200);
+    expect(dashboard.body).toContain("/packages/%40scope%2Fpkg/1.0.0");
+    expect(api.statusCode).toBe(200);
+    expect(api.json().review).toMatchObject({ packageName: "@scope/pkg", version: "1.0.0" });
+    expect(page.statusCode).toBe(200);
+    expect(page.body).toContain("@scope/pkg@1.0.0");
+    expect(decisions.statusCode).toBe(200);
+    expect(decisions.body).toContain("scoped package needs review");
+    await app.close();
+  });
+
   it("renders identity-specific package decision history", async () => {
     const persistence = new MemoryPersistence();
     await persistence.putPolicyDecision(
