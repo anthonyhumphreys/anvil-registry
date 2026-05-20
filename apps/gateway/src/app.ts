@@ -459,7 +459,7 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
       identity: decisionIdentity
     }));
 
-    if (decision.action !== "allow") {
+    if (decision.action !== "allow" || (reason === "tarball_request" && !analysisReport)) {
       await queue.enqueueAnalysisJob({
         packageName,
         version,
