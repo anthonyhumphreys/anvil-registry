@@ -328,9 +328,11 @@ The admin UI provides human review and policy management.
 - Analysis report viewer.
 - LLM risk review viewer and reviewer-triggered LLM review request.
 - Override approval workflow.
-- Policy configuration.
+- Effective policy configuration viewer.
 - Audit log.
 - Popular package index viewer.
+
+Admin exposes `GET /api/policy` and `/policy` so reviewers can inspect the runtime mode and effective deterministic policy. Policy editing is intentionally not part of this slice; config still comes from environment and deployment configuration.
 
 ### MVP auth
 

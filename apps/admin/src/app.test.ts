@@ -34,12 +34,14 @@ describe("admin app", () => {
     expect(response.body).toContain("Recent Analysis Reports");
     expect(response.body).toContain("Node Base Reports");
     expect(response.body).toContain("dependency");
+    expect(response.body).toContain("Policy Configuration");
+    expect(response.body).toContain("View effective policy");
     expect(response.body).toContain("Popular Package Index");
     expect(response.body).toContain("Audit Events");
     await app.close();
   });
 
-  it("exposes JSON decision, report, override, index, and audit-event lists", async () => {
+  it("exposes JSON decision, report, override, policy, index, and audit-event lists", async () => {
     const persistence = new MemoryPersistence();
     await seed(persistence);
     const app = buildAdmin({ config: loadConfig(), persistence });
@@ -48,6 +50,7 @@ describe("admin app", () => {
     const reports = await app.inject({ method: "GET", url: "/api/reports" });
     const overrides = await app.inject({ method: "GET", url: "/api/overrides" });
     const nodeBaseReports = await app.inject({ method: "GET", url: "/api/node-base/reports" });
+    const policy = await app.inject({ method: "GET", url: "/api/policy" });
     const popularPackageIndex = await app.inject({ method: "GET", url: "/api/popular-package-index" });
     const auditEvents = await app.inject({ method: "GET", url: "/api/audit-events" });
 
@@ -56,9 +59,32 @@ describe("admin app", () => {
     expect(overrides.json().overrides).toHaveLength(1);
     expect(nodeBaseReports.json().reports).toHaveLength(1);
     expect(nodeBaseReports.json().reports[0]).toMatchObject({ source: "devcontainer", projectName: "demo", reportType: "dependency" });
+    expect(policy.json()).toMatchObject({ runtimeMode: "development", policy: { version: "2026-05-20.1", minimumPackageAgeDays: 7 } });
     expect(popularPackageIndex.json().popularPackages).toEqual(expect.arrayContaining([expect.objectContaining({ name: "lodash" })]));
     expect(popularPackageIndex.json().knownConfusions).toMatchObject({ loadash: "lodash" });
     expect(auditEvents.json().auditEvents).toHaveLength(1);
+    await app.close();
+  });
+
+  it("renders the effective policy configuration", async () => {
+    const app = buildAdmin({
+      config: loadConfig({
+        ...process.env,
+        RUNTIME_MODE: "ci",
+        LLM_REVIEW_ENABLED: "true",
+        LLM_REVIEW_MODEL: "risk-reviewer"
+      })
+    });
+
+    const response = await app.inject({ method: "GET", url: "/policy" });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain("Effective Policy");
+    expect(response.body).toContain("Deterministic Gates");
+    expect(response.body).toContain("Raw Policy");
+    expect(response.body).toContain("ci");
+    expect(response.body).toContain("LLM review enabled");
+    expect(response.body).toContain("risk-reviewer");
     await app.close();
   });
 

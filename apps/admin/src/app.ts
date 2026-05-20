@@ -91,6 +91,8 @@ export function buildAdmin(dependencies: AdminDependencies = {}): FastifyInstanc
     return { auditEvents: await persistence.listAuditEvents({ limit: parseLimit(query.limit) }) };
   });
 
+  app.get("/api/policy", async () => ({ runtimeMode: config.RUNTIME_MODE, policy: config.policy }));
+
   app.get("/api/popular-package-index", async () => await popularPackageIndex);
 
   app.post<{
@@ -293,6 +295,11 @@ export function buildAdmin(dependencies: AdminDependencies = {}): FastifyInstanc
         </div>
       </section>
       <section>
+        <h2>Policy Configuration</h2>
+        <p><a href="/policy">View effective policy</a></p>
+        ${policySummary(config)}
+      </section>
+      <section>
         <h2>Recent Decisions</h2>
         ${decisionTable(decisions)}
       </section>
@@ -319,6 +326,25 @@ export function buildAdmin(dependencies: AdminDependencies = {}): FastifyInstanc
       <section>
         <h2>Audit Events</h2>
         ${auditEventTable(auditEvents)}
+      </section>`
+    );
+  });
+
+  app.get("/policy", async (_request, reply) => {
+    reply.type("text/html");
+    return page(
+      "Policy Configuration",
+      `<section>
+        <h2>Effective Policy</h2>
+        ${policySummary(config)}
+      </section>
+      <section>
+        <h2>Deterministic Gates</h2>
+        ${policyDetails(config.policy)}
+      </section>
+      <section>
+        <h2>Raw Policy</h2>
+        <pre>${escapeHtml(JSON.stringify(config.policy, null, 2))}</pre>
       </section>`
     );
   });
@@ -1418,6 +1444,51 @@ function formatEvidenceValue(value: unknown) {
 
 function summaryTile(label: string, value: unknown, tone: string) {
   return `<div class="tile ${tone}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
+}
+
+function policySummary(config: AnvilConfig) {
+  return `<div class="summary">
+    ${summaryTile("Runtime", config.RUNTIME_MODE, "muted")}
+    ${summaryTile("Policy Version", config.policy.version, "muted")}
+    ${summaryTile("Package Age", `${config.policy.minimumPackageAgeDays} days`, "warn")}
+    ${summaryTile("LLM Review", config.policy.llmReview.enabled ? "enabled" : "disabled", config.policy.llmReview.enabled ? "warn" : "muted")}
+  </div>`;
+}
+
+function policyDetails(policy: AnvilConfig["policy"]) {
+  return settingTable([
+    ["Minimum package age", `${policy.minimumPackageAgeDays} days`],
+    ["Compare previous versions", policy.comparePreviousVersions],
+    ["Low download threshold", policy.lowDownloadThreshold],
+    ["Strict low download threshold", policy.strictLowDownloadThreshold],
+    ["Block similar low-download packages", policy.blockSimilarLowDownloadPackages],
+    ["Block new install scripts", policy.blockNewInstallScripts],
+    ["Quarantine changed install scripts", policy.quarantineChangedInstallScripts],
+    ["Block unexpected binaries", policy.blockUnexpectedBinaries],
+    ["Quarantine obfuscated code", policy.quarantineObfuscatedCode],
+    ["Hide quarantined metadata", policy.hideQuarantinedMetadata],
+    ["Provenance enabled", policy.provenance.enabled],
+    ["Provenance high-download threshold", policy.provenance.highDownloadThreshold],
+    ["Trusted publishing score reduction", policy.provenance.trustedPublishingScoreReduction],
+    ["Quarantine changed provenance", policy.provenance.quarantineChangedProvenance],
+    ["Quarantine missing provenance for high-download packages", policy.provenance.quarantineMissingForHighDownloadPackages],
+    ["Overrides enabled", policy.overrides.enabled],
+    ["Override reason required", policy.overrides.requireReason],
+    ["Override default expiry", `${policy.overrides.defaultExpiryDays} days`],
+    ["LLM review enabled", policy.llmReview.enabled],
+    ["LLM review unknown packages", policy.llmReview.runOnUnknownPackages],
+    ["LLM review quarantine", policy.llmReview.runOnQuarantine],
+    ["LLM review private packages", policy.llmReview.includePrivatePackages],
+    ["LLM provider", policy.llmReview.provider ?? "(none)"],
+    ["LLM model", policy.llmReview.model ?? "(none)"]
+  ]);
+}
+
+function settingTable(rows: Array<[string, unknown]>) {
+  return `<table>
+    <thead><tr><th>Setting</th><th>Value</th></tr></thead>
+    <tbody>${rows.map(([key, value]) => `<tr><td>${escapeHtml(key)}</td><td>${escapeHtml(value)}</td></tr>`).join("")}</tbody>
+  </table>`;
 }
 
 function page(title: string, body: string) {
