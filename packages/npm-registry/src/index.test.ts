@@ -74,4 +74,22 @@ describe("npm registry helpers", () => {
 
     expect(version?.provenance).toEqual({ present: false });
   });
+
+  it("preserves the package private flag from npm version metadata", () => {
+    const version = toVersionMetadata(
+      {
+        name: "@scope/private-pkg",
+        versions: {
+          "1.0.0": {
+            name: "@scope/private-pkg",
+            version: "1.0.0",
+            private: true
+          }
+        }
+      },
+      "1.0.0"
+    );
+
+    expect(version?.private).toBe(true);
+  });
 });

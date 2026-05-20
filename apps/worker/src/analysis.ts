@@ -119,6 +119,7 @@ async function analysePackageVersion(target: { packageName: string; version: str
     {
       report,
       previousMetadata,
+      targetMetadata,
       preliminaryDecision,
       dependencies
     }
@@ -178,13 +179,14 @@ async function maybeReviewWithLlm(
   context: {
     report: AnalysisReport;
     previousMetadata?: PackageVersionMetadata;
+    targetMetadata: PackageVersionMetadata;
     preliminaryDecision: ReturnType<typeof evaluatePolicy>;
     dependencies: WorkerAnalysisDependencies;
   }
 ): Promise<LlmRiskReview | undefined> {
   const policy = context.dependencies.config.policy.llmReview;
   if (!policy.enabled) return undefined;
-  if (!shouldRunLlmReview(context.report, context.previousMetadata, context.preliminaryDecision, context.dependencies.config)) return undefined;
+  if (!shouldRunLlmReview(context.report, context.previousMetadata, context.targetMetadata, context.preliminaryDecision, context.dependencies.config)) return undefined;
 
   const provider =
     context.dependencies.llmRiskReviewProvider ??
@@ -205,11 +207,13 @@ async function maybeReviewWithLlm(
 function shouldRunLlmReview(
   report: AnalysisReport,
   previousMetadata: PackageVersionMetadata | undefined,
+  targetMetadata: PackageVersionMetadata,
   preliminaryDecision: ReturnType<typeof evaluatePolicy>,
   config: AnvilConfig
 ) {
   const policy = config.policy.llmReview;
   if (!policy.enabled) return false;
+  if (targetMetadata.private && !policy.includePrivatePackages) return false;
   if (policy.runOnUnknownPackages && !previousMetadata) return true;
   if (policy.runOnQuarantine && (preliminaryDecision.action === "quarantine" || preliminaryDecision.action === "block")) return true;
   return report.signals.some((signal) => signal.severity === "high" || signal.severity === "critical");

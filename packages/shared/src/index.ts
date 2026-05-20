@@ -102,6 +102,7 @@ export type PackageMetadataSummary = {
 export type PackageVersionMetadata = {
   name: string;
   version: string;
+  private?: boolean;
   publishedAt?: string;
   tarballUrl?: string;
   integrity?: string;

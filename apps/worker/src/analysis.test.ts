@@ -5,6 +5,7 @@ import type { LlmRiskReviewProvider } from "@anvil/llm-risk-review";
 import type { NpmPackageMetadata } from "@anvil/npm-registry";
 import { MemoryPersistence } from "@anvil/persistence";
 import { MetadataProvenanceVerifier } from "@anvil/provenance";
+import type { LlmRiskReview } from "@anvil/shared";
 import { analyseAnalysisJob, analysePackageTarget, parsePackageTarget } from "./analysis.js";
 
 describe("worker analysis", () => {
@@ -276,6 +277,66 @@ describe("worker analysis", () => {
       })
     ]);
   });
+
+  it("does not send private package metadata to LLM review unless explicitly enabled", async () => {
+    const persistence = new MemoryPersistence();
+    const config = loadConfig({
+      ...process.env,
+      RUNTIME_MODE: "ci",
+      LLM_REVIEW_ENABLED: "true",
+      LLM_REVIEW_PROVIDER: "test-provider",
+      LLM_REVIEW_MODEL: "test-model",
+      LLM_REVIEW_RUN_ON_UNKNOWN_PACKAGES: "true"
+    });
+    const registry = { fetchMetadata: vi.fn(async () => privateMetadata()), fetchTarball: vi.fn() };
+    const review = {
+      riskLevel: "high",
+      confidence: "high",
+      summary: "Should not be called for private packages by default.",
+      suspectedRiskTypes: ["unknown"],
+      evidence: [{ signal: "UNKNOWN", explanation: "Private package.", source: "metadata" }],
+      recommendedAction: "quarantine"
+    } satisfies LlmRiskReview;
+    const llmRiskReviewProvider: LlmRiskReviewProvider = {
+      review: vi.fn(async () => review)
+    };
+
+    const result = await analysePackageTarget("@scope/private-pkg@1.0.0", { config, registry, persistence, llmRiskReviewProvider });
+
+    expect(llmRiskReviewProvider.review).not.toHaveBeenCalled();
+    expect(result.decision.reasons.map((reason) => reason.code)).not.toContain("LLM_RISK_REVIEW_FLAGGED");
+    expect(await persistence.listLlmRiskReviews({ packageName: "@scope/private-pkg", version: "1.0.0" })).toEqual([]);
+  });
+
+  it("can send private package metadata to LLM review when explicitly enabled", async () => {
+    const persistence = new MemoryPersistence();
+    const config = loadConfig({
+      ...process.env,
+      RUNTIME_MODE: "ci",
+      LLM_REVIEW_ENABLED: "true",
+      LLM_REVIEW_PROVIDER: "test-provider",
+      LLM_REVIEW_MODEL: "test-model",
+      LLM_REVIEW_RUN_ON_UNKNOWN_PACKAGES: "true",
+      LLM_REVIEW_INCLUDE_PRIVATE_PACKAGES: "true"
+    });
+    const registry = { fetchMetadata: vi.fn(async () => privateMetadata()), fetchTarball: vi.fn() };
+    const review = {
+      riskLevel: "high",
+      confidence: "medium",
+      summary: "Private package review was explicitly enabled.",
+      suspectedRiskTypes: ["unknown"],
+      evidence: [{ signal: "UNKNOWN", explanation: "Private package review opt-in.", source: "metadata" }],
+      recommendedAction: "quarantine"
+    } satisfies LlmRiskReview;
+    const llmRiskReviewProvider: LlmRiskReviewProvider = {
+      review: vi.fn(async () => review)
+    };
+
+    await analysePackageTarget("@scope/private-pkg@1.0.0", { config, registry, persistence, llmRiskReviewProvider });
+
+    expect(llmRiskReviewProvider.review).toHaveBeenCalledWith(expect.objectContaining({ packageName: "@scope/private-pkg", version: "1.0.0" }));
+    expect(await persistence.listLlmRiskReviews({ packageName: "@scope/private-pkg", version: "1.0.0" })).toHaveLength(1);
+  });
 });
 
 const tarballs: Record<string, Uint8Array> = {
@@ -375,6 +436,23 @@ function typoMetadata(): NpmPackageMetadata {
           integrity: "sha512-typo",
           shasum: "typosum"
         }
+      }
+    }
+  };
+}
+
+function privateMetadata(): NpmPackageMetadata {
+  return {
+    name: "@scope/private-pkg",
+    "dist-tags": { latest: "1.0.0" },
+    time: {
+      "1.0.0": "2020-01-01T00:00:00.000Z"
+    },
+    versions: {
+      "1.0.0": {
+        name: "@scope/private-pkg",
+        version: "1.0.0",
+        private: true
       }
     }
   };

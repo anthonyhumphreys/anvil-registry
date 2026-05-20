@@ -11,6 +11,7 @@ export type NpmPackageMetadata = {
 export type NpmVersionMetadata = {
   name: string;
   version: string;
+  private?: boolean;
   dist?: {
     tarball?: string;
     integrity?: string;
@@ -111,6 +112,7 @@ export function toVersionMetadata(metadata: NpmPackageMetadata, version: string)
   return {
     name: versionMetadata.name,
     version: versionMetadata.version,
+    private: versionMetadata.private,
     publishedAt: metadata.time?.[version],
     tarballUrl: versionMetadata.dist?.tarball,
     integrity: versionMetadata.dist?.integrity,
