@@ -83,6 +83,30 @@ describe("worker analysis", () => {
     expect(registry.fetchTarball).toHaveBeenCalledTimes(2);
   });
 
+  it("passes the configured previous-version depth into manifest analysis", async () => {
+    const persistence = new MemoryPersistence();
+    const config = loadConfig({ ...process.env, RUNTIME_MODE: "ci", COMPARE_PREVIOUS_VERSIONS: "3" });
+    const registry = {
+      fetchMetadata: vi.fn(async () => manifestHistoryMetadata()),
+      fetchTarball: vi.fn()
+    };
+
+    const result = await analysePackageTarget("history-pkg@1.0.3", { config, registry, persistence });
+
+    expect(result.report.manifestDiff).toMatchObject({
+      baselines: [
+        expect.objectContaining({ version: "1.0.2" }),
+        expect.objectContaining({ version: "1.0.1" }),
+        expect.objectContaining({ version: "1.0.0" })
+      ]
+    });
+    expect(result.report.signals.find((signal) => signal.code === "NEW_INSTALL_SCRIPT")?.evidence).toMatchObject({
+      comparedVersions: ["1.0.2", "1.0.1", "1.0.0"],
+      compareDepth: 3
+    });
+    expect(registry.fetchTarball).not.toHaveBeenCalled();
+  });
+
   it("persists low-adoption name-squatting signals in worker reports", async () => {
     const persistence = new MemoryPersistence();
     const config = loadConfig({ ...process.env, RUNTIME_MODE: "ci" });
@@ -518,6 +542,43 @@ function metadata(): NpmPackageMetadata {
           pkg: "./cli.js"
         },
         repository: { type: "git", url: "https://example.test/pkg-renamed.git" }
+      }
+    }
+  };
+}
+
+function manifestHistoryMetadata(): NpmPackageMetadata {
+  return {
+    name: "history-pkg",
+    "dist-tags": { latest: "1.0.3" },
+    time: {
+      "1.0.0": "2020-01-01T00:00:00.000Z",
+      "1.0.1": "2020-01-02T00:00:00.000Z",
+      "1.0.2": "2020-01-03T00:00:00.000Z",
+      "1.0.3": "2020-01-04T00:00:00.000Z"
+    },
+    versions: {
+      "1.0.0": {
+        name: "history-pkg",
+        version: "1.0.0",
+        dependencies: {}
+      },
+      "1.0.1": {
+        name: "history-pkg",
+        version: "1.0.1",
+        scripts: { install: "node old-install.js" },
+        dependencies: { "tiny-left-pad": "^0.9.0" }
+      },
+      "1.0.2": {
+        name: "history-pkg",
+        version: "1.0.2",
+        dependencies: {}
+      },
+      "1.0.3": {
+        name: "history-pkg",
+        version: "1.0.3",
+        scripts: { install: "node install.js" },
+        dependencies: { "tiny-left-pad": "^1.0.0" }
       }
     }
   };

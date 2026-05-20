@@ -66,6 +66,7 @@ async function analysePackageVersion(
   if (!targetMetadata) throw new Error(`Version metadata not found for ${target.packageName}@${version}`);
 
   const previousMetadata = previousVersion ? toVersionMetadata(metadata, previousVersion) : undefined;
+  const previousMetadataVersions = previousVersions.map((candidate) => toVersionMetadata(metadata, candidate)).filter((candidate): candidate is PackageVersionMetadata => Boolean(candidate));
   const provenanceVerifier = dependencies.provenanceVerifier ?? new FetchingProvenanceVerifier();
   const provenanceVerification = await provenanceVerifier.verify({
     packageName: target.packageName,
@@ -74,7 +75,7 @@ async function analysePackageVersion(
     shasum: targetMetadata.shasum,
     provenance: targetMetadata.provenance
   });
-  const manifestReport = analyseManifestChange(targetMetadata, previousMetadata, {
+  const manifestReport = analyseManifestChange(targetMetadata, previousMetadataVersions, {
     analyserVersion: "manifest-2026-05-20.1",
     policyVersion: dependencies.config.policy.version
   });

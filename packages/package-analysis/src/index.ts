@@ -6,16 +6,19 @@ const lifecycleScripts = new Set(["preinstall", "install", "postinstall", "prepa
 
 export function analyseManifestChange(
   target: PackageVersionMetadata,
-  previous?: PackageVersionMetadata,
+  previous?: PackageVersionMetadata | PackageVersionMetadata[],
   options: { analyserVersion: string; policyVersion: string } = {
     analyserVersion: "manifest-2026-05-20.1",
     policyVersion: "unknown"
   }
 ): AnalysisReport {
   const signals: PolicyReason[] = [];
+  const previousVersions = normalizePreviousVersions(previous);
+  const primaryPrevious = previousVersions[0];
   const targetLifecycle = pickLifecycleScripts(target.scripts);
-  const previousLifecycle = pickLifecycleScripts(previous?.scripts);
-  const release = releaseContext(previous?.version, target.version);
+  const previousLifecycle = pickLifecycleScripts(primaryPrevious?.scripts);
+  const release = releaseContext(primaryPrevious?.version, target.version);
+  const baseline = baselineContext(previousVersions);
 
   for (const [scriptName, script] of Object.entries(targetLifecycle)) {
     if (!previousLifecycle[scriptName]) {
@@ -23,14 +26,14 @@ export function analyseManifestChange(
         code: "NEW_INSTALL_SCRIPT",
         message: `Lifecycle script '${scriptName}' was introduced.`,
         severity: "high",
-        evidence: { scriptName, script, impact: "install-time", expectedForRelease: false, releaseType: release.type }
+        evidence: { scriptName, script, impact: "install-time", expectedForRelease: false, releaseType: release.type, ...baseline, history: lifecycleScriptHistory(scriptName, previousVersions) }
       });
     } else if (previousLifecycle[scriptName] !== script) {
       signals.push({
         code: "INSTALL_SCRIPT_CHANGED",
         message: `Lifecycle script '${scriptName}' changed.`,
         severity: "medium",
-        evidence: { scriptName, impact: "install-time", expectedForRelease: false, releaseType: release.type }
+        evidence: { scriptName, impact: "install-time", expectedForRelease: false, releaseType: release.type, ...baseline, history: lifecycleScriptHistory(scriptName, previousVersions) }
       });
     }
   }
@@ -39,36 +42,43 @@ export function analyseManifestChange(
     signals.push(finding);
   }
 
-  const dependencyDiff = diffManifestDependencies(target, previous);
-  if (previous && isPatchVersionBump(previous.version, target.version) && Object.keys(dependencyDiff.added).length > 0) {
+  const dependencyDiff = diffManifestDependencies(target, primaryPrevious);
+  if (primaryPrevious && isPatchVersionBump(primaryPrevious.version, target.version) && Object.keys(dependencyDiff.added).length > 0) {
     signals.push({
       code: "NEW_DEPENDENCY_IN_PATCH_VERSION",
       message: "Patch version added new runtime dependencies.",
       severity: "medium",
-      evidence: { added: dependencyDiff.added, impact: "runtime", expectedForRelease: false, releaseType: release.type }
+      evidence: { added: dependencyDiff.added, impact: "runtime", expectedForRelease: false, releaseType: release.type, ...baseline, history: dependencyHistory(dependencyDiff.added, previousVersions, "dependencies") }
     });
   }
 
-  if (previous && isPatchVersionBump(previous.version, target.version) && Object.keys(dependencyDiff.optional.added).length > 0) {
+  if (primaryPrevious && isPatchVersionBump(primaryPrevious.version, target.version) && Object.keys(dependencyDiff.optional.added).length > 0) {
     signals.push({
       code: "OPTIONAL_DEPENDENCY_ADDED",
       message: "Patch version added optional dependencies.",
       severity: "medium",
-      evidence: { added: dependencyDiff.optional.added, impact: "install-time-or-runtime", expectedForRelease: false, releaseType: release.type }
+      evidence: { added: dependencyDiff.optional.added, impact: "install-time-or-runtime", expectedForRelease: false, releaseType: release.type, ...baseline, history: dependencyHistory(dependencyDiff.optional.added, previousVersions, "optionalDependencies") }
     });
   }
 
-  if (previous && Object.keys(dependencyDiff.peer.added).length + Object.keys(dependencyDiff.peer.removed).length + Object.keys(dependencyDiff.peer.changed).length > 0) {
+  if (primaryPrevious && Object.keys(dependencyDiff.peer.added).length + Object.keys(dependencyDiff.peer.removed).length + Object.keys(dependencyDiff.peer.changed).length > 0) {
     signals.push({
       code: "PEER_DEPENDENCY_CHANGED",
       message: "Peer dependency contract changed.",
       severity: "low",
-      evidence: { ...dependencyDiff.peer, impact: "runtime-contract", expectedForRelease: release.type === "major", releaseType: release.type }
+      evidence: {
+        ...dependencyDiff.peer,
+        impact: "runtime-contract",
+        expectedForRelease: release.type === "major",
+        releaseType: release.type,
+        ...baseline,
+        history: dependencyHistory(changedDependencyTargets(dependencyDiff.peer), previousVersions, "peerDependencies")
+      }
     });
   }
 
-  if (previous) {
-    signals.push(...detectManifestMetadataChanges(target, previous, release.type));
+  if (primaryPrevious) {
+    signals.push(...detectManifestMetadataChanges(target, primaryPrevious, previousVersions, release.type));
   }
 
   return {
@@ -85,7 +95,17 @@ export function analyseManifestChange(
         previous: previousLifecycle,
         target: targetLifecycle
       },
-      metadata: diffManifestMetadata(target, previous)
+      metadata: diffManifestMetadata(target, primaryPrevious),
+      baselines: previousVersions.map((version) => ({
+        version: version.version,
+        release: releaseContext(version.version, target.version),
+        lifecycleScripts: {
+          previous: pickLifecycleScripts(version.scripts),
+          target: targetLifecycle
+        },
+        dependencyDiff: diffManifestDependencies(target, version),
+        metadata: diffManifestMetadata(target, version)
+      }))
     },
     createdAt: new Date().toISOString()
   };
@@ -332,16 +352,17 @@ function diffManifestDependencies(target: PackageVersionMetadata, previous?: Pac
   };
 }
 
-function detectManifestMetadataChanges(target: PackageVersionMetadata, previous: PackageVersionMetadata, releaseType: string): PolicyReason[] {
+function detectManifestMetadataChanges(target: PackageVersionMetadata, previous: PackageVersionMetadata, previousVersions: PackageVersionMetadata[], releaseType: string): PolicyReason[] {
   const signals: PolicyReason[] = [];
   const metadataDiff = diffManifestMetadata(target, previous);
+  const baseline = baselineContext(previousVersions);
 
   if (metadataDiff.repository.changed) {
     signals.push({
       code: "REPOSITORY_CHANGED",
       message: "Repository metadata changed.",
       severity: "medium",
-      evidence: { ...metadataDiff.repository, impact: "metadata", expectedForRelease: releaseType !== "patch", releaseType }
+      evidence: { ...metadataDiff.repository, impact: "metadata", expectedForRelease: releaseType !== "patch", releaseType, ...baseline, history: metadataHistory("repository", previousVersions) }
     });
   }
 
@@ -350,7 +371,7 @@ function detectManifestMetadataChanges(target: PackageVersionMetadata, previous:
       code: "BIN_FIELD_CHANGED",
       message: "Package binary entry points changed.",
       severity: "medium",
-      evidence: { ...metadataDiff.bin, impact: "runtime-entrypoint", expectedForRelease: releaseType !== "patch", releaseType }
+      evidence: { ...metadataDiff.bin, impact: "runtime-entrypoint", expectedForRelease: releaseType !== "patch", releaseType, ...baseline, history: metadataHistory("bin", previousVersions) }
     });
   }
 
@@ -365,12 +386,64 @@ function detectManifestMetadataChanges(target: PackageVersionMetadata, previous:
         ...metadataDiff[key],
         impact: key === "files" ? "published-files" : "metadata",
         expectedForRelease: releaseType !== "patch" || key === "license",
-        releaseType
+        releaseType,
+        ...baseline,
+        history: metadataHistory(key, previousVersions)
       }
     });
   }
 
   return signals;
+}
+
+function normalizePreviousVersions(previous: PackageVersionMetadata | PackageVersionMetadata[] | undefined) {
+  if (!previous) return [];
+  return Array.isArray(previous) ? previous : [previous];
+}
+
+function baselineContext(previousVersions: PackageVersionMetadata[]) {
+  return {
+    comparedVersions: previousVersions.map((version) => version.version),
+    compareDepth: previousVersions.length
+  };
+}
+
+function lifecycleScriptHistory(scriptName: string, previousVersions: PackageVersionMetadata[]) {
+  return previousVersions.map((version) => ({
+    version: version.version,
+    script: pickLifecycleScripts(version.scripts)[scriptName]
+  }));
+}
+
+function dependencyHistory(
+  dependencies: Record<string, unknown>,
+  previousVersions: PackageVersionMetadata[],
+  field: "dependencies" | "optionalDependencies" | "peerDependencies"
+) {
+  return Object.fromEntries(
+    Object.keys(dependencies).map((name) => [
+      name,
+      previousVersions.map((version) => ({
+        version: version.version,
+        spec: version[field]?.[name]
+      }))
+    ])
+  );
+}
+
+function changedDependencyTargets(diff: { added: Record<string, string>; removed: Record<string, string>; changed: Record<string, { previous: string; target: string }> }) {
+  return {
+    ...diff.added,
+    ...diff.removed,
+    ...Object.fromEntries(Object.entries(diff.changed).map(([name, change]) => [name, change.target]))
+  };
+}
+
+function metadataHistory(field: "repository" | "license" | "maintainers" | "bin" | "files", previousVersions: PackageVersionMetadata[]) {
+  return previousVersions.map((version) => ({
+    version: version.version,
+    value: version[field]
+  }));
 }
 
 function diffManifestMetadata(target: PackageVersionMetadata, previous?: PackageVersionMetadata) {

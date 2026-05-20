@@ -79,6 +79,69 @@ describe("analyseManifestChange", () => {
     });
   });
 
+  it("records comparison history across multiple previous manifests", () => {
+    const report = analyseManifestChange(
+      {
+        name: "pkg",
+        version: "1.0.3",
+        scripts: { install: "node install.js" },
+        dependencies: { "tiny-left-pad": "^1.0.0" },
+        repository: { type: "git", url: "https://example.test/new.git" }
+      },
+      [
+        {
+          name: "pkg",
+          version: "1.0.2",
+          dependencies: {},
+          repository: { type: "git", url: "https://example.test/old.git" }
+        },
+        {
+          name: "pkg",
+          version: "1.0.1",
+          scripts: { install: "node old-install.js" },
+          dependencies: { "tiny-left-pad": "^0.9.0" },
+          repository: { type: "git", url: "https://example.test/older.git" }
+        },
+        {
+          name: "pkg",
+          version: "1.0.0",
+          dependencies: {}
+        }
+      ]
+    );
+
+    expect(report.manifestDiff?.baselines).toEqual([
+      expect.objectContaining({ version: "1.0.2", release: expect.objectContaining({ type: "patch" }) }),
+      expect.objectContaining({ version: "1.0.1", dependencyDiff: expect.objectContaining({ changed: { "tiny-left-pad": { previous: "^0.9.0", target: "^1.0.0" } } }) }),
+      expect.objectContaining({ version: "1.0.0" })
+    ]);
+    expect(report.signals.find((signal) => signal.code === "NEW_INSTALL_SCRIPT")?.evidence).toMatchObject({
+      comparedVersions: ["1.0.2", "1.0.1", "1.0.0"],
+      compareDepth: 3,
+      history: [
+        { version: "1.0.2" },
+        { version: "1.0.1", script: "node old-install.js" },
+        { version: "1.0.0" }
+      ]
+    });
+    expect(report.signals.find((signal) => signal.code === "NEW_DEPENDENCY_IN_PATCH_VERSION")?.evidence).toMatchObject({
+      history: {
+        "tiny-left-pad": [
+          { version: "1.0.2" },
+          { version: "1.0.1", spec: "^0.9.0" },
+          { version: "1.0.0" }
+        ]
+      }
+    });
+    expect(report.signals.find((signal) => signal.code === "REPOSITORY_CHANGED")?.evidence).toMatchObject({
+      history: [
+        { version: "1.0.2", value: { type: "git", url: "https://example.test/old.git" } },
+        { version: "1.0.1", value: { type: "git", url: "https://example.test/older.git" } },
+        { version: "1.0.0" }
+      ]
+    });
+  });
+
   it("parses npm tarballs and flags suspicious new files", () => {
     const baseline = parseNpmTarball(
       makeTarball([
