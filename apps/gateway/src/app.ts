@@ -166,9 +166,13 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
   });
 
   app.post<{
-    Body: { packageName: string; version: string };
+    Body: { packageName?: string; version?: string };
   }>("/-/anvil/explain", async (request, reply) => {
-    const result = await explainVersion(request.body.packageName, request.body.version);
+    const targets = analysisTargetsFromBody(request.body ?? {});
+    const target = targets[0];
+    if (!target) return reply.code(400).send({ error: "ANVIL_EXPLAIN_REQUIRES_TARGET" });
+
+    const result = await explainVersion(target.packageName, target.version);
     if (!result) return reply.code(404).send({ error: "ANVIL_VERSION_NOT_FOUND" });
     return result;
   });

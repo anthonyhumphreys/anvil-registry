@@ -210,6 +210,8 @@ GET  /-/anvil/policy
 
 `GET /-/health` is a liveness check and should only prove the gateway process can answer HTTP. `GET /-/ready` is a traffic-readiness check and must fail with HTTP 503 when required runtime dependencies are unavailable. At minimum, readiness should report component status for persistence, object storage, and the analysis queue so load balancers and deploy scripts do not route npm install traffic into a service that can only provide interpretive dance.
 
+`POST /-/anvil/explain` requires a package target (`packageName`, with optional `version` defaulting to `latest`) and should reject malformed input before fetching upstream metadata.
+
 `POST /-/anvil/node-base/reports` accepts token-gated Anvil Node Base JSON reports for Admin visibility. The body is validated with Zod, requires a simple report type and JSON object report, and may include `source`, `projectName`, and `summary`. If `summary` is omitted, the gateway can lift `report.summary` into the persisted report summary.
 
 Actual npm scoped package paths can be quirky, so route handling must be tested against real npm, pnpm, and yarn requests.

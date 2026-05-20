@@ -462,6 +462,31 @@ describe("gateway policy enforcement", () => {
     await app.close();
   });
 
+  it("rejects malformed explain requests without touching upstream metadata", async () => {
+    const fetchMetadata = vi.fn();
+    const app = buildGateway({
+      config: testConfig("ci"),
+      persistence: new MemoryPersistence(),
+      queue: new MemoryJobQueue(),
+      registry: {
+        fetchMetadata,
+        fetchTarball: vi.fn()
+      },
+      downloadStats: noDownloadStats()
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/-/anvil/explain",
+      payload: { version: "1.0.0" }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ error: "ANVIL_EXPLAIN_REQUIRES_TARGET" });
+    expect(fetchMetadata).not.toHaveBeenCalled();
+    await app.close();
+  });
+
   it("enqueues manual analysis jobs for package targets", async () => {
     const persistence = new MemoryPersistence();
     const queue = new MemoryJobQueue();
