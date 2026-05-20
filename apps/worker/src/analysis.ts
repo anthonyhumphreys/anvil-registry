@@ -8,7 +8,17 @@ import { analyseFileTree, analyseManifestChange, mergeAnalysisReports, parseNpmT
 import type { AnvilPersistence } from "@anvil/persistence";
 import { evaluatePolicy } from "@anvil/policy-engine";
 import { FetchingProvenanceVerifier, type ProvenanceVerifier } from "@anvil/provenance";
-import { buildPolicyDecisionAuditEvent, type AnalysisJob, type AnalysisReport, type LlmRiskReview, type LlmRiskReviewInput, type PackageVersionMetadata, type PolicyReason } from "@anvil/shared";
+import {
+  buildPolicyDecisionAuditEvent,
+  type AnalysisJob,
+  type AnalysisJobPriority,
+  type AnalysisJobReason,
+  type AnalysisReport,
+  type LlmRiskReview,
+  type LlmRiskReviewInput,
+  type PackageVersionMetadata,
+  type PolicyReason
+} from "@anvil/shared";
 
 export type WorkerAnalysisDependencies = {
   config: AnvilConfig;
@@ -28,13 +38,22 @@ export async function analysePackageTarget(target: string, dependencies: WorkerA
 }
 
 export async function analyseAnalysisJob(job: AnalysisJob, dependencies: WorkerAnalysisDependencies) {
-  return analysePackageVersion({ packageName: job.packageName, version: job.version }, dependencies, { forceLlmReview: job.runLlmReview === true });
+  return analysePackageVersion(
+    { packageName: job.packageName, version: job.version },
+    dependencies,
+    {
+      forceLlmReview: job.runLlmReview === true,
+      requestedBy: job.requestedBy,
+      requestReason: job.reason,
+      priority: job.priority
+    }
+  );
 }
 
 async function analysePackageVersion(
   target: { packageName: string; version: string },
   dependencies: WorkerAnalysisDependencies,
-  options: { forceLlmReview?: boolean } = {}
+  options: { forceLlmReview?: boolean; requestedBy?: string; requestReason?: AnalysisJobReason; priority?: AnalysisJobPriority } = {}
 ) {
   const metadata = await dependencies.registry.fetchMetadata(target.packageName);
   const version = target.version === "latest" ? metadata["dist-tags"]?.latest : target.version;
@@ -139,6 +158,37 @@ async function analysePackageVersion(
       provider: dependencies.config.policy.llmReview.provider ?? "http",
       model: dependencies.config.policy.llmReview.model ?? "unspecified",
       review: llmRiskReview
+    });
+    await dependencies.persistence.putAuditEvent({
+      actor: options.requestedBy ?? "anvil-worker",
+      eventType: "llm_review.completed",
+      targetType: "package",
+      targetId: `${target.packageName}@${version}`,
+      metadata: {
+        source: "worker",
+        reason: options.requestReason,
+        priority: options.priority,
+        provider: dependencies.config.policy.llmReview.provider ?? "http",
+        model: dependencies.config.policy.llmReview.model ?? "unspecified",
+        riskLevel: llmRiskReview.riskLevel,
+        recommendedAction: llmRiskReview.recommendedAction
+      }
+    });
+  } else if (options.forceLlmReview && dependencies.config.policy.llmReview.enabled) {
+    await dependencies.persistence.putAuditEvent({
+      actor: options.requestedBy ?? "anvil-worker",
+      eventType: "llm_review.unavailable",
+      targetType: "package",
+      targetId: `${target.packageName}@${version}`,
+      metadata: {
+        source: "worker",
+        reason: options.requestReason,
+        priority: options.priority,
+        provider: dependencies.config.policy.llmReview.provider ?? "http",
+        model: dependencies.config.policy.llmReview.model ?? "unspecified",
+        endpointConfigured: Boolean(dependencies.config.LLM_REVIEW_ENDPOINT),
+        privatePackageSkipped: Boolean(targetMetadata.private && !dependencies.config.policy.llmReview.includePrivatePackages)
+      }
     });
   }
   const decision = evaluatePolicy({

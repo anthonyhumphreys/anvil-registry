@@ -310,6 +310,7 @@ describe("worker analysis", () => {
         version: "1.0.0",
         reason: "manual_review",
         priority: "high",
+        requestedBy: "reviewer",
         runLlmReview: true,
         createdAt: "2026-05-20T00:00:00.000Z"
       },
@@ -319,6 +320,66 @@ describe("worker analysis", () => {
     expect(llmRiskReviewProvider.review).toHaveBeenCalledWith(expect.objectContaining({ packageName: "pkg", version: "1.0.0" }));
     expect(result.decision.action).toBe("quarantine");
     expect(await persistence.listLlmRiskReviews({ packageName: "pkg", version: "1.0.0" })).toHaveLength(1);
+    expect(await persistence.listAuditEvents({ targetId: "pkg@1.0.0" })).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          actor: "reviewer",
+          eventType: "llm_review.completed",
+          metadata: expect.objectContaining({
+            reason: "manual_review",
+            priority: "high",
+            provider: "test-provider",
+            model: "test-model",
+            riskLevel: "high",
+            recommendedAction: "quarantine"
+          })
+        })
+      ])
+    );
+  });
+
+  it("audits forced LLM review jobs when no review is produced", async () => {
+    const persistence = new MemoryPersistence();
+    const config = loadConfig({
+      ...process.env,
+      RUNTIME_MODE: "ci",
+      LLM_REVIEW_ENABLED: "true",
+      LLM_REVIEW_PROVIDER: "http",
+      LLM_REVIEW_MODEL: "test-model"
+    });
+    const registry = { fetchMetadata: vi.fn(async () => metadata()), fetchTarball: vi.fn(async (url: string) => tarballs[url]) };
+
+    const result = await analyseAnalysisJob(
+      {
+        packageName: "pkg",
+        version: "1.0.0",
+        reason: "manual_review",
+        priority: "high",
+        requestedBy: "reviewer",
+        runLlmReview: true,
+        createdAt: "2026-05-20T00:00:00.000Z"
+      },
+      { config, registry, persistence }
+    );
+
+    expect(result.decision.reasons.map((reason) => reason.code)).not.toContain("LLM_RISK_REVIEW_FLAGGED");
+    expect(await persistence.listLlmRiskReviews({ packageName: "pkg", version: "1.0.0" })).toHaveLength(0);
+    expect(await persistence.listAuditEvents({ targetId: "pkg@1.0.0" })).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          actor: "reviewer",
+          eventType: "llm_review.unavailable",
+          metadata: expect.objectContaining({
+            reason: "manual_review",
+            priority: "high",
+            provider: "http",
+            model: "test-model",
+            endpointConfigured: false,
+            privatePackageSkipped: false
+          })
+        })
+      ])
+    );
   });
 
   it("does not send private package metadata to LLM review unless explicitly enabled", async () => {
