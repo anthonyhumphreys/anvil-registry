@@ -15,6 +15,7 @@ export function analyseManifestChange(
   const signals: PolicyReason[] = [];
   const targetLifecycle = pickLifecycleScripts(target.scripts);
   const previousLifecycle = pickLifecycleScripts(previous?.scripts);
+  const release = releaseContext(previous?.version, target.version);
 
   for (const [scriptName, script] of Object.entries(targetLifecycle)) {
     if (!previousLifecycle[scriptName]) {
@@ -22,14 +23,14 @@ export function analyseManifestChange(
         code: "NEW_INSTALL_SCRIPT",
         message: `Lifecycle script '${scriptName}' was introduced.`,
         severity: "high",
-        evidence: { scriptName, script }
+        evidence: { scriptName, script, impact: "install-time", expectedForRelease: false, releaseType: release.type }
       });
     } else if (previousLifecycle[scriptName] !== script) {
       signals.push({
         code: "INSTALL_SCRIPT_CHANGED",
         message: `Lifecycle script '${scriptName}' changed.`,
         severity: "medium",
-        evidence: { scriptName }
+        evidence: { scriptName, impact: "install-time", expectedForRelease: false, releaseType: release.type }
       });
     }
   }
@@ -44,7 +45,7 @@ export function analyseManifestChange(
       code: "NEW_DEPENDENCY_IN_PATCH_VERSION",
       message: "Patch version added new runtime dependencies.",
       severity: "medium",
-      evidence: { added: dependencyDiff.added }
+      evidence: { added: dependencyDiff.added, impact: "runtime", expectedForRelease: false, releaseType: release.type }
     });
   }
 
@@ -53,7 +54,7 @@ export function analyseManifestChange(
       code: "OPTIONAL_DEPENDENCY_ADDED",
       message: "Patch version added optional dependencies.",
       severity: "medium",
-      evidence: { added: dependencyDiff.optional.added }
+      evidence: { added: dependencyDiff.optional.added, impact: "install-time-or-runtime", expectedForRelease: false, releaseType: release.type }
     });
   }
 
@@ -62,12 +63,12 @@ export function analyseManifestChange(
       code: "PEER_DEPENDENCY_CHANGED",
       message: "Peer dependency contract changed.",
       severity: "low",
-      evidence: dependencyDiff.peer
+      evidence: { ...dependencyDiff.peer, impact: "runtime-contract", expectedForRelease: release.type === "major", releaseType: release.type }
     });
   }
 
   if (previous) {
-    signals.push(...detectManifestMetadataChanges(target, previous));
+    signals.push(...detectManifestMetadataChanges(target, previous, release.type));
   }
 
   return {
@@ -79,6 +80,7 @@ export function analyseManifestChange(
     signals,
     dependencyDiff,
     manifestDiff: {
+      release,
       lifecycleScripts: {
         previous: previousLifecycle,
         target: targetLifecycle
@@ -330,7 +332,7 @@ function diffManifestDependencies(target: PackageVersionMetadata, previous?: Pac
   };
 }
 
-function detectManifestMetadataChanges(target: PackageVersionMetadata, previous: PackageVersionMetadata): PolicyReason[] {
+function detectManifestMetadataChanges(target: PackageVersionMetadata, previous: PackageVersionMetadata, releaseType: string): PolicyReason[] {
   const signals: PolicyReason[] = [];
   const metadataDiff = diffManifestMetadata(target, previous);
 
@@ -339,7 +341,7 @@ function detectManifestMetadataChanges(target: PackageVersionMetadata, previous:
       code: "REPOSITORY_CHANGED",
       message: "Repository metadata changed.",
       severity: "medium",
-      evidence: metadataDiff.repository
+      evidence: { ...metadataDiff.repository, impact: "metadata", expectedForRelease: releaseType !== "patch", releaseType }
     });
   }
 
@@ -348,7 +350,7 @@ function detectManifestMetadataChanges(target: PackageVersionMetadata, previous:
       code: "BIN_FIELD_CHANGED",
       message: "Package binary entry points changed.",
       severity: "medium",
-      evidence: metadataDiff.bin
+      evidence: { ...metadataDiff.bin, impact: "runtime-entrypoint", expectedForRelease: releaseType !== "patch", releaseType }
     });
   }
 
@@ -358,7 +360,13 @@ function detectManifestMetadataChanges(target: PackageVersionMetadata, previous:
       code: "MANIFEST_FIELD_CHANGED",
       message: `Package ${key} metadata changed.`,
       severity: key === "license" ? "low" : "medium",
-      evidence: { field: key, ...metadataDiff[key] }
+      evidence: {
+        field: key,
+        ...metadataDiff[key],
+        impact: key === "files" ? "published-files" : "metadata",
+        expectedForRelease: releaseType !== "patch" || key === "license",
+        releaseType
+      }
     });
   }
 
@@ -372,6 +380,15 @@ function diffManifestMetadata(target: PackageVersionMetadata, previous?: Package
     maintainers: changedField(previous?.maintainers, target.maintainers),
     bin: changedField(previous?.bin, target.bin),
     files: changedField(previous?.files, target.files)
+  };
+}
+
+function releaseContext(previousVersion: string | undefined, targetVersion: string) {
+  const type = previousVersion ? semver.diff(previousVersion, targetVersion) ?? "unknown" : "no-baseline";
+  return {
+    previous: previousVersion,
+    target: targetVersion,
+    type
   };
 }
 

@@ -20,6 +20,17 @@ describe("analyseManifestChange", () => {
 
     expect(report.signals.map((signal) => signal.code)).toContain("NEW_INSTALL_SCRIPT");
     expect(report.signals.map((signal) => signal.code)).toContain("NEW_DEPENDENCY_IN_PATCH_VERSION");
+    expect(report.manifestDiff?.release).toMatchObject({ previous: "1.0.0", target: "1.0.1", type: "patch" });
+    expect(report.signals.find((signal) => signal.code === "NEW_INSTALL_SCRIPT")?.evidence).toMatchObject({
+      impact: "install-time",
+      expectedForRelease: false,
+      releaseType: "patch"
+    });
+    expect(report.signals.find((signal) => signal.code === "NEW_DEPENDENCY_IN_PATCH_VERSION")?.evidence).toMatchObject({
+      impact: "runtime",
+      expectedForRelease: false,
+      releaseType: "patch"
+    });
   });
 
   it("diffs broader manifest metadata and dependency groups", () => {
@@ -60,6 +71,11 @@ describe("analyseManifestChange", () => {
     expect(report.manifestDiff?.metadata).toMatchObject({
       license: { previous: "Apache-2.0", target: "MIT", changed: true },
       bin: { target: { pkg: "./cli.js" }, changed: true }
+    });
+    expect(report.signals.find((signal) => signal.code === "BIN_FIELD_CHANGED")?.evidence).toMatchObject({
+      impact: "runtime-entrypoint",
+      expectedForRelease: false,
+      releaseType: "patch"
     });
   });
 
