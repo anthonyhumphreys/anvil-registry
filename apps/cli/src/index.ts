@@ -2,7 +2,7 @@
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { loadConfig } from "@anvil/config";
-import type { PolicyDecision } from "@anvil/shared";
+import type { AnalysisReport, LlmRiskReview, Override, PolicyDecision } from "@anvil/shared";
 
 type ReadTextFile = (path: string) => Promise<string>;
 
@@ -280,22 +280,48 @@ async function nodeBaseReport(args: string[], dependencies: CliDependencies): Pr
 
 async function explainTarget(target: PackageTarget, dependencies: CliDependencies) {
   const registryUrl = registryBaseUrl(dependencies.env);
-  return requestJson<{ packageName: string; version: string; decision: PolicyDecision }>(dependencies, `${registryUrl}/-/anvil/explain`, {
+  return requestJson<ExplainResult>(dependencies, `${registryUrl}/-/anvil/explain`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(target)
   });
 }
 
-function printDecision(result: { packageName: string; version: string; decision: PolicyDecision }, dependencies: CliDependencies) {
+function printDecision(result: ExplainResult, dependencies: CliDependencies) {
   dependencies.stdout.write(`\nAnvil ${formatAction(result.decision.action)} ${result.packageName}@${result.version}\n`);
   dependencies.stdout.write(`${result.decision.explanation}\n`);
   if (result.decision.reasons.length > 0) {
     dependencies.stdout.write("Reasons:\n");
     for (const reason of result.decision.reasons) dependencies.stdout.write(`- ${reason.message}\n`);
   }
+  if (result.analysisReport) printAnalysisSummary(result.analysisReport, dependencies);
+  if (result.llmRiskReviews?.length) printLlmRiskReviewSummary(result.llmRiskReviews, dependencies);
+  if (result.override) {
+    dependencies.stdout.write("Active override:\n");
+    dependencies.stdout.write(`- ${result.override.action}: ${result.override.reason}\n`);
+  }
   if (result.decision.action === "block" || result.decision.action === "quarantine") {
     dependencies.stdout.write(`Override:\n- anvil approve ${result.packageName}@${result.version} --reason "intentional dependency"\n`);
+  }
+}
+
+function printAnalysisSummary(report: AnalysisReport, dependencies: CliDependencies) {
+  dependencies.stdout.write("Analysis:\n");
+  dependencies.stdout.write(`- analyser: ${report.analyserVersion}\n`);
+  dependencies.stdout.write(`- score: ${report.score}\n`);
+  if (report.signals.length > 0) {
+    dependencies.stdout.write(`- signals: ${report.signals.map((signal) => signal.code).join(", ")}\n`);
+  }
+}
+
+function printLlmRiskReviewSummary(reviews: LlmRiskReviewRecord[], dependencies: CliDependencies) {
+  const latest = reviews[0];
+  if (!latest) return;
+  dependencies.stdout.write("LLM review:\n");
+  dependencies.stdout.write(`- ${latest.provider}/${latest.model}: ${latest.review.riskLevel} confidence=${latest.review.confidence} recommendation=${latest.review.recommendedAction}\n`);
+  dependencies.stdout.write(`- ${latest.review.summary}\n`);
+  if (latest.review.suspectedRiskTypes.length > 0) {
+    dependencies.stdout.write(`- suspected risks: ${latest.review.suspectedRiskTypes.join(", ")}\n`);
   }
 }
 
@@ -395,6 +421,24 @@ type SmokePackageMetadata = {
   name: string;
   "dist-tags"?: { latest?: string };
   versions?: Record<string, { dist?: { tarball?: string } }>;
+};
+
+type ExplainResult = {
+  packageName: string;
+  version: string;
+  decision: PolicyDecision;
+  analysisReport?: AnalysisReport;
+  llmRiskReviews?: LlmRiskReviewRecord[];
+  override?: Override;
+};
+
+type LlmRiskReviewRecord = {
+  packageName: string;
+  version: string;
+  provider: string;
+  model: string;
+  review: LlmRiskReview;
+  createdAt?: string;
 };
 
 function isGatewayTarballUrl(tarballUrl: string, registryUrl: string): boolean {

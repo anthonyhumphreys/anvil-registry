@@ -82,6 +82,66 @@ importers:
     expect(writes.join("")).toContain("Anvil allowed pkg@1.0.0");
   });
 
+  it("prints analysis and LLM review context from explain responses", async () => {
+    const writes: string[] = [];
+    const dependencies = fakeDependencies({
+      fetch: vi.fn(async () =>
+        jsonResponse({
+          packageName: "pkg",
+          version: "1.0.0",
+          decision: {
+            action: "quarantine",
+            score: 55,
+            reasons: [{ code: "LLM_RISK_REVIEW_FLAGGED", message: "Install path behavior needs human review.", severity: "high" }],
+            explanation: "pkg@1.0.0 is quarantined by deterministic policy."
+          },
+          analysisReport: {
+            packageName: "pkg",
+            version: "1.0.0",
+            analyserVersion: "static-analysis-test",
+            policyVersion: "test-policy",
+            score: 25,
+            signals: [{ code: "USES_PROCESS_ENV", message: "Package reads process.env in install-path code.", severity: "medium" }],
+            createdAt: "2026-05-20T12:00:00.000Z"
+          },
+          llmRiskReviews: [
+            {
+              packageName: "pkg",
+              version: "1.0.0",
+              provider: "test-provider",
+              model: "risk-reviewer",
+              review: {
+                riskLevel: "high",
+                confidence: "medium",
+                summary: "Install path behavior needs human review.",
+                suspectedRiskTypes: ["install_script_abuse"],
+                evidence: [{ signal: "USES_PROCESS_ENV", explanation: "Environment access in install-path code.", source: "code_snippet" }],
+                recommendedAction: "quarantine"
+              },
+              createdAt: "2026-05-20T12:00:01.000Z"
+            }
+          ]
+        })
+      ),
+      stdout: {
+        write: (value: string) => {
+          writes.push(value);
+          return true;
+        }
+      }
+    });
+
+    const exitCode = await run(["explain", "pkg@1.0.0"], dependencies);
+
+    expect(exitCode).toBe(0);
+    expect(writes.join("")).toContain("Analysis:");
+    expect(writes.join("")).toContain("analyser: static-analysis-test");
+    expect(writes.join("")).toContain("signals: USES_PROCESS_ENV");
+    expect(writes.join("")).toContain("LLM review:");
+    expect(writes.join("")).toContain("test-provider/risk-reviewer: high confidence=medium recommendation=quarantine");
+    expect(writes.join("")).toContain("suspected risks: install_script_abuse");
+  });
+
   it("ignores the pnpm argument separator", async () => {
     const dependencies = fakeDependencies({
       fetch: vi.fn(async () => jsonResponse({ ok: true, upstream: "https://registry.npmjs.org", runtimeMode: "development" }))

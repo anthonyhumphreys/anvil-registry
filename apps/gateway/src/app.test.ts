@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { loadConfig } from "@anvil/config";
 import type { NpmPackageMetadata } from "@anvil/npm-registry";
 import type { ObjectStore } from "@anvil/object-store";
+import type { AnalysisReport } from "@anvil/shared";
 import { MemoryPersistence } from "@anvil/persistence";
 import { MemoryJobQueue } from "@anvil/queue";
 import { buildGateway } from "./app.js";
@@ -328,6 +329,80 @@ describe("gateway policy enforcement", () => {
       tarballIntegrity: "sha512-test",
       analyserVersion: "metadata-policy-2026-05-20.1"
     })).toMatchObject({ action: "quarantine" });
+
+    await app.close();
+  });
+
+  it("includes latest analysis and LLM review evidence in explain responses", async () => {
+    const persistence = new MemoryPersistence();
+    const report = {
+      packageName: "stable-package",
+      version: "1.0.0",
+      analyserVersion: "static-analysis-test",
+      policyVersion: testConfig("ci").policy.version,
+      tarballIntegrity: "sha512-test",
+      score: 25,
+      signals: [{ code: "USES_PROCESS_ENV", message: "Package reads process.env in install-path code.", severity: "medium" }],
+      createdAt: "2026-05-20T12:00:00.000Z"
+    } satisfies AnalysisReport;
+    await persistence.putAnalysisReport(report);
+    await persistence.putLlmRiskReview({
+      packageName: "stable-package",
+      version: "1.0.0",
+      provider: "test-provider",
+      model: "risk-reviewer",
+      review: {
+        riskLevel: "high",
+        confidence: "medium",
+        summary: "Install path behavior needs human review.",
+        suspectedRiskTypes: ["install_script_abuse"],
+        evidence: [{ signal: "USES_PROCESS_ENV", explanation: "Environment access in install-path code.", source: "code_snippet" }],
+        recommendedAction: "quarantine"
+      }
+    });
+    const app = buildGateway({
+      config: loadConfig({
+        ...process.env,
+        RUNTIME_MODE: "ci",
+        PUBLIC_BASE_URL: "http://anvil.test",
+        PERSISTENCE_DRIVER: "memory",
+        LLM_REVIEW_ENABLED: "true"
+      }),
+      persistence,
+      queue: new MemoryJobQueue(),
+      registry: {
+        fetchMetadata: vi.fn(async () => packageMetadata("stable-package", "2020-01-01T00:00:00.000Z")),
+        fetchTarball: vi.fn()
+      },
+      downloadStats: noDownloadStats()
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/-/anvil/explain",
+      payload: { packageName: "stable-package", version: "1.0.0" }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      packageName: "stable-package",
+      version: "1.0.0",
+      decision: {
+        action: "quarantine",
+        reasons: expect.arrayContaining([expect.objectContaining({ code: "LLM_RISK_REVIEW_FLAGGED" })])
+      },
+      analysisReport: expect.objectContaining({
+        analyserVersion: "static-analysis-test",
+        signals: [expect.objectContaining({ code: "USES_PROCESS_ENV" })]
+      }),
+      llmRiskReviews: [
+        expect.objectContaining({
+          provider: "test-provider",
+          model: "risk-reviewer",
+          review: expect.objectContaining({ riskLevel: "high", summary: "Install path behavior needs human review." })
+        })
+      ]
+    });
 
     await app.close();
   });

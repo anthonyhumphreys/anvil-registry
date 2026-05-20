@@ -242,14 +242,32 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
     const metadata = await fetchMetadata(packageName);
     const version = requestedVersion === "latest" ? metadata["dist-tags"]?.latest : requestedVersion;
     if (!version || !metadata.versions?.[version]) return undefined;
-    const decision = await evaluateAndCache(metadata, version, "metadata_request", await safeWeeklyDownloads(packageName));
-    return { packageName, version, decision };
+    const weeklyDownloads = await safeWeeklyDownloads(packageName);
+    await persistPackageVersions(metadata, weeklyDownloads);
+    const decision = await evaluateAndCache(metadata, version, "metadata_request", weeklyDownloads);
+    const [analysisReport, llmRiskReviews, override] = await Promise.all([
+      persistence.getAnalysisReport(packageName, version),
+      persistence.listLlmRiskReviews({ packageName, version, limit: 5 }),
+      persistence.getOverride(packageName, version)
+    ]);
+
+    return {
+      packageName,
+      version,
+      decision,
+      analysisReport,
+      llmRiskReviews,
+      override
+    };
   }
 
   async function evaluateAndCache(metadata: NpmPackageMetadata, version: string, reason: "metadata_request" | "tarball_request", weeklyDownloads?: number) {
     const packageName = metadata.name;
     const versionMetadata = toVersionMetadata(metadata, version);
-    const analysisReport = await persistence.getAnalysisReport(packageName, version);
+    const [analysisReport, latestLlmReview] = await Promise.all([
+      persistence.getAnalysisReport(packageName, version),
+      config.policy.llmReview.enabled ? persistence.listLlmRiskReviews({ packageName, version, limit: 1 }) : Promise.resolve([])
+    ]);
     const decisionIdentity = {
       tarballIntegrity: versionMetadata?.integrity,
       tarballShasum: versionMetadata?.shasum,
@@ -275,6 +293,7 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
       similarPackages,
       override: await persistence.getOverride(packageName, version),
       analysisReport,
+      llmRiskReview: latestLlmReview[0]?.review,
       policy: config.policy
     });
 
