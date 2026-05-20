@@ -286,6 +286,12 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
     return handleMetadataRequest(decodeRoutePackageName(request.params.scope, request.params.packageName));
   });
 
+  app.get<{ Params: { scope: string; packageName: string } }>("/:scope/:packageName", async (request, reply) => {
+    const packageName = decodeSplitEncodedScopedPackageName(request.params.scope, request.params.packageName);
+    if (!packageName) return reply.code(404).send({ error: "ANVIL_ROUTE_NOT_FOUND" });
+    return handleMetadataRequest(packageName);
+  });
+
   app.get<{ Params: { packageName: string; tarballName: string } }>("/:packageName/-/:tarballName", async (request, reply) => {
     return handleTarballRequest(request.params.packageName, request.params.tarballName, reply);
   });
@@ -294,6 +300,15 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
     "/@:scope/:packageName/-/:tarballName",
     async (request, reply) => {
       return handleTarballRequest(decodeRoutePackageName(request.params.scope, request.params.packageName), request.params.tarballName, reply);
+    }
+  );
+
+  app.get<{ Params: { scope: string; packageName: string; tarballName: string } }>(
+    "/:scope/:packageName/-/:tarballName",
+    async (request, reply) => {
+      const packageName = decodeSplitEncodedScopedPackageName(request.params.scope, request.params.packageName);
+      if (!packageName) return reply.code(404).send({ error: "ANVIL_ROUTE_NOT_FOUND" });
+      return handleTarballRequest(packageName, request.params.tarballName, reply);
     }
   );
 
@@ -492,6 +507,20 @@ function tarballCacheKey(packageName: string, version: string, integrity: string
   const safeName = packageName.replace(/^@/, "").replace(/[\/:]/g, "__");
   const safeIntegrity = integrity.replace(/[\/:+=]/g, "_");
   return `tarballs/${safeName}/${version}/${safeIntegrity}.tgz`;
+}
+
+function decodeSplitEncodedScopedPackageName(scopeSegment: string, packageName: string): string | undefined {
+  const scope = safeDecodeURIComponent(scopeSegment);
+  if (!scope.startsWith("@") || scope.length === 1) return undefined;
+  return `${scope}/${packageName}`;
+}
+
+function safeDecodeURIComponent(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 function analysisTargetsFromBody(body: PackageTargetRequest) {

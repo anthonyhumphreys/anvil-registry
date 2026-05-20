@@ -148,6 +148,33 @@ describe("gateway policy enforcement", () => {
     await app.close();
   });
 
+  it("accepts split URL-encoded scoped metadata and tarball paths", async () => {
+    const metadata = packageMetadata("@scope/pkg", "2020-01-01T00:00:00.000Z");
+    const fetchMetadata = vi.fn(async () => metadata);
+    const fetchTarball = vi.fn(async () => new Uint8Array([1, 2, 3]));
+    const app = buildGateway({
+      config: testConfig("development"),
+      persistence: new MemoryPersistence(),
+      objectStore: new TestObjectStore(),
+      queue: new MemoryJobQueue(),
+      registry: {
+        fetchMetadata,
+        fetchTarball
+      },
+      downloadStats: noDownloadStats()
+    });
+
+    const metadataResponse = await app.inject({ method: "GET", url: "/%40scope/pkg" });
+    const tarballResponse = await app.inject({ method: "GET", url: "/%40scope/pkg/-/pkg-1.0.0.tgz" });
+
+    expect(metadataResponse.statusCode).toBe(200);
+    expect(tarballResponse.statusCode).toBe(200);
+    expect(fetchMetadata).toHaveBeenCalledWith("@scope/pkg");
+    expect(fetchTarball).toHaveBeenCalledWith("https://registry.npmjs.org/@scope/pkg/-/pkg-1.0.0.tgz");
+
+    await app.close();
+  });
+
   it("serves cached tarballs without fetching upstream and stores misses", async () => {
     const metadata = packageMetadata("stable-package", "2020-01-01T00:00:00.000Z");
     const objectStore = new TestObjectStore();
