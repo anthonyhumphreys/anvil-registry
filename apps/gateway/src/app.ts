@@ -423,7 +423,12 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
       analyserVersion: analysisReport?.analyserVersion ?? metadataPolicyAnalyserVersion
     };
     const existing = await persistence.getPolicyDecision(packageName, version, config.policy.version, decisionIdentity);
-    if (existing) return existing;
+    if (existing) {
+      if (reason === "tarball_request" && !analysisReport && existing.action === "allow") {
+        await enqueueAnalysisJob(packageName, version, reason, "normal");
+      }
+      return existing;
+    }
 
     const similarPackages = detectNameSquatting(packageName, await popularPackageIndex).map((signal) => ({
       name: signal.candidate,
@@ -460,16 +465,20 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
     }));
 
     if (decision.action !== "allow" || (reason === "tarball_request" && !analysisReport)) {
-      await queue.enqueueAnalysisJob({
-        packageName,
-        version,
-        reason,
-        priority: decision.action === "block" ? "high" : "normal",
-        createdAt: new Date().toISOString()
-      });
+      await enqueueAnalysisJob(packageName, version, reason, decision.action === "block" ? "high" : "normal");
     }
 
     return decision;
+  }
+
+  async function enqueueAnalysisJob(packageName: string, version: string, reason: "metadata_request" | "tarball_request", priority: AnalysisJob["priority"]) {
+    await queue.enqueueAnalysisJob({
+      packageName,
+      version,
+      reason,
+      priority,
+      createdAt: new Date().toISOString()
+    });
   }
 
   async function safeWeeklyDownloads(packageName: string): Promise<number | undefined> {

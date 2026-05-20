@@ -242,6 +242,39 @@ describe("gateway policy enforcement", () => {
     await app.close();
   });
 
+  it("enqueues deep analysis when tarball requests reuse cached metadata decisions", async () => {
+    const metadata = packageMetadata("stable-package", "2020-01-01T00:00:00.000Z");
+    const queue = new MemoryJobQueue();
+    const app = buildGateway({
+      config: testConfig("development"),
+      persistence: new MemoryPersistence(),
+      queue,
+      registry: {
+        fetchMetadata: vi.fn(async () => metadata),
+        fetchTarball: vi.fn(async () => new Uint8Array([1, 2, 3]))
+      },
+      downloadStats: noDownloadStats()
+    });
+
+    const metadataResponse = await app.inject({ method: "GET", url: "/stable-package" });
+    const tarballResponse = await app.inject({ method: "GET", url: "/stable-package/-/stable-package-1.0.0.tgz" });
+    const queuedJobs = [];
+    for await (const job of queue.receiveAnalysisJobs()) queuedJobs.push(job);
+
+    expect(metadataResponse.statusCode).toBe(200);
+    expect(tarballResponse.statusCode).toBe(200);
+    expect(queuedJobs).toEqual([
+      expect.objectContaining({
+        packageName: "stable-package",
+        version: "1.0.0",
+        reason: "tarball_request",
+        priority: "normal"
+      })
+    ]);
+
+    await app.close();
+  });
+
   it("does not reuse cached policy decisions when tarball integrity changes", async () => {
     const persistence = new MemoryPersistence();
     await persistence.putPolicyDecision(
