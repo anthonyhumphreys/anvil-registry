@@ -1,0 +1,79 @@
+# Anvil Node Base
+
+Hardened Node 22 devcontainer base image for safer dependency installs.
+
+## Commands
+
+- `anvil-npm-ci-safe`: runs `npm ci --ignore-scripts`, then reports dependency lifecycle scripts.
+- `anvil-npm-ci-observed`: explicitly enables lifecycle scripts under `strace` and scans logs for IOC markers.
+- `anvil-dep-report`: scans an existing `node_modules` tree without installing and writes JSON plus Markdown reports.
+- `anvil-scan-lifecycle-scripts`: emits JSON for packages with install-time lifecycle scripts and suspicious script contents.
+- `anvil-scan-install-logs`: scans npm and strace logs for high-confidence and medium-confidence IOC markers with line evidence.
+- `anvil-network-monitor`: runs an arbitrary command under network syscall tracing and writes JSON plus Markdown reports.
+- `anvil-risk-gate`: applies the shared strict-mode risk policy to generated reports.
+- `anvil-use-registry`: writes a project `.npmrc` that points npm at Anvil Registry while preserving safer npm defaults.
+- `anvil-submit-report`: submits a local JSON report to Anvil Registry for Admin visibility.
+- `anvil-submit-report-if-configured`: submits reports only when `ANVIL_REGISTRY_URL` is set.
+
+Reports are written to `${ANVIL_REPORT_DIR:-.anvil/reports}`. Observed mode writes `ioc-report.json` and `ioc-report.md` with high/medium IOC findings, captured process executions, outbound connection targets, and sensitive file accesses. Dependency report mode writes `dependency-report.json`, `dependency-report.md`, and `lifecycle-scripts.json`. Network monitor mode writes `network-strace.log`, `network-report.json`, and `network-report.md`.
+
+## Network Policy
+
+`anvil-scan-install-logs`, `anvil-npm-ci-observed`, and `anvil-network-monitor` apply a small configurable network policy on top of raw IOC matching:
+
+```bash
+ANVIL_NETWORK_ALLOWED_PORTS=80,443
+ANVIL_NETWORK_ALLOWED_HOSTS=registry.npmjs.org,npm.pkg.github.com
+ANVIL_NETWORK_BLOCKED_HOSTS=raw.githubusercontent.com,pastebin.com
+ANVIL_NETWORK_DIRECT_IP_SEVERITY=medium
+ANVIL_NETWORK_NON_STANDARD_PORT_SEVERITY=medium
+```
+
+Allowed host matches suppress direct-IP and non-standard-port findings for that host or IP. Blocked hosts always produce a high-confidence finding. Direct IP connections and non-standard ports default to medium confidence, but can be promoted to `high` for stricter CI/devcontainer runs or set to `off` when a repo has a known noisy install path. Which, to be clear, should come with a raised eyebrow and a reason.
+
+## Strict Mode
+
+All install/report commands use the same strict-mode gate:
+
+```bash
+ANVIL_STRICT=true
+ANVIL_STRICT_RISK_LEVEL=high
+ANVIL_STRICT_LIFECYCLE_MODE=any
+```
+
+`ANVIL_STRICT_RISK_LEVEL=high` fails IOC, network, and dependency reports when high-confidence findings exist. Set it to `medium` to fail on high or medium findings, or `off` to keep strict lifecycle handling while ignoring risk counts.
+
+`ANVIL_STRICT_LIFECYCLE_MODE=any` preserves the safe-mode default: any dependency lifecycle script fails strict safe installs. Set it to `risk` to fail only when lifecycle script findings meet `ANVIL_STRICT_RISK_LEVEL`, or `off` to report lifecycle scripts without failing.
+
+## Registry Integration
+
+Set `ANVIL_REGISTRY_URL` or pass a URL directly:
+
+```bash
+ANVIL_REGISTRY_URL=http://localhost:4873 anvil-use-registry
+anvil-use-registry https://npm.anvil.example.com
+```
+
+By default the helper writes `.npmrc` in the current directory. Override that with `ANVIL_NPMRC_PATH` when a devcontainer needs a different project path:
+
+```bash
+ANVIL_REGISTRY_URL=http://gateway:4873 ANVIL_NPMRC_PATH=/workspaces/my-app/.npmrc anvil-use-registry
+```
+
+The generated config keeps `ignore-scripts=true`, `fund=false`, `audit=true`, `save-exact=true`, and `foreground-scripts=true`.
+
+## Report Submission
+
+Submit a generated report to Anvil Registry:
+
+```bash
+ANVIL_REGISTRY_URL=http://gateway:4873 anvil-submit-report .anvil/reports/dependency-report.json dependency
+ANVIL_REGISTRY_URL=http://gateway:4873 anvil-submit-report .anvil/reports/ioc-report.json ioc
+ANVIL_REGISTRY_URL=http://gateway:4873 anvil-submit-report .anvil/reports/network-report.json network
+```
+
+If the gateway has `ADMIN_TOKEN` configured, pass it as `ANVIL_ADMIN_TOKEN`.
+
+When `ANVIL_REGISTRY_URL` is set, `anvil-npm-ci-safe`, `anvil-npm-ci-observed`, and `anvil-dep-report` automatically submit their generated JSON reports. Submission failures warn but do not fail the install unless `ANVIL_REPORT_SUBMIT_STRICT=true` is set.
+
+Observed mode is opt-in because dependency install scripts are where supply-chain incidents go to feel important.

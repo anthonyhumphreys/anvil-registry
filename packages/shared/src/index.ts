@@ -1,0 +1,296 @@
+import { z } from "zod";
+
+export const runtimeModeSchema = z.enum(["development", "ci", "production"]);
+export type RuntimeMode = z.infer<typeof runtimeModeSchema>;
+
+export const policyActionSchema = z.enum(["allow", "warn", "quarantine", "block"]);
+export type PolicyAction = z.infer<typeof policyActionSchema>;
+
+export type PolicyReasonCode =
+  | "PACKAGE_TOO_NEW"
+  | "LOW_WEEKLY_DOWNLOADS"
+  | "SIMILAR_TO_POPULAR_PACKAGE"
+  | "NEW_PACKAGE_LOW_DOWNLOADS"
+  | "NEW_INSTALL_SCRIPT"
+  | "INSTALL_SCRIPT_CHANGED"
+  | "NEW_DEPENDENCY_IN_PATCH_VERSION"
+  | "MANIFEST_FIELD_CHANGED"
+  | "BIN_FIELD_CHANGED"
+  | "OPTIONAL_DEPENDENCY_ADDED"
+  | "PEER_DEPENDENCY_CHANGED"
+  | "SUSPICIOUS_FILE_ADDED"
+  | "UNSAFE_TARBALL_PATH"
+  | "UNSAFE_TARBALL_SYMLINK"
+  | "LARGE_FILE_SIZE_DELTA"
+  | "OBFUSCATED_CODE_DETECTED"
+  | "UNEXPECTED_BINARY_FILE"
+  | "USES_CHILD_PROCESS"
+  | "USES_PROCESS_ENV"
+  | "NETWORK_ACCESS_IN_INSTALL_PATH"
+  | "REPOSITORY_CHANGED"
+  | "PROVENANCE_MISSING"
+  | "PROVENANCE_CHANGED"
+  | "PROVENANCE_SUBJECT_MISMATCH"
+  | "TRUSTED_PUBLISHING_PRESENT"
+  | "LLM_RISK_REVIEW_FLAGGED"
+  | "APPROVED_OVERRIDE";
+
+export type PolicyReason = {
+  code: PolicyReasonCode;
+  message: string;
+  severity: "info" | "low" | "medium" | "high" | "critical";
+  evidence?: Record<string, unknown>;
+};
+
+export type PolicyDecision = {
+  action: PolicyAction;
+  score: number;
+  reasons: PolicyReason[];
+  explanation: string;
+  expiresAt?: string;
+};
+
+export type Override = {
+  packageName: string;
+  version?: string;
+  action: PolicyAction;
+  reason: string;
+  approvedBy?: string;
+  expiresAt?: string;
+};
+
+export type PolicyConfig = {
+  version: string;
+  minimumPackageAgeDays: number;
+  comparePreviousVersions: number;
+  lowDownloadThreshold: number;
+  strictLowDownloadThreshold: number;
+  blockSimilarLowDownloadPackages: boolean;
+  blockNewInstallScripts: boolean;
+  quarantineChangedInstallScripts: boolean;
+  blockUnexpectedBinaries: boolean;
+  quarantineObfuscatedCode: boolean;
+  hideQuarantinedMetadata: boolean;
+  provenance: {
+    enabled: boolean;
+    highDownloadThreshold: number;
+    trustedPublishingScoreReduction: number;
+    quarantineChangedProvenance: boolean;
+    quarantineMissingForHighDownloadPackages: boolean;
+  };
+  overrides: {
+    enabled: boolean;
+    requireReason: boolean;
+    defaultExpiryDays: number;
+  };
+  llmReview: {
+    enabled: boolean;
+    includePrivatePackages: boolean;
+    runOnUnknownPackages: boolean;
+    runOnQuarantine: boolean;
+    provider?: string;
+    model?: string;
+  };
+};
+
+export type PackageMetadataSummary = {
+  name: string;
+  distTags?: Record<string, string>;
+  publishedAt?: string;
+};
+
+export type PackageVersionMetadata = {
+  name: string;
+  version: string;
+  publishedAt?: string;
+  tarballUrl?: string;
+  integrity?: string;
+  shasum?: string;
+  scripts?: Record<string, string>;
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
+  bin?: unknown;
+  files?: unknown;
+  repository?: unknown;
+  license?: string;
+  maintainers?: unknown;
+  provenance?: {
+    present: boolean;
+    source?: "dist.attestations" | "dist.provenance" | "version.provenance";
+    attestationUrl?: string;
+    raw?: unknown;
+  };
+};
+
+export type ProvenanceVerificationResult = {
+  status: "missing" | "unverified" | "subject_matched" | "subject_mismatch" | "unsupported";
+  verified: boolean;
+  verifier: string;
+  summary: string;
+  source?: NonNullable<PackageVersionMetadata["provenance"]>["source"];
+  attestationUrl?: string;
+  subjectName?: string;
+  expectedSubjectName?: string;
+  subjectDigest?: Record<string, string>;
+  expectedDigest?: Record<string, string>;
+  evidence?: Record<string, unknown>;
+};
+
+export type AnalysisReport = {
+  packageName: string;
+  version: string;
+  analyserVersion: string;
+  policyVersion: string;
+  tarballIntegrity?: string;
+  tarballShasum?: string;
+  provenance?: {
+    status: "present" | "missing" | "changed" | "removed";
+    target?: PackageVersionMetadata["provenance"];
+    previous?: PackageVersionMetadata["provenance"];
+    verification?: ProvenanceVerificationResult;
+  };
+  score: number;
+  signals: PolicyReason[];
+  manifestDiff?: Record<string, unknown>;
+  dependencyDiff?: Record<string, unknown>;
+  fileFindings?: Array<{ path: string; code: PolicyReasonCode; reason: string; severity: PolicyReason["severity"]; evidence?: Record<string, unknown> }>;
+  createdAt: string;
+};
+
+export type LlmRiskType =
+  | "typosquatting"
+  | "dependency_confusion"
+  | "credential_exfiltration"
+  | "install_script_abuse"
+  | "obfuscation"
+  | "unexpected_network_access"
+  | "suspicious_maintainer_change"
+  | "overbroad_dependency_tree"
+  | "unknown";
+
+export type LlmEvidenceSource = "metadata" | "package_json" | "diff" | "code_snippet" | "download_stats";
+
+export type LlmRiskReview = {
+  riskLevel: "low" | "medium" | "high" | "critical";
+  confidence: "low" | "medium" | "high";
+  summary: string;
+  suspectedRiskTypes: LlmRiskType[];
+  evidence: Array<{ signal: string; explanation: string; source: LlmEvidenceSource }>;
+  recommendedAction: PolicyAction;
+};
+
+export type PolicyInput = {
+  packageName: string;
+  version: string;
+  runtimeMode: RuntimeMode;
+  metadata?: PackageMetadataSummary;
+  versionMetadata?: PackageVersionMetadata;
+  weeklyDownloads?: number;
+  packageAgeDays?: number;
+  analysisReport?: AnalysisReport;
+  llmRiskReview?: LlmRiskReview;
+  override?: Override;
+  similarPackages?: Array<{ name: string; similarity: number; weeklyDownloads?: number }>;
+  policy: PolicyConfig;
+};
+
+export type AnalysisJob = {
+  id?: string;
+  packageName: string;
+  version: string;
+  requestedBy?: string;
+  reason: "metadata_request" | "tarball_request" | "lockfile_scan" | "manual_review";
+  priority: "low" | "normal" | "high";
+  createdAt: string;
+};
+
+export type AnvilErrorResponse = {
+  error: "ANVIL_PACKAGE_BLOCKED" | "ANVIL_PACKAGE_QUARANTINED";
+  package: string;
+  version: string;
+  decision: PolicyAction;
+  score: number;
+  reasons: PolicyReason[];
+  suggestions: Array<{ package: string; reason: string }>;
+  overrideHint: string;
+};
+
+export type PolicyDecisionAuditIdentity = {
+  tarballIntegrity?: string;
+  tarballShasum?: string;
+  analyserVersion?: string;
+};
+
+export type PolicyDecisionAuditEvent = {
+  actor: "anvil-gateway" | "anvil-worker" | string;
+  eventType: "policy.decision";
+  targetType: "package";
+  targetId: string;
+  metadata: {
+    source: string;
+    action: PolicyDecision["action"];
+    score: number;
+    policyVersion: string;
+    analyserVersion?: string;
+    tarballIntegrity?: string;
+    tarballShasum?: string;
+    reasonCodes: PolicyReasonCode[];
+  };
+};
+
+export function packageIdentity(packageName: string, version: string): string {
+  return `${packageName}@${version}`;
+}
+
+export function buildPolicyDecisionAuditEvent(input: {
+  actor: PolicyDecisionAuditEvent["actor"];
+  source: string;
+  packageName: string;
+  version: string;
+  policyVersion: string;
+  decision: PolicyDecision;
+  identity?: PolicyDecisionAuditIdentity;
+}): PolicyDecisionAuditEvent {
+  return {
+    actor: input.actor,
+    eventType: "policy.decision",
+    targetType: "package",
+    targetId: packageIdentity(input.packageName, input.version),
+    metadata: {
+      source: input.source,
+      action: input.decision.action,
+      score: input.decision.score,
+      policyVersion: input.policyVersion,
+      analyserVersion: input.identity?.analyserVersion,
+      tarballIntegrity: input.identity?.tarballIntegrity,
+      tarballShasum: input.identity?.tarballShasum,
+      reasonCodes: input.decision.reasons.map((reason) => reason.code)
+    }
+  };
+}
+
+export function isDecisionBlockingInstall(decision: PolicyDecision, runtimeMode: RuntimeMode): boolean {
+  if (decision.action === "block") return true;
+  if (decision.action === "quarantine") return runtimeMode !== "development";
+  return false;
+}
+
+export function buildAnvilError(packageName: string, version: string, decision: PolicyDecision): AnvilErrorResponse {
+  return {
+    error: decision.action === "quarantine" ? "ANVIL_PACKAGE_QUARANTINED" : "ANVIL_PACKAGE_BLOCKED",
+    package: packageName,
+    version,
+    decision: decision.action,
+    score: decision.score,
+    reasons: decision.reasons,
+    suggestions: decision.reasons
+      .filter((reason) => reason.code === "SIMILAR_TO_POPULAR_PACKAGE" && typeof reason.evidence?.candidate === "string")
+      .map((reason) => ({
+        package: String(reason.evidence?.candidate),
+        reason: "Popular package with a similar name."
+      })),
+    overrideHint: `Run: anvil approve ${packageIdentity(packageName, version)} --reason "intentional"`
+  };
+}

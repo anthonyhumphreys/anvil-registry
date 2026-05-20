@@ -1,0 +1,16 @@
+{
+  "name": "@anvil/infra-sst",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "migrate:run": "tsx scripts/run-migrations.ts",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "sst": "^3.17.10"
+  }
+}

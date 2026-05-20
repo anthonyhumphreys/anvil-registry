@@ -1,0 +1,488 @@
+import { describe, expect, it, vi } from "vitest";
+import { loadConfig } from "@anvil/config";
+import type { NpmPackageMetadata } from "@anvil/npm-registry";
+import type { ObjectStore } from "@anvil/object-store";
+import { MemoryPersistence } from "@anvil/persistence";
+import { MemoryJobQueue } from "@anvil/queue";
+import { buildGateway } from "./app.js";
+
+function testConfig(runtimeMode: "development" | "ci" | "production" = "ci") {
+  return loadConfig({
+    ...process.env,
+    RUNTIME_MODE: runtimeMode,
+    PUBLIC_BASE_URL: "http://anvil.test",
+    PERSISTENCE_DRIVER: "memory"
+  });
+}
+
+describe("gateway policy enforcement", () => {
+  it("reports dependency readiness", async () => {
+    const app = buildGateway({
+      config: testConfig("ci"),
+      persistence: new MemoryPersistence(),
+      objectStore: new TestObjectStore(),
+      queue: new MemoryJobQueue(),
+      registry: {
+        fetchMetadata: vi.fn(),
+        fetchTarball: vi.fn()
+      },
+      downloadStats: noDownloadStats()
+    });
+
+    const response = await app.inject({ method: "GET", url: "/-/ready" });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      ok: true,
+      checks: [
+        { component: "persistence", ok: true },
+        { component: "objectStore", ok: true },
+        { component: "queue", ok: true }
+      ]
+    });
+
+    await app.close();
+  });
+
+  it("returns 503 readiness when a dependency check fails", async () => {
+    const objectStore = new TestObjectStore();
+    objectStore.failHealthCheck = true;
+    const app = buildGateway({
+      config: testConfig("ci"),
+      persistence: new MemoryPersistence(),
+      objectStore,
+      queue: new MemoryJobQueue(),
+      registry: {
+        fetchMetadata: vi.fn(),
+        fetchTarball: vi.fn()
+      },
+      downloadStats: noDownloadStats()
+    });
+
+    const response = await app.inject({ method: "GET", url: "/-/ready" });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toMatchObject({
+      ok: false,
+      checks: expect.arrayContaining([{ component: "objectStore", ok: false, error: "object store unavailable" }])
+    });
+
+    await app.close();
+  });
+
+  it("filters blocked versions from metadata and removes unusable dist-tags", async () => {
+    const metadata = packageMetadata("fresh-package", new Date().toISOString());
+    const app = buildGateway({
+      config: testConfig("ci"),
+      persistence: new MemoryPersistence(),
+      queue: new MemoryJobQueue(),
+      registry: {
+        fetchMetadata: vi.fn(async () => metadata),
+        fetchTarball: vi.fn()
+      },
+      downloadStats: noDownloadStats()
+    });
+
+    const response = await app.inject({ method: "GET", url: "/fresh-package" });
+    expect(response.statusCode).toBe(200);
+
+    const body = response.json<NpmPackageMetadata>();
+    expect(body.versions?.["1.0.0"]).toBeUndefined();
+    expect(body["dist-tags"]?.latest).toBeUndefined();
+
+    await app.close();
+  });
+
+  it("blocks tarball fetches for policy-denied package versions", async () => {
+    const metadata = packageMetadata("fresh-package", new Date().toISOString());
+    const fetchTarball = vi.fn();
+    const app = buildGateway({
+      config: testConfig("ci"),
+      persistence: new MemoryPersistence(),
+      queue: new MemoryJobQueue(),
+      registry: {
+        fetchMetadata: vi.fn(async () => metadata),
+        fetchTarball
+      },
+      downloadStats: noDownloadStats()
+    });
+
+    const response = await app.inject({ method: "GET", url: "/fresh-package/-/fresh-package-1.0.0.tgz" });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toMatchObject({
+      error: "ANVIL_PACKAGE_BLOCKED",
+      package: "fresh-package",
+      version: "1.0.0",
+      decision: "block"
+    });
+    expect(fetchTarball).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it("rewrites scoped package tarball URLs through the gateway", async () => {
+    const metadata = packageMetadata("@scope/pkg", "2020-01-01T00:00:00.000Z");
+    const app = buildGateway({
+      config: testConfig("development"),
+      persistence: new MemoryPersistence(),
+      queue: new MemoryJobQueue(),
+      registry: {
+        fetchMetadata: vi.fn(async () => metadata),
+        fetchTarball: vi.fn()
+      },
+      downloadStats: noDownloadStats()
+    });
+
+    const response = await app.inject({ method: "GET", url: "/@scope/pkg" });
+    const body = response.json<NpmPackageMetadata>();
+
+    expect(response.statusCode).toBe(200);
+    expect(body.versions?.["1.0.0"]?.dist?.tarball).toBe("http://anvil.test/@scope/pkg/-/pkg-1.0.0.tgz");
+
+    await app.close();
+  });
+
+  it("serves cached tarballs without fetching upstream and stores misses", async () => {
+    const metadata = packageMetadata("stable-package", "2020-01-01T00:00:00.000Z");
+    const objectStore = new TestObjectStore();
+    const fetchTarball = vi.fn(async () => new Uint8Array([7, 8, 9]));
+    const persistence = new MemoryPersistence();
+    const app = buildGateway({
+      config: testConfig("ci"),
+      persistence,
+      objectStore,
+      queue: new MemoryJobQueue(),
+      registry: {
+        fetchMetadata: vi.fn(async () => metadata),
+        fetchTarball
+      },
+      downloadStats: noDownloadStats()
+    });
+
+    const first = await app.inject({ method: "GET", url: "/stable-package/-/stable-package-1.0.0.tgz" });
+    const second = await app.inject({ method: "GET", url: "/stable-package/-/stable-package-1.0.0.tgz" });
+
+    expect(first.statusCode).toBe(200);
+    expect(first.headers["x-anvil-cache"]).toBe("miss");
+    expect([...first.rawPayload]).toEqual([7, 8, 9]);
+    expect(second.statusCode).toBe(200);
+    expect(second.headers["x-anvil-cache"]).toBe("hit");
+    expect([...second.rawPayload]).toEqual([7, 8, 9]);
+    expect(fetchTarball).toHaveBeenCalledTimes(1);
+    expect(await persistence.getPackageVersion("stable-package", "1.0.0")).toMatchObject({
+      packageName: "stable-package",
+      version: "1.0.0",
+      cachedTarballKey: "tarballs/stable-package/1.0.0/sha512-test.tgz"
+    });
+
+    await app.close();
+  });
+
+  it("does not reuse cached policy decisions when tarball integrity changes", async () => {
+    const persistence = new MemoryPersistence();
+    await persistence.putPolicyDecision(
+      "stable-package",
+      "1.0.0",
+      testConfig("ci").policy.version,
+      {
+        action: "block",
+        score: 95,
+        reasons: [{ code: "UNEXPECTED_BINARY_FILE", message: "Old tarball was bad.", severity: "critical" }],
+        explanation: "old cached block"
+      },
+      { tarballIntegrity: "sha512-old", analyserVersion: "metadata-policy-2026-05-20.1" }
+    );
+    const app = buildGateway({
+      config: testConfig("ci"),
+      persistence,
+      queue: new MemoryJobQueue(),
+      registry: {
+        fetchMetadata: vi.fn(async () => packageMetadata("stable-package", "2020-01-01T00:00:00.000Z")),
+        fetchTarball: vi.fn()
+      },
+      downloadStats: noDownloadStats()
+    });
+
+    const response = await app.inject({ method: "GET", url: "/stable-package" });
+    const body = response.json<NpmPackageMetadata>();
+
+    expect(response.statusCode).toBe(200);
+    expect(body.versions?.["1.0.0"]).toBeDefined();
+    expect(await persistence.getPolicyDecision("stable-package", "1.0.0", testConfig("ci").policy.version, {
+      tarballIntegrity: "sha512-test",
+      analyserVersion: "metadata-policy-2026-05-20.1"
+    })).toMatchObject({ action: "allow" });
+
+    await app.close();
+  });
+
+  it("writes one audit event for newly computed gateway policy decisions", async () => {
+    const metadata = packageMetadata("fresh-package", new Date().toISOString());
+    const persistence = new MemoryPersistence();
+    const app = buildGateway({
+      config: testConfig("ci"),
+      persistence,
+      queue: new MemoryJobQueue(),
+      registry: {
+        fetchMetadata: vi.fn(async () => metadata),
+        fetchTarball: vi.fn()
+      },
+      downloadStats: noDownloadStats()
+    });
+
+    const first = await app.inject({ method: "GET", url: "/fresh-package" });
+    const second = await app.inject({ method: "GET", url: "/fresh-package" });
+
+    expect(first.statusCode).toBe(200);
+    expect(second.statusCode).toBe(200);
+    expect(await persistence.listAuditEvents()).toEqual([
+      expect.objectContaining({
+        actor: "anvil-gateway",
+        eventType: "policy.decision",
+        targetType: "package",
+        targetId: "fresh-package@1.0.0",
+        metadata: expect.objectContaining({
+          source: "metadata_request",
+          action: "block",
+          policyVersion: testConfig("ci").policy.version,
+          analyserVersion: "metadata-policy-2026-05-20.1",
+          tarballIntegrity: "sha512-test",
+          reasonCodes: expect.arrayContaining(["PACKAGE_TOO_NEW"])
+        })
+      })
+    ]);
+
+    await app.close();
+  });
+
+  it("uses npm download stats when enforcing low-adoption name-squatting policy", async () => {
+    const metadata = packageMetadata("@tenstack/react-query", "2020-01-01T00:00:00.000Z");
+    const queue = new MemoryJobQueue();
+    const persistence = new MemoryPersistence();
+    const app = buildGateway({
+      config: testConfig("ci"),
+      persistence,
+      queue,
+      registry: {
+        fetchMetadata: vi.fn(async () => metadata),
+        fetchTarball: vi.fn()
+      },
+      downloadStats: {
+        getWeeklyDownloads: vi.fn(async () => 10)
+      }
+    });
+
+    const response = await app.inject({ method: "GET", url: "/@tenstack/react-query" });
+    const body = response.json<NpmPackageMetadata>();
+    const queuedJobs = [];
+    for await (const job of queue.receiveAnalysisJobs()) queuedJobs.push(job);
+
+    expect(response.statusCode).toBe(200);
+    expect(body.versions?.["1.0.0"]).toBeUndefined();
+    expect(queuedJobs[0]).toMatchObject({ packageName: "@tenstack/react-query", version: "1.0.0", priority: "high" });
+    expect(await persistence.getPackageVersion("@tenstack/react-query", "1.0.0")).toMatchObject({
+      packageName: "@tenstack/react-query",
+      version: "1.0.0",
+      weeklyDownloads: 10,
+      tarballUrl: "https://registry.npmjs.org/@tenstack/react-query/-/react-query-1.0.0.tgz"
+    });
+
+    await app.close();
+  });
+
+  it("applies missing provenance policy before tarball download", async () => {
+    const metadata = packageMetadata("popular-package", "2020-01-01T00:00:00.000Z");
+    const fetchTarball = vi.fn();
+    const queue = new MemoryJobQueue();
+    const persistence = new MemoryPersistence();
+    const app = buildGateway({
+      config: testConfig("ci"),
+      persistence,
+      queue,
+      registry: {
+        fetchMetadata: vi.fn(async () => metadata),
+        fetchTarball
+      },
+      downloadStats: {
+        getWeeklyDownloads: vi.fn(async () => 250_000)
+      }
+    });
+
+    const metadataResponse = await app.inject({ method: "GET", url: "/popular-package" });
+    const tarballResponse = await app.inject({ method: "GET", url: "/popular-package/-/popular-package-1.0.0.tgz" });
+    const queuedJobs = [];
+    for await (const job of queue.receiveAnalysisJobs()) queuedJobs.push(job);
+
+    expect(metadataResponse.statusCode).toBe(200);
+    expect(metadataResponse.json<NpmPackageMetadata>().versions?.["1.0.0"]).toBeUndefined();
+    expect(tarballResponse.statusCode).toBe(423);
+    expect(tarballResponse.json()).toMatchObject({
+      error: "ANVIL_PACKAGE_QUARANTINED",
+      decision: "quarantine",
+      reasons: [expect.objectContaining({ code: "PROVENANCE_MISSING" })]
+    });
+    expect(fetchTarball).not.toHaveBeenCalled();
+    expect(queuedJobs[0]).toMatchObject({ packageName: "popular-package", version: "1.0.0", priority: "normal" });
+    expect(await persistence.getPolicyDecision("popular-package", "1.0.0", testConfig("ci").policy.version, {
+      tarballIntegrity: "sha512-test",
+      analyserVersion: "metadata-policy-2026-05-20.1"
+    })).toMatchObject({ action: "quarantine" });
+
+    await app.close();
+  });
+
+  it("writes an audit event when an override is created", async () => {
+    const persistence = new MemoryPersistence();
+    const app = buildGateway({
+      config: loadConfig({ ...process.env, ADMIN_TOKEN: "secret", PERSISTENCE_DRIVER: "memory" }),
+      persistence,
+      queue: new MemoryJobQueue(),
+      registry: {
+        fetchMetadata: vi.fn(),
+        fetchTarball: vi.fn()
+      },
+      downloadStats: noDownloadStats()
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/-/anvil/override",
+      headers: { authorization: "Bearer secret" },
+      payload: { packageName: "pkg", version: "1.0.0", reason: "intentional", approvedBy: "reviewer" }
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(await persistence.listAuditEvents()).toEqual([
+      expect.objectContaining({
+        actor: "reviewer",
+        eventType: "override.created",
+        targetId: "pkg@1.0.0"
+      })
+    ]);
+
+    await app.close();
+  });
+
+  it("accepts Node Base reports and writes an audit event", async () => {
+    const persistence = new MemoryPersistence();
+    const app = buildGateway({
+      config: loadConfig({ ...process.env, ADMIN_TOKEN: "secret", PERSISTENCE_DRIVER: "memory" }),
+      persistence,
+      queue: new MemoryJobQueue(),
+      registry: {
+        fetchMetadata: vi.fn(),
+        fetchTarball: vi.fn()
+      },
+      downloadStats: noDownloadStats()
+    });
+
+    const rejected = await app.inject({
+      method: "POST",
+      url: "/-/anvil/node-base/reports",
+      payload: { source: "devcontainer", reportType: "dependency", report: { summary: { high: 1 } } }
+    });
+    const accepted = await app.inject({
+      method: "POST",
+      url: "/-/anvil/node-base/reports",
+      headers: { authorization: "Bearer secret" },
+      payload: { source: "devcontainer", projectName: "demo", reportType: "dependency", summary: { high: 1 }, report: { summary: { high: 1 } } }
+    });
+
+    expect(rejected.statusCode).toBe(401);
+    expect(accepted.statusCode).toBe(201);
+    expect(await persistence.listNodeBaseReports()).toEqual([
+      expect.objectContaining({ source: "devcontainer", projectName: "demo", reportType: "dependency", summary: { high: 1 } })
+    ]);
+    expect(await persistence.listAuditEvents()).toEqual([
+      expect.objectContaining({
+        eventType: "node_base_report.submitted",
+        targetType: "node_base_report"
+      })
+    ]);
+
+    await app.close();
+  });
+
+  it("revokes overrides and invalidates cached policy decisions", async () => {
+    const persistence = new MemoryPersistence();
+    const config = testConfig("ci");
+    await persistence.putOverride({ packageName: "pkg", version: "1.0.0", action: "allow", reason: "temporary", approvedBy: "reviewer" });
+    await persistence.putPolicyDecision("pkg", "1.0.0", config.policy.version, {
+      action: "allow",
+      score: 0,
+      reasons: [],
+      explanation: "cached"
+    });
+    const app = buildGateway({
+      config,
+      persistence,
+      queue: new MemoryJobQueue(),
+      registry: {
+        fetchMetadata: vi.fn(),
+        fetchTarball: vi.fn()
+      },
+      downloadStats: noDownloadStats()
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/-/anvil/override/revoke",
+      payload: { packageName: "pkg", version: "1.0.0", revokedBy: "reviewer" }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(await persistence.getOverride("pkg", "1.0.0")).toBeUndefined();
+    expect(await persistence.getPolicyDecision("pkg", "1.0.0", config.policy.version)).toBeUndefined();
+    expect((await persistence.listAuditEvents())[0]).toMatchObject({ eventType: "override.revoked", targetId: "pkg@1.0.0" });
+
+    await app.close();
+  });
+});
+
+class TestObjectStore implements ObjectStore {
+  private readonly objects = new Map<string, Uint8Array>();
+  failHealthCheck = false;
+
+  async healthCheck(): Promise<void> {
+    if (this.failHealthCheck) throw new Error("object store unavailable");
+  }
+
+  async get(key: string): Promise<Uint8Array | undefined> {
+    return this.objects.get(key);
+  }
+
+  async put(key: string, body: Uint8Array): Promise<void> {
+    this.objects.set(key, body);
+  }
+}
+
+function noDownloadStats() {
+  return {
+    getWeeklyDownloads: vi.fn(async () => undefined)
+  };
+}
+
+function packageMetadata(packageName: string, publishedAt: string): NpmPackageMetadata {
+  const tarballPackageName = packageName.split("/").pop() ?? packageName;
+  return {
+    name: packageName,
+    "dist-tags": {
+      latest: "1.0.0"
+    },
+    time: {
+      created: publishedAt,
+      "1.0.0": publishedAt
+    },
+    versions: {
+      "1.0.0": {
+        name: packageName,
+        version: "1.0.0",
+        dist: {
+          tarball: `https://registry.npmjs.org/${packageName}/-/${tarballPackageName}-1.0.0.tgz`,
+          integrity: "sha512-test"
+        }
+      }
+    }
+  };
+}

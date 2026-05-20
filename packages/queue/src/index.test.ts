@@ -1,0 +1,169 @@
+import { describe, expect, it } from "vitest";
+import { loadConfig } from "@anvil/config";
+import {
+  BullMqJobQueue,
+  MemoryJobQueue,
+  SqsJobQueue,
+  connectionFromRedisUrl,
+  createJobQueue,
+  createSqsAnalysisWorker,
+  type SqsAnalysisWorker,
+  type SqsClientLike
+} from "./index.js";
+
+describe("queue factory", () => {
+  it("uses memory queue by default", () => {
+    expect(createJobQueue(loadConfig({ ...process.env, QUEUE_DRIVER: "memory" }))).toBeInstanceOf(MemoryJobQueue);
+  });
+
+  it("uses BullMQ queue when configured", async () => {
+    const queue = createJobQueue(loadConfig({ ...process.env, QUEUE_DRIVER: "bullmq", REDIS_URL: "redis://localhost:6379" }));
+    expect(queue).toBeInstanceOf(BullMqJobQueue);
+    await (queue as BullMqJobQueue).close();
+  });
+
+  it("uses SQS queue when configured", () => {
+    const queue = createJobQueue(loadConfig({ ...process.env, QUEUE_DRIVER: "sqs", ANALYSIS_QUEUE_URL: "https://sqs.example.test/queue" }));
+    expect(queue).toBeInstanceOf(SqsJobQueue);
+    (queue as SqsJobQueue).close();
+  });
+
+  it("parses Redis URLs with credentials", () => {
+    expect(connectionFromRedisUrl("redis://user:pass@redis.example.test:6380")).toEqual({
+      host: "redis.example.test",
+      port: 6380,
+      username: "user",
+      password: "pass"
+    });
+  });
+
+  it("sends analysis jobs to SQS", async () => {
+    const client = new FakeSqsClient();
+    const queue = new SqsJobQueue({ queueUrl: "https://sqs.example.test/queue", region: "us-east-1", client });
+
+    await queue.enqueueAnalysisJob({
+      packageName: "pkg",
+      version: "1.0.0",
+      reason: "metadata_request",
+      priority: "normal",
+      createdAt: "2026-05-20T00:00:00.000Z"
+    });
+
+    expect(client.commands).toHaveLength(1);
+    expect(client.commands[0]?.constructor.name).toBe("SendMessageCommand");
+    expect(client.commands[0]?.input).toMatchObject({ QueueUrl: "https://sqs.example.test/queue" });
+    expect(JSON.parse(String(client.commands[0]?.input.MessageBody))).toMatchObject({ packageName: "pkg", version: "1.0.0" });
+  });
+
+  it("consumes SQS messages and deletes them after successful analysis", async () => {
+    let sawDeleteMessage!: () => void;
+    const deleteMessageSeen = new Promise<void>((resolve) => {
+      sawDeleteMessage = resolve;
+    });
+    let worker: SqsAnalysisWorker;
+    const client = new FakeSqsClient([
+      {
+        Messages: [
+          {
+            MessageId: "message-1",
+            ReceiptHandle: "receipt-1",
+            Body: JSON.stringify({
+              packageName: "pkg",
+              version: "1.0.0",
+              reason: "metadata_request",
+              priority: "normal",
+              createdAt: "2026-05-20T00:00:00.000Z"
+            })
+          }
+        ]
+      }
+    ]);
+    client.onCommand = (commandName) => {
+      if (commandName === "DeleteMessageCommand") {
+        void worker.close();
+        sawDeleteMessage();
+      }
+    };
+    const handled = new Promise<void>((resolve) => {
+      worker = createSqsAnalysisWorker({
+        queueUrl: "https://sqs.example.test/queue",
+        region: "us-east-1",
+        waitTimeSeconds: 0,
+        client,
+        handler: async (job) => {
+          expect(job).toMatchObject({ id: "message-1", packageName: "pkg", version: "1.0.0" });
+          resolve();
+        }
+      });
+    });
+
+    await handled;
+    await deleteMessageSeen;
+    expect(client.commands.map((command) => command.constructor.name)).toContain("DeleteMessageCommand");
+  });
+
+  it("returns failed SQS messages to the queue for retry", async () => {
+    let sawRetry!: () => void;
+    const retrySeen = new Promise<void>((resolve) => {
+      sawRetry = resolve;
+    });
+    let worker: SqsAnalysisWorker;
+    const client = new FakeSqsClient([
+      {
+        Messages: [
+          {
+            MessageId: "message-1",
+            ReceiptHandle: "receipt-1",
+            Body: JSON.stringify({
+              packageName: "pkg",
+              version: "1.0.0",
+              reason: "metadata_request",
+              priority: "normal",
+              createdAt: "2026-05-20T00:00:00.000Z"
+            })
+          }
+        ]
+      }
+    ]);
+    client.onCommand = (commandName) => {
+      if (commandName === "ChangeMessageVisibilityCommand") {
+        void worker.close();
+        sawRetry();
+      }
+    };
+
+    worker = createSqsAnalysisWorker({
+      queueUrl: "https://sqs.example.test/queue",
+      region: "us-east-1",
+      waitTimeSeconds: 0,
+      client,
+      handler: async () => {
+        throw new Error("analysis failed");
+      }
+    });
+
+    await retrySeen;
+    expect(client.commands.find((command) => command.constructor.name === "ChangeMessageVisibilityCommand")?.input).toMatchObject({
+      QueueUrl: "https://sqs.example.test/queue",
+      ReceiptHandle: "receipt-1",
+      VisibilityTimeout: 0
+    });
+  });
+});
+
+class FakeSqsClient implements SqsClientLike {
+  readonly commands: Array<{ constructor: { name: string }; input: Record<string, unknown> }> = [];
+  onCommand?: (commandName: string) => void;
+
+  constructor(private readonly receiveResponses: unknown[] = []) {}
+
+  async send(command: Parameters<SqsClientLike["send"]>[0]): Promise<unknown> {
+    const recorded = command as unknown as { constructor: { name: string }; input: Record<string, unknown> };
+    this.commands.push(recorded);
+    this.onCommand?.(recorded.constructor.name);
+    if (recorded.constructor.name === "ReceiveMessageCommand") return this.receiveResponses.shift() ?? {};
+    return {};
+  }
+
+  destroy(): void {}
+}

@@ -1,0 +1,29 @@
+{
+  "name": "@anvil/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/index.ts",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@anvil/config": "workspace:*",
+    "@anvil/logger": "workspace:*",
+    "@anvil/name-squatting": "workspace:*",
+    "@anvil/npm-registry": "workspace:*",
+    "@anvil/package-analysis": "workspace:*",
+    "@anvil/persistence": "workspace:*",
+    "@anvil/policy-engine": "workspace:*",
+    "@anvil/provenance": "workspace:*",
+    "@anvil/queue": "workspace:*",
+    "@anvil/shared": "workspace:*",
+    "semver": "^7.7.2"
+  },
+  "devDependencies": {
+    "@types/semver": "^7.7.0"
+  }
+}
