@@ -50,6 +50,12 @@ packages:
   '@scope/pkg@1.2.3':
     resolution: {integrity: sha512-test}
 
+  '@scope/alias@npm:@scope/real@2.3.4':
+    resolution: {integrity: sha512-test}
+
+  '@tooling/bundler@6.3.5(@types/node@22.15.29)(tsx@4.19.4)(yaml@2.8.0)':
+    resolution: {integrity: sha512-test}
+
   lodash@4.17.21:
     resolution: {integrity: sha512-test}
 
@@ -60,6 +66,8 @@ importers:
 
     expect(targets).toEqual([
       { packageName: "@scope/pkg", version: "1.2.3" },
+      { packageName: "@scope/real", version: "2.3.4" },
+      { packageName: "@tooling/bundler", version: "6.3.5" },
       { packageName: "lodash", version: "4.17.21" }
     ]);
   });

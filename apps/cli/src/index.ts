@@ -103,17 +103,36 @@ function parsePnpmLock(content: string): PackageTarget[] {
   const targets = new Map<string, PackageTarget>();
   const importersIndex = content.indexOf("\nimporters:");
   const packagesSection = importersIndex >= 0 ? content.slice(0, importersIndex) : content;
-  const packageLine = /^\s{2}['"]?(?:\/)?((?:@[^/\s]+\/)?[^@\s:'"]+)@([^:\s('"]+)(?:\([^:\n]+\))?['"]?:\s*$/gm;
+  const packageLine = /^ {2}(\S.+):\s*$/gm;
   let match: RegExpExecArray | null;
 
   while ((match = packageLine.exec(packagesSection))) {
-    const packageName = match[1];
-    const version = match[2];
-    if (!packageName || !version || version.startsWith("link:") || version.startsWith("file:")) continue;
-    targets.set(`${packageName}@${version}`, { packageName, version });
+    const target = parsePnpmPackageKey(match[1] ?? "");
+    if (!target) continue;
+    targets.set(`${target.packageName}@${target.version}`, target);
   }
 
   return [...targets.values()].sort(compareTargets);
+}
+
+function parsePnpmPackageKey(rawKey: string): PackageTarget | undefined {
+  let key = rawKey.trim();
+  if ((key.startsWith("'") && key.endsWith("'")) || (key.startsWith('"') && key.endsWith('"'))) key = key.slice(1, -1);
+  if (key.startsWith("/")) key = key.slice(1);
+  key = key.split("(")[0] ?? key;
+
+  const alias = key.match(/^((?:@[^/\s]+\/)?[^@\s]+)@npm:((?:@[^/\s]+\/)?[^@\s]+)@(.+)$/);
+  if (alias) return cleanPnpmTarget(alias[2], alias[3]);
+
+  const atIndex = key.startsWith("@") ? key.lastIndexOf("@") : key.indexOf("@");
+  if (atIndex <= 0) return undefined;
+  return cleanPnpmTarget(key.slice(0, atIndex), key.slice(atIndex + 1));
+}
+
+function cleanPnpmTarget(packageName: string | undefined, version: string | undefined): PackageTarget | undefined {
+  if (!packageName || !version) return undefined;
+  if (version.startsWith("link:") || version.startsWith("file:") || version.startsWith("workspace:")) return undefined;
+  return { packageName, version };
 }
 
 function parsePackageJson(content: string): PackageTarget[] {
