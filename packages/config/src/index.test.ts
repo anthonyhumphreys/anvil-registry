@@ -78,4 +78,20 @@ describe("config", () => {
     expect(config.LLM_REVIEW_ENDPOINT).toBe("https://llm.example.test/review");
     expect(config.LLM_REVIEW_API_KEY).toBe("secret");
   });
+
+  it("treats empty optional LLM provider environment values as unset", () => {
+    const config = loadConfig({
+      ...process.env,
+      LLM_REVIEW_ENABLED: "false",
+      LLM_REVIEW_PROVIDER: "",
+      LLM_REVIEW_MODEL: " ",
+      LLM_REVIEW_ENDPOINT: "",
+      LLM_REVIEW_API_KEY: ""
+    });
+
+    expect(config.policy.llmReview.provider).toBeUndefined();
+    expect(config.policy.llmReview.model).toBeUndefined();
+    expect(config.LLM_REVIEW_ENDPOINT).toBeUndefined();
+    expect(config.LLM_REVIEW_API_KEY).toBeUndefined();
+  });
 });

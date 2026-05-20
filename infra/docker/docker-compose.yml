@@ -21,6 +21,14 @@ services:
       AWS_REGION: us-east-1
       UPSTREAM_NPM_REGISTRY: https://registry.npmjs.org
       NPM_DOWNLOADS_API: https://api.npmjs.org/downloads
+      LLM_REVIEW_ENABLED: ${LLM_REVIEW_ENABLED:-false}
+      LLM_REVIEW_PROVIDER: ${LLM_REVIEW_PROVIDER:-}
+      LLM_REVIEW_MODEL: ${LLM_REVIEW_MODEL:-}
+      LLM_REVIEW_ENDPOINT: ${LLM_REVIEW_ENDPOINT:-}
+      LLM_REVIEW_API_KEY: ${LLM_REVIEW_API_KEY:-}
+      LLM_REVIEW_RUN_ON_UNKNOWN_PACKAGES: ${LLM_REVIEW_RUN_ON_UNKNOWN_PACKAGES:-false}
+      LLM_REVIEW_RUN_ON_QUARANTINE: ${LLM_REVIEW_RUN_ON_QUARANTINE:-false}
+      LLM_REVIEW_INCLUDE_PRIVATE_PACKAGES: ${LLM_REVIEW_INCLUDE_PRIVATE_PACKAGES:-false}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -60,6 +68,14 @@ services:
       AWS_REGION: us-east-1
       UPSTREAM_NPM_REGISTRY: https://registry.npmjs.org
       NPM_DOWNLOADS_API: https://api.npmjs.org/downloads
+      LLM_REVIEW_ENABLED: ${LLM_REVIEW_ENABLED:-false}
+      LLM_REVIEW_PROVIDER: ${LLM_REVIEW_PROVIDER:-}
+      LLM_REVIEW_MODEL: ${LLM_REVIEW_MODEL:-}
+      LLM_REVIEW_ENDPOINT: ${LLM_REVIEW_ENDPOINT:-}
+      LLM_REVIEW_API_KEY: ${LLM_REVIEW_API_KEY:-}
+      LLM_REVIEW_RUN_ON_UNKNOWN_PACKAGES: ${LLM_REVIEW_RUN_ON_UNKNOWN_PACKAGES:-false}
+      LLM_REVIEW_RUN_ON_QUARANTINE: ${LLM_REVIEW_RUN_ON_QUARANTINE:-false}
+      LLM_REVIEW_INCLUDE_PRIVATE_PACKAGES: ${LLM_REVIEW_INCLUDE_PRIVATE_PACKAGES:-false}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -92,6 +108,14 @@ services:
       S3_ACCESS_KEY_ID: minio
       S3_SECRET_ACCESS_KEY: miniopassword
       AWS_REGION: us-east-1
+      LLM_REVIEW_ENABLED: ${LLM_REVIEW_ENABLED:-false}
+      LLM_REVIEW_PROVIDER: ${LLM_REVIEW_PROVIDER:-}
+      LLM_REVIEW_MODEL: ${LLM_REVIEW_MODEL:-}
+      LLM_REVIEW_ENDPOINT: ${LLM_REVIEW_ENDPOINT:-}
+      LLM_REVIEW_API_KEY: ${LLM_REVIEW_API_KEY:-}
+      LLM_REVIEW_RUN_ON_UNKNOWN_PACKAGES: ${LLM_REVIEW_RUN_ON_UNKNOWN_PACKAGES:-false}
+      LLM_REVIEW_RUN_ON_QUARANTINE: ${LLM_REVIEW_RUN_ON_QUARANTINE:-false}
+      LLM_REVIEW_INCLUDE_PRIVATE_PACKAGES: ${LLM_REVIEW_INCLUDE_PRIVATE_PACKAGES:-false}
     depends_on:
       gateway:
         condition: service_healthy

@@ -1060,6 +1060,8 @@ volumes:
   anvil-minio:
 ```
 
+The local Compose file passes optional `LLM_REVIEW_*` values through to gateway, worker, and admin. Set `LLM_REVIEW_ENABLED=true`, `LLM_REVIEW_ENDPOINT`, and optionally `LLM_REVIEW_API_KEY`, `LLM_REVIEW_PROVIDER`, `LLM_REVIEW_MODEL`, `LLM_REVIEW_RUN_ON_UNKNOWN_PACKAGES`, `LLM_REVIEW_RUN_ON_QUARANTINE`, or `LLM_REVIEW_INCLUDE_PRIVATE_PACKAGES` before `docker compose up` to exercise the MVP LLM review route locally. Empty optional values are treated as unset so a default Compose run does not fail config parsing just because no model endpoint exists yet.
+
 ### 11.2 Database migrations
 
 The persistence package owns the checked-in Drizzle migrations under:

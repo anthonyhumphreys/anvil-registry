@@ -8,6 +8,18 @@ const booleanEnv = z.preprocess((value) => {
   return value;
 }, z.boolean());
 
+const optionalEnvString = z.preprocess((value) => {
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}, z.string().optional());
+
+const optionalEnvUrl = z.preprocess((value) => {
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}, z.string().url().optional());
+
 const envSchema = z.object({
   RUNTIME_MODE: runtimeModeSchema.default("development"),
   HOST: z.string().default("0.0.0.0"),
@@ -40,10 +52,10 @@ const envSchema = z.object({
   AWS_REGION: z.string().default("us-east-1"),
   ADMIN_TOKEN: z.string().optional(),
   LLM_REVIEW_ENABLED: booleanEnv.default(false),
-  LLM_REVIEW_PROVIDER: z.string().optional(),
-  LLM_REVIEW_MODEL: z.string().optional(),
-  LLM_REVIEW_ENDPOINT: z.string().url().optional(),
-  LLM_REVIEW_API_KEY: z.string().optional(),
+  LLM_REVIEW_PROVIDER: optionalEnvString,
+  LLM_REVIEW_MODEL: optionalEnvString,
+  LLM_REVIEW_ENDPOINT: optionalEnvUrl,
+  LLM_REVIEW_API_KEY: optionalEnvString,
   LLM_REVIEW_INCLUDE_PRIVATE_PACKAGES: booleanEnv.default(false),
   LLM_REVIEW_RUN_ON_UNKNOWN_PACKAGES: booleanEnv.default(false),
   LLM_REVIEW_RUN_ON_QUARANTINE: booleanEnv.default(false)
