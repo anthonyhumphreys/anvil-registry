@@ -59,6 +59,17 @@ export type Override = {
   expiresAt?: string;
 };
 
+export function resolveOverrideExpiry(expiresAt: string | undefined, defaultExpiryDays: number, now = Date.now()): string | undefined | null {
+  const explicitExpiry = expiresAt?.trim();
+  if (explicitExpiry) {
+    const timestamp = Date.parse(explicitExpiry);
+    return Number.isNaN(timestamp) ? null : new Date(timestamp).toISOString();
+  }
+
+  if (defaultExpiryDays <= 0) return undefined;
+  return new Date(now + defaultExpiryDays * 24 * 60 * 60 * 1000).toISOString();
+}
+
 export type PolicyConfig = {
   version: string;
   minimumPackageAgeDays: number;

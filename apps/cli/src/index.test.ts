@@ -358,7 +358,7 @@ importers:
       env: { ANVIL_REGISTRY_URL: "http://anvil.test", ADMIN_TOKEN: "secret" }
     });
 
-    const exitCode = await run(["approve", "pkg@1.0.0", "--reason", "intentional"], dependencies);
+    const exitCode = await run(["approve", "pkg@1.0.0", "--reason", "intentional", "--expires-at", "2026-06-20T00:00:00Z"], dependencies);
 
     expect(exitCode).toBe(0);
     expect(dependencies.fetch).toHaveBeenCalledWith(
@@ -366,7 +366,7 @@ importers:
       expect.objectContaining({
         method: "POST",
         headers: expect.objectContaining({ authorization: "Bearer secret" }),
-        body: JSON.stringify({ packageName: "pkg", version: "1.0.0", reason: "intentional", action: "allow" })
+        body: JSON.stringify({ packageName: "pkg", version: "1.0.0", reason: "intentional", action: "allow", expiresAt: "2026-06-20T00:00:00Z" })
       })
     );
   });

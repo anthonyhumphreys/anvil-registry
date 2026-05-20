@@ -215,10 +215,11 @@ async function smoke(args: string[], dependencies: CliDependencies): Promise<num
 
 async function approve(args: string[], dependencies: CliDependencies): Promise<number> {
   const targetArg = args[0];
-  if (!targetArg) throw new Error('Usage: anvil approve package@version --reason "intentional dependency"');
+  if (!targetArg) throw new Error('Usage: anvil approve package@version --reason "intentional dependency" [--expires-at 2026-06-20T00:00:00Z]');
   const reason = readFlag(args, "--reason");
   if (!reason) throw new Error("Approval requires --reason.");
   const action = readFlag(args, "--action") as "allow" | "warn" | "quarantine" | "block" | undefined;
+  const expiresAt = readFlag(args, "--expires-at");
   const target = parseTarget(targetArg);
   const registryUrl = registryBaseUrl(dependencies.env);
 
@@ -228,7 +229,7 @@ async function approve(args: string[], dependencies: CliDependencies): Promise<n
       "content-type": "application/json",
       ...(dependencies.env.ADMIN_TOKEN ? { authorization: `Bearer ${dependencies.env.ADMIN_TOKEN}` } : {})
     },
-    body: JSON.stringify({ ...target, reason, action: action ?? "allow" })
+    body: JSON.stringify({ ...target, reason, action: action ?? "allow", ...(expiresAt ? { expiresAt } : {}) })
   });
   dependencies.stdout.write(`Approved override for ${target.packageName}@${target.version}.\n`);
   return 0;
@@ -557,7 +558,7 @@ function usage() {
   anvil scan pnpm-lock.yaml [--queue-analysis]
   anvil warm package-lock.json
   anvil smoke [package]
-  anvil approve package@version --reason "intentional dependency"
+  anvil approve package@version --reason "intentional dependency" [--expires-at 2026-06-20T00:00:00Z]
   anvil node-base reports [--type dependency|lifecycle|ioc|network] [--risk risky|high|medium] [--limit 20]
   anvil node-base report <id>
   anvil policy test package.json

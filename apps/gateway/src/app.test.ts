@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { loadConfig } from "@anvil/config";
 import type { NpmPackageMetadata } from "@anvil/npm-registry";
 import type { ObjectStore } from "@anvil/object-store";
@@ -17,6 +17,10 @@ function testConfig(runtimeMode: "development" | "ci" | "production" = "ci") {
 }
 
 describe("gateway policy enforcement", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("reports dependency readiness", async () => {
     const app = buildGateway({
       config: testConfig("ci"),
@@ -461,6 +465,7 @@ describe("gateway policy enforcement", () => {
   });
 
   it("writes an audit event when an override is created", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-05-20T00:00:00.000Z"));
     const persistence = new MemoryPersistence();
     const app = buildGateway({
       config: loadConfig({ ...process.env, ADMIN_TOKEN: "secret", PERSISTENCE_DRIVER: "memory" }),
@@ -481,15 +486,20 @@ describe("gateway policy enforcement", () => {
     });
 
     expect(response.statusCode).toBe(201);
+    expect(await persistence.getOverride("pkg", "1.0.0")).toMatchObject({
+      expiresAt: "2026-06-19T00:00:00.000Z"
+    });
     expect(await persistence.listAuditEvents()).toEqual([
       expect.objectContaining({
         actor: "reviewer",
         eventType: "override.created",
-        targetId: "pkg@1.0.0"
+        targetId: "pkg@1.0.0",
+        metadata: expect.objectContaining({ expiresAt: "2026-06-19T00:00:00.000Z" })
       })
     ]);
 
     await app.close();
+    now.mockRestore();
   });
 
   it("accepts Node Base reports and writes an audit event", async () => {

@@ -1,9 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { loadConfig } from "@anvil/config";
 import { MemoryPersistence } from "@anvil/persistence";
 import { buildAdmin } from "./app.js";
 
 describe("admin app", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("renders dashboard with decisions and reports", async () => {
     const persistence = new MemoryPersistence();
     await seed(persistence);
@@ -252,6 +256,7 @@ describe("admin app", () => {
   });
 
   it("protects override creation when admin token is configured", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-05-20T00:00:00.000Z"));
     const persistence = new MemoryPersistence();
     const app = buildAdmin({ config: loadConfig({ ...process.env, ADMIN_TOKEN: "secret" }), persistence });
 
@@ -269,9 +274,10 @@ describe("admin app", () => {
 
     expect(rejected.statusCode).toBe(401);
     expect(accepted.statusCode).toBe(201);
-    expect(await persistence.getOverride("pkg", "1.0.0")).toMatchObject({ reason: "intentional" });
+    expect(await persistence.getOverride("pkg", "1.0.0")).toMatchObject({ reason: "intentional", expiresAt: "2026-06-19T00:00:00.000Z" });
     expect(await persistence.listAuditEvents()).toHaveLength(1);
     await app.close();
+    now.mockRestore();
   });
 
   it("allows dashboard forms after local admin token session is unlocked", async () => {
@@ -290,7 +296,7 @@ describe("admin app", () => {
       method: "POST",
       url: "/api/overrides",
       headers: { "content-type": "application/x-www-form-urlencoded", cookie },
-      payload: "packageName=form-pkg&version=1.0.0&action=allow&reason=intentional"
+      payload: "packageName=form-pkg&version=1.0.0&action=allow&reason=intentional&expiresAt=2026-06-01T00%3A00%3A00Z"
     });
     const managedDashboard = await app.inject({ method: "GET", url: "/", headers: { cookie } });
     const revoked = await app.inject({
@@ -304,6 +310,7 @@ describe("admin app", () => {
     expect(session.statusCode).toBe(302);
     expect(String(cookie)).toContain("anvil_admin_token=");
     expect(created.statusCode).toBe(201);
+    expect(managedDashboard.body).toContain("expires at");
     expect(managedDashboard.body).toContain("Revoke");
     expect(revoked.statusCode).toBe(200);
     expect(await persistence.getOverride("form-pkg", "1.0.0")).toBeUndefined();

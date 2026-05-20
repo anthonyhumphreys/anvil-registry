@@ -18,7 +18,7 @@ import { createObjectStore, type ObjectStore } from "@anvil/object-store";
 import { createPersistence, type AnvilPersistence } from "@anvil/persistence";
 import { evaluatePolicy } from "@anvil/policy-engine";
 import { createJobQueue, type JobQueue } from "@anvil/queue";
-import { buildAnvilError, buildPolicyDecisionAuditEvent, isDecisionBlockingInstall, type AnalysisJob, type PolicyDecision } from "@anvil/shared";
+import { buildAnvilError, buildPolicyDecisionAuditEvent, isDecisionBlockingInstall, resolveOverrideExpiry, type AnalysisJob, type PolicyDecision } from "@anvil/shared";
 
 const metadataPolicyAnalyserVersion = "metadata-policy-2026-05-20.1";
 type ReadinessComponent = "persistence" | "objectStore" | "queue";
@@ -113,18 +113,25 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
   });
 
   app.post<{
-    Body: { packageName: string; version?: string; action?: "allow" | "warn" | "quarantine" | "block"; reason: string; approvedBy?: string };
+    Body: { packageName?: string; version?: string; action?: "allow" | "warn" | "quarantine" | "block"; reason?: string; approvedBy?: string; expiresAt?: string };
   }>("/-/anvil/override", async (request, reply) => {
     if (config.ADMIN_TOKEN && request.headers.authorization !== `Bearer ${config.ADMIN_TOKEN}`) {
       return reply.code(401).send({ error: "ANVIL_ADMIN_TOKEN_REQUIRED" });
     }
+    if (!request.body.packageName || !request.body.reason) {
+      return reply.code(400).send({ error: "ANVIL_OVERRIDE_REQUIRES_PACKAGE_AND_REASON" });
+    }
+
+    const expiresAt = resolveOverrideExpiry(request.body.expiresAt, config.policy.overrides.defaultExpiryDays);
+    if (expiresAt === null) return reply.code(400).send({ error: "ANVIL_OVERRIDE_EXPIRES_AT_INVALID" });
 
     const override = {
       packageName: request.body.packageName,
       version: request.body.version,
       action: request.body.action ?? "allow",
       reason: request.body.reason,
-      approvedBy: request.body.approvedBy ?? "local-admin"
+      approvedBy: request.body.approvedBy ?? "local-admin",
+      expiresAt
     };
     await persistence.putOverride(override);
     if (override.version) await persistence.deletePolicyDecision(override.packageName, override.version, config.policy.version);
@@ -134,7 +141,7 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
       eventType: "override.created",
       targetType: "package",
       targetId: `${override.packageName}${override.version ? `@${override.version}` : ""}`,
-      metadata: { source: "gateway", action: override.action, reason: override.reason }
+      metadata: { source: "gateway", action: override.action, reason: override.reason, expiresAt: override.expiresAt }
     });
 
     return reply.code(201).send({ ok: true });

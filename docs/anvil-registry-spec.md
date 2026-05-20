@@ -356,7 +356,7 @@ anvil scan pnpm-lock.yaml --queue-analysis
 anvil explain react@19.0.0
 anvil explain @tanstack/react-query@latest
 anvil warm package-lock.json
-anvil approve package@version --reason "intentional dependency"
+anvil approve package@version --reason "intentional dependency" --expires-at 2026-06-20T00:00:00Z
 anvil policy test package.json
 anvil doctor
 ```
@@ -921,7 +921,7 @@ The runtime queue adapter must support `QUEUE_DRIVER=sqs` with `ANALYSIS_QUEUE_U
 
 - Fail closed for high-risk signals.
 - Use cached decisions aggressively.
-- Allow approved audited overrides.
+- Allow approved audited overrides; override creation defaults to `overrides.defaultExpiryDays` when no explicit `expiresAt` is supplied.
 - Queue deep analysis.
 - Record all policy events.
 

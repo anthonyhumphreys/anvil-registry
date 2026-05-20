@@ -13,7 +13,7 @@ import {
   type PackageVersionRecord,
   type PolicyDecisionRecord
 } from "@anvil/persistence";
-import type { Override } from "@anvil/shared";
+import { resolveOverrideExpiry, type Override } from "@anvil/shared";
 
 export type AdminDependencies = {
   config?: AnvilConfig;
@@ -131,6 +131,8 @@ export function buildAdmin(dependencies: AdminDependencies = {}): FastifyInstanc
     if (!request.body.packageName || !request.body.reason) {
       return reply.code(400).send({ error: "ANVIL_OVERRIDE_REQUIRES_PACKAGE_AND_REASON" });
     }
+    const expiresAt = resolveOverrideExpiry(request.body.expiresAt, config.policy.overrides.defaultExpiryDays);
+    if (expiresAt === null) return reply.code(400).send({ error: "ANVIL_OVERRIDE_EXPIRES_AT_INVALID" });
 
     const override = {
       packageName: request.body.packageName,
@@ -138,7 +140,7 @@ export function buildAdmin(dependencies: AdminDependencies = {}): FastifyInstanc
       action: request.body.action ?? "allow",
       reason: request.body.reason,
       approvedBy: request.body.approvedBy ?? "admin-ui",
-      expiresAt: request.body.expiresAt
+      expiresAt
     };
     await persistence.putOverride(override);
     if (override.version) await persistence.deletePolicyDecision(override.packageName, override.version, config.policy.version);
@@ -148,7 +150,7 @@ export function buildAdmin(dependencies: AdminDependencies = {}): FastifyInstanc
       eventType: "override.created",
       targetType: "package",
       targetId: `${override.packageName}${override.version ? `@${override.version}` : ""}`,
-      metadata: { source: "admin", action: override.action, reason: override.reason }
+      metadata: { source: "admin", action: override.action, reason: override.reason, expiresAt: override.expiresAt }
     });
 
     return reply.code(201).send({ ok: true });
@@ -1151,6 +1153,7 @@ function overrideForm(packageName = "", version = "") {
       <option value="block">block</option>
     </select>
     <input name="reason" placeholder="reason" aria-label="Reason" />
+    <input name="expiresAt" placeholder="expires at" aria-label="Expires at" />
     <button type="submit">Create Override</button>
   </form>`;
 }
@@ -1283,7 +1286,7 @@ function page(title: string, body: string) {
     dd { margin: 0; }
     .pill { display: inline-block; border-radius: 999px; padding: 2px 8px; background: #eef1ef; font-size: 12px; font-weight: 700; }
     .empty { color: #66706c; }
-    .override-form { display: grid; grid-template-columns: 1.2fr .7fr .7fr 2fr auto; gap: 8px; margin-bottom: 12px; }
+    .override-form { display: grid; grid-template-columns: 1.2fr .7fr .7fr 1.5fr 1fr auto; gap: 8px; margin-bottom: 12px; }
     .token-form { display: grid; grid-template-columns: minmax(220px, 360px) auto; gap: 8px; max-width: 540px; }
     .inline-form { margin: 0; }
     input, select, button { min-height: 36px; border: 1px solid #c7ceca; border-radius: 6px; padding: 0 10px; background: #fff; font: inherit; }
