@@ -1264,6 +1264,8 @@ The gateway service uses `/-/health` for the ECS container health check and `/-/
 
 The SST deployment also creates an admin Fargate service using `apps/admin/Dockerfile`, exposes `/-/health` as its load-balancer health check, and links an `AdminToken` secret into both gateway and admin as `ADMIN_TOKEN`. That keeps override creation, index uploads, and manual analysis enqueueing token-gated in production.
 
+SST passes deploy-time `LLM_REVIEW_ENABLED`, `LLM_REVIEW_PROVIDER`, `LLM_REVIEW_MODEL`, `LLM_REVIEW_ENDPOINT`, `LLM_REVIEW_RUN_ON_UNKNOWN_PACKAGES`, `LLM_REVIEW_RUN_ON_QUARANTINE`, and `LLM_REVIEW_INCLUDE_PRIVATE_PACKAGES` values into gateway, worker, and admin. The provider credential is the `LlmReviewApiKey` secret and is linked only to the worker, because the gateway enqueues review jobs and should not need the model key.
+
 Run the deployed migration task through SST's linked resource shell:
 
 ```bash

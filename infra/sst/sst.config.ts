@@ -17,6 +17,7 @@ export default $config({
       }
     });
     const adminToken = new sst.Secret("AdminToken");
+    const llmReviewApiKey = new sst.Secret("LlmReviewApiKey", "");
     const database = new sst.aws.Postgres("Database", {
       vpc,
       database: "anvil",
@@ -48,6 +49,15 @@ export default $config({
       UPSTREAM_NPM_REGISTRY: "https://registry.npmjs.org",
       NPM_DOWNLOADS_API: "https://api.npmjs.org/downloads",
       ...databaseEnvironment
+    };
+    const llmReviewEnvironment = {
+      LLM_REVIEW_ENABLED: process.env.LLM_REVIEW_ENABLED ?? "false",
+      LLM_REVIEW_PROVIDER: process.env.LLM_REVIEW_PROVIDER ?? "",
+      LLM_REVIEW_MODEL: process.env.LLM_REVIEW_MODEL ?? "",
+      LLM_REVIEW_ENDPOINT: process.env.LLM_REVIEW_ENDPOINT ?? "",
+      LLM_REVIEW_RUN_ON_UNKNOWN_PACKAGES: process.env.LLM_REVIEW_RUN_ON_UNKNOWN_PACKAGES ?? "false",
+      LLM_REVIEW_RUN_ON_QUARANTINE: process.env.LLM_REVIEW_RUN_ON_QUARANTINE ?? "false",
+      LLM_REVIEW_INCLUDE_PRIVATE_PACKAGES: process.env.LLM_REVIEW_INCLUDE_PRIVATE_PACKAGES ?? "false"
     };
 
     new sst.aws.Task("DatabaseMigration", {
@@ -92,6 +102,7 @@ export default $config({
       },
       environment: {
         ...commonServiceEnvironment,
+        ...llmReviewEnvironment,
         PUBLIC_BASE_URL: "https://npm.anvil.example.com",
         ADMIN_TOKEN: adminToken.value
       },
@@ -126,6 +137,7 @@ export default $config({
       },
       environment: {
         ...commonServiceEnvironment,
+        ...llmReviewEnvironment,
         ANVIL_API_BASE_URL: "https://npm.anvil.example.com",
         ADMIN_TOKEN: adminToken.value
       },
@@ -145,8 +157,12 @@ export default $config({
         timeout: "10 seconds",
         retries: 3
       },
-      environment: commonServiceEnvironment,
-      link: [bucket, queue, database]
+      environment: {
+        ...commonServiceEnvironment,
+        ...llmReviewEnvironment,
+        LLM_REVIEW_API_KEY: llmReviewApiKey.value
+      },
+      link: [bucket, queue, database, llmReviewApiKey]
     });
 
     return {
