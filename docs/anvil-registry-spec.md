@@ -624,6 +624,8 @@ Detects typo-squatting, scope-squatting, and brand confusion.
 - Popular package index lookup.
 - Known ecosystem map.
 
+Detector output should preserve the likely intended package and the reasons that matched, such as `known_ecosystem_confusion`, `similar_scope`, `missing_character`, `extra_character`, `transposed_characters`, `pluralisation_variant`, and `visual_similarity`.
+
 ### Example detection
 
 ```text
@@ -693,6 +695,8 @@ export type LlmRiskReviewInput = {
     name: string;
     similarity: number;
     weeklyDownloads?: number;
+    reasons?: string[];
+    suggestedPackage?: string;
   }>;
   deterministicSignals: PolicyReasonCode[];
   manifestDiff?: ManifestDiff;

@@ -105,7 +105,11 @@ describe("worker analysis", () => {
     expect(codes).toContain("SIMILAR_TO_POPULAR_PACKAGE");
     expect(result.report.signals.find((signal) => signal.code === "SIMILAR_TO_POPULAR_PACKAGE")).toMatchObject({
       severity: "critical",
-      evidence: { candidate: "@tanstack/react-query" }
+      evidence: {
+        candidate: "@tanstack/react-query",
+        suggestedPackage: "@tanstack/react-query",
+        reasons: expect.arrayContaining(["known_ecosystem_confusion"])
+      }
     });
     expect(
       (await persistence.getPolicyDecision("@tenstack/react-query", "1.0.0", config.policy.version, {

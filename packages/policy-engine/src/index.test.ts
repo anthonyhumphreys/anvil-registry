@@ -22,11 +22,14 @@ describe("evaluatePolicy", () => {
       version: "1.0.0",
       runtimeMode: "development",
       weeklyDownloads: 10,
-      similarPackages: [{ name: "@tanstack/react-query", similarity: 0.95, weeklyDownloads: 4_000_000 }],
+      similarPackages: [{ name: "@tanstack/react-query", similarity: 0.95, weeklyDownloads: 4_000_000, reasons: ["known_ecosystem_confusion"], suggestedPackage: "@tanstack/react-query" }],
       policy: defaultPolicyConfig
     });
 
     expect(decision.action).toBe("block");
+    expect(decision.reasons.find((reason) => reason.code === "SIMILAR_TO_POPULAR_PACKAGE")).toMatchObject({
+      evidence: { suggestedPackage: "@tanstack/react-query", reasons: ["known_ecosystem_confusion"] }
+    });
   });
 
   it("honours active allow overrides", () => {

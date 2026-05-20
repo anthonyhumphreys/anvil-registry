@@ -334,7 +334,9 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
     const similarPackages = detectNameSquatting(packageName).map((signal) => ({
       name: signal.candidate,
       similarity: signal.similarity,
-      weeklyDownloads: signal.weeklyDownloads
+      weeklyDownloads: signal.weeklyDownloads,
+      reasons: signal.reasons,
+      suggestedPackage: signal.suggestedPackage
     }));
 
     const decision = evaluatePolicy({

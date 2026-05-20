@@ -75,7 +75,8 @@ async function analysePackageVersion(target: { packageName: string; version: str
     name: signal.candidate,
     similarity: signal.similarity,
     weeklyDownloads: signal.weeklyDownloads,
-    reasons: signal.reasons
+    reasons: signal.reasons,
+    suggestedPackage: signal.suggestedPackage
   }));
   const report = mergePolicyContextSignals(
     {
@@ -230,7 +231,7 @@ function mergePolicyContextSignals(
   context: {
     weeklyDownloads?: number;
     packageAgeDays?: number;
-    similarPackages: Array<{ name: string; similarity: number; weeklyDownloads?: number; reasons: string[] }>;
+    similarPackages: Array<{ name: string; similarity: number; weeklyDownloads?: number; reasons: string[]; suggestedPackage?: string }>;
     targetMetadata: PackageVersionMetadata;
     previousMetadata?: PackageVersionMetadata;
     policy: AnvilConfig["policy"];
@@ -268,6 +269,7 @@ function mergePolicyContextSignals(
       severity: lowAdoption && context.policy.blockSimilarLowDownloadPackages ? "critical" : "medium",
       evidence: {
         candidate: bestSimilarPackage.name,
+        suggestedPackage: bestSimilarPackage.suggestedPackage,
         similarity: bestSimilarPackage.similarity,
         weeklyDownloads: bestSimilarPackage.weeklyDownloads,
         reasons: bestSimilarPackage.reasons

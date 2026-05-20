@@ -1,14 +1,17 @@
 export type PopularPackage = {
   name: string;
   weeklyDownloads?: number;
+  aliases?: string[];
 };
 
 export type NameSquattingSignal = {
   candidate: string;
   similarity: number;
+  jaroWinklerSimilarity: number;
   distance: number;
   weeklyDownloads?: number;
   reasons: string[];
+  suggestedPackage: string;
 };
 
 export const defaultPopularPackages: PopularPackage[] = [
@@ -21,6 +24,12 @@ export const defaultPopularPackages: PopularPackage[] = [
   { name: "express", weeklyDownloads: 25_000_000 },
   { name: "fastify", weeklyDownloads: 3_000_000 }
 ];
+
+export const knownEcosystemConfusions: Record<string, string> = {
+  "@tenstack/react-query": "@tanstack/react-query",
+  "@vite/plugin-react": "@vitejs/plugin-react",
+  loadash: "lodash"
+};
 
 export function splitPackageName(packageName: string): { scope?: string; name: string } {
   if (!packageName.startsWith("@")) return { name: packageName };
@@ -78,37 +87,144 @@ export function similarity(a: string, b: string): number {
   return 1 - damerauLevenshtein(left, right) / maxLength;
 }
 
+export function jaroWinklerSimilarity(a: string, b: string): number {
+  const left = normaliseName(a);
+  const right = normaliseName(b);
+  if (left === right) return 1;
+  if (!left || !right) return 0;
+
+  const matchDistance = Math.max(Math.floor(Math.max(left.length, right.length) / 2) - 1, 0);
+  const leftMatches = Array<boolean>(left.length).fill(false);
+  const rightMatches = Array<boolean>(right.length).fill(false);
+  let matches = 0;
+
+  for (let i = 0; i < left.length; i += 1) {
+    const start = Math.max(0, i - matchDistance);
+    const end = Math.min(i + matchDistance + 1, right.length);
+    for (let j = start; j < end; j += 1) {
+      if (rightMatches[j] || left[i] !== right[j]) continue;
+      leftMatches[i] = true;
+      rightMatches[j] = true;
+      matches += 1;
+      break;
+    }
+  }
+
+  if (matches === 0) return 0;
+
+  const leftMatched = [...left].filter((_char, index) => leftMatches[index]);
+  const rightMatched = [...right].filter((_char, index) => rightMatches[index]);
+  const transpositions = leftMatched.filter((char, index) => char !== rightMatched[index]).length / 2;
+  const jaro = (matches / left.length + matches / right.length + (matches - transpositions) / matches) / 3;
+  const prefix = commonPrefixLength(left, right, 4);
+  return Number((jaro + prefix * 0.1 * (1 - jaro)).toFixed(3));
+}
+
 export function detectNameSquatting(
   packageName: string,
   popularPackages: PopularPackage[] = defaultPopularPackages
 ): NameSquattingSignal[] {
   const requested = splitPackageName(packageName);
+  const knownCandidate = knownEcosystemConfusions[packageName.toLowerCase()];
 
   return popularPackages
     .filter((candidate) => candidate.name !== packageName)
     .map((candidate) => {
       const candidateParts = splitPackageName(candidate.name);
-      const score = similarity(packageName, candidate.name);
+      const candidateNames = [candidate.name, ...(candidate.aliases ?? [])];
+      const scores = candidateNames.map((name) => ({
+        name,
+        editSimilarity: similarity(packageName, name),
+        jaroWinkler: jaroWinklerSimilarity(packageName, name),
+        distance: damerauLevenshtein(normaliseName(packageName), normaliseName(name))
+      }));
+      const best = scores.sort((a, b) => Math.max(b.editSimilarity, b.jaroWinkler) - Math.max(a.editSimilarity, a.jaroWinkler))[0]!;
+      const score = Math.max(best.editSimilarity, best.jaroWinkler);
       const distance = damerauLevenshtein(normaliseName(packageName), normaliseName(candidate.name));
       const reasons: string[] = [];
 
       if (score >= 0.82) reasons.push("high_name_similarity");
-      if (requested.name.replace(/[-_]/g, "") === candidateParts.name.replace(/[-_]/g, "")) {
+      if (best.jaroWinkler >= 0.9) reasons.push("high_jaro_winkler_similarity");
+      if (knownCandidate === candidate.name) reasons.push("known_ecosystem_confusion");
+      if (requested.name !== candidateParts.name && requested.name.replace(/[-_]/g, "") === candidateParts.name.replace(/[-_]/g, "")) {
         reasons.push("hyphen_or_underscore_variant");
       }
-      if (requested.scope && candidateParts.scope && similarity(requested.scope, candidateParts.scope) >= 0.75) {
+      if (isPluralisationVariant(requested.name, candidateParts.name)) reasons.push("pluralisation_variant");
+      if (requested.scope && candidateParts.scope && Math.max(similarity(requested.scope, candidateParts.scope), jaroWinklerSimilarity(requested.scope, candidateParts.scope)) >= 0.75) {
         reasons.push("similar_scope");
+      }
+      reasons.push(...editPatternReasons(normaliseName(packageName), normaliseName(candidate.name)));
+      if (normaliseVisual(packageName) === normaliseVisual(candidate.name) && normaliseName(packageName) !== normaliseName(candidate.name)) {
+        reasons.push("visual_similarity");
       }
       if (distance <= 2) reasons.push("short_edit_distance");
 
       return {
         candidate: candidate.name,
         similarity: Number(score.toFixed(3)),
+        jaroWinklerSimilarity: best.jaroWinkler,
         distance,
         weeklyDownloads: candidate.weeklyDownloads,
-        reasons
+        reasons: [...new Set(reasons)],
+        suggestedPackage: candidate.name
       };
     })
     .filter((signal) => signal.reasons.length > 0)
     .sort((a, b) => b.similarity - a.similarity);
+}
+
+function commonPrefixLength(a: string, b: string, maxLength: number): number {
+  let length = 0;
+  while (length < maxLength && a[length] && a[length] === b[length]) length += 1;
+  return length;
+}
+
+function isPluralisationVariant(a: string, b: string): boolean {
+  const left = a.toLowerCase().replace(/[-_]/g, "");
+  const right = b.toLowerCase().replace(/[-_]/g, "");
+  if (left === right) return false;
+  return stripPlural(left) === right || stripPlural(right) === left;
+}
+
+function stripPlural(value: string): string {
+  if (value.endsWith("ies") && value.length > 3) return `${value.slice(0, -3)}y`;
+  if (value.endsWith("es") && value.length > 2) return value.slice(0, -2);
+  if (value.endsWith("s") && value.length > 1) return value.slice(0, -1);
+  return value;
+}
+
+function editPatternReasons(requested: string, candidate: string): string[] {
+  if (requested === candidate) return [];
+  if (Math.abs(requested.length - candidate.length) === 1 && oneInsertionAway(requested, candidate)) {
+    return [requested.length < candidate.length ? "missing_character" : "extra_character"];
+  }
+  if (requested.length === candidate.length && oneTranspositionAway(requested, candidate)) return ["transposed_characters"];
+  return [];
+}
+
+function oneInsertionAway(a: string, b: string): boolean {
+  const shorter = a.length <= b.length ? a : b;
+  const longer = a.length <= b.length ? b : a;
+  let skipped = false;
+  for (let i = 0, j = 0; i < shorter.length || j < longer.length; i += 1, j += 1) {
+    if (shorter[i] === longer[j]) continue;
+    if (skipped) return false;
+    skipped = true;
+    i -= 1;
+  }
+  return true;
+}
+
+function oneTranspositionAway(a: string, b: string): boolean {
+  const indexes = [...a].flatMap((char, index) => (char === b[index] ? [] : [index]));
+  return indexes.length === 2 && a[indexes[0]!] === b[indexes[1]!] && a[indexes[1]!] === b[indexes[0]!];
+}
+
+function normaliseVisual(value: string): string {
+  return normaliseName(value)
+    .replace(/[0o]/g, "o")
+    .replace(/[1il]/g, "l")
+    .replace(/[5s]/g, "s")
+    .replace(/[2z]/g, "z")
+    .replace(/[8b]/g, "b");
 }

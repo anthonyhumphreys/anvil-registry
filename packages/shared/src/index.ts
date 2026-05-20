@@ -202,6 +202,8 @@ export type LlmRiskReviewInput = {
     name: string;
     similarity: number;
     weeklyDownloads?: number;
+    reasons?: string[];
+    suggestedPackage?: string;
   }>;
   deterministicSignals: PolicyReasonCode[];
   manifestDiff?: Record<string, unknown>;
@@ -224,7 +226,7 @@ export type PolicyInput = {
   analysisReport?: AnalysisReport;
   llmRiskReview?: LlmRiskReview;
   override?: Override;
-  similarPackages?: Array<{ name: string; similarity: number; weeklyDownloads?: number }>;
+  similarPackages?: Array<{ name: string; similarity: number; weeklyDownloads?: number; reasons?: string[]; suggestedPackage?: string }>;
   policy: PolicyConfig;
 };
 

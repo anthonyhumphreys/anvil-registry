@@ -56,7 +56,12 @@ export function evaluatePolicy(input: PolicyInput): PolicyDecision {
       code: "SIMILAR_TO_POPULAR_PACKAGE",
       message: `Package name is similar to ${bestSimilarPackage.name}.`,
       severity: input.policy.blockSimilarLowDownloadPackages ? "critical" : "medium",
-      evidence: { candidate: bestSimilarPackage.name, similarity: bestSimilarPackage.similarity }
+      evidence: {
+        candidate: bestSimilarPackage.name,
+        suggestedPackage: bestSimilarPackage.suggestedPackage ?? bestSimilarPackage.name,
+        similarity: bestSimilarPackage.similarity,
+        reasons: bestSimilarPackage.reasons
+      }
     });
   }
 
