@@ -1,7 +1,20 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { loadConfig } from "@anvil/config";
+import type { ObjectStore } from "@anvil/object-store";
 import { MemoryPersistence } from "@anvil/persistence";
 import { buildAdmin } from "./app.js";
+
+class TestObjectStore implements ObjectStore {
+  private readonly objects = new Map<string, Uint8Array>();
+
+  async get(key: string): Promise<Uint8Array | undefined> {
+    return this.objects.get(key);
+  }
+
+  async put(key: string, body: Uint8Array): Promise<void> {
+    this.objects.set(key, body);
+  }
+}
 
 describe("admin app", () => {
   afterEach(() => {
@@ -60,6 +73,61 @@ describe("admin app", () => {
     expect(response.body).toContain("Known Ecosystem Confusions");
     expect(response.body).toContain("@tanstack/react-query");
     expect(response.body).toContain("@tenstack/react-query");
+    await app.close();
+  });
+
+  it("validates and uploads popular package indexes to object storage", async () => {
+    const persistence = new MemoryPersistence();
+    const objectStore = new TestObjectStore();
+    const app = buildAdmin({
+      config: loadConfig({ ...process.env, ADMIN_TOKEN: "secret" }),
+      persistence,
+      objectStore
+    });
+
+    const rejected = await app.inject({
+      method: "POST",
+      url: "/api/popular-package-index",
+      payload: { popularPackages: [] }
+    });
+    const invalid = await app.inject({
+      method: "POST",
+      url: "/api/popular-package-index",
+      headers: { authorization: "Bearer secret" },
+      payload: { popularPackages: [{ weeklyDownloads: 1 }] }
+    });
+    const accepted = await app.inject({
+      method: "POST",
+      url: "/api/popular-package-index",
+      headers: { authorization: "Bearer secret" },
+      payload: {
+        generatedAt: "2026-05-20T00:00:00.000Z",
+        uploadedBy: "reviewer",
+        popularPackages: [{ name: "real-package", weeklyDownloads: 100_000 }],
+        knownConfusions: { "rea1-package": "real-package" }
+      }
+    });
+    const index = await app.inject({ method: "GET", url: "/api/popular-package-index" });
+
+    expect(rejected.statusCode).toBe(401);
+    expect(invalid.statusCode).toBe(400);
+    expect(accepted.statusCode).toBe(201);
+    expect(accepted.json()).toMatchObject({
+      activeKey: "popular-index/npm/latest.json",
+      datedKey: "popular-index/npm/2026-05-20.json"
+    });
+    expect(await objectStore.get("popular-index/npm/latest.json")).toBeDefined();
+    expect(await objectStore.get("popular-index/npm/2026-05-20.json")).toBeDefined();
+    expect(index.json()).toMatchObject({
+      source: "object:popular-index/npm/latest.json",
+      popularPackages: [{ name: "real-package", weeklyDownloads: 100_000 }],
+      knownConfusions: { "rea1-package": "real-package" }
+    });
+    expect((await persistence.listAuditEvents())[0]).toMatchObject({
+      actor: "reviewer",
+      eventType: "popular_index.updated",
+      targetId: "popular-index/npm/latest.json"
+    });
     await app.close();
   });
 

@@ -16,6 +16,7 @@
     "@anvil/logger": "workspace:*",
     "@anvil/name-squatting": "workspace:*",
     "@anvil/npm-registry": "workspace:*",
+    "@anvil/object-store": "workspace:*",
     "@anvil/package-analysis": "workspace:*",
     "@anvil/persistence": "workspace:*",
     "@anvil/policy-engine": "workspace:*",

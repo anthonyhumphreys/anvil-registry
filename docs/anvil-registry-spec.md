@@ -626,7 +626,7 @@ Detects typo-squatting, scope-squatting, and brand confusion.
 
 Detector output should preserve the likely intended package and the reasons that matched, such as `known_ecosystem_confusion`, `similar_scope`, `missing_character`, `extra_character`, `transposed_characters`, `pluralisation_variant`, and `visual_similarity`.
 
-The gateway, worker, and admin UI load the popular package index from `POPULAR_PACKAGE_INDEX_PATH` when configured. The JSON index contains:
+The gateway, worker, and admin UI load the popular package index from object storage at `POPULAR_PACKAGE_INDEX_OBJECT_KEY` when configured, defaulting to `popular-index/npm/latest.json` in local Docker/SST deployments. `POPULAR_PACKAGE_INDEX_PATH` remains a local-file fallback for development and bootstrap workflows. The JSON index contains:
 
 ```json
 {
@@ -636,7 +636,7 @@ The gateway, worker, and admin UI load the popular package index from `POPULAR_P
 }
 ```
 
-If no path is configured, Anvil uses the built-in seed index. Admin exposes the active index at `GET /api/popular-package-index` and `/popular-package-index` so reviewers can inspect which package names and known confusion pairs are driving deterministic typo-squatting evidence.
+If no object or path is configured, Anvil uses the built-in seed index. Admin exposes the active index at `GET /api/popular-package-index` and `/popular-package-index` so reviewers can inspect which package names and known confusion pairs are driving deterministic typo-squatting evidence. Admin also accepts `POST /api/popular-package-index` with the same JSON shape, validates it, writes it to `popular-index/npm/{date}.json`, updates the active object key, and records an audit event.
 
 ### Example detection
 

@@ -296,6 +296,57 @@ describe("gateway policy enforcement", () => {
     await app.close();
   });
 
+  it("loads name-squatting evidence from an object-store popular package index", async () => {
+    const objectStore = new TestObjectStore();
+    await objectStore.put(
+      "popular-index/npm/latest.json",
+      new TextEncoder().encode(
+        JSON.stringify({
+          generatedAt: "2026-05-20T00:00:00.000Z",
+          popularPackages: [{ name: "@scope/actual-package", weeklyDownloads: 200_000 }],
+          knownConfusions: { "@scope/actua1-package": "@scope/actual-package" }
+        })
+      )
+    );
+    const metadata = packageMetadata("@scope/actua1-package", "2020-01-01T00:00:00.000Z");
+    const queue = new MemoryJobQueue();
+    const persistence = new MemoryPersistence();
+    const app = buildGateway({
+      config: testConfig("ci"),
+      persistence,
+      objectStore,
+      queue,
+      registry: {
+        fetchMetadata: vi.fn(async () => metadata),
+        fetchTarball: vi.fn()
+      },
+      downloadStats: noDownloadStats()
+    });
+
+    const response = await app.inject({ method: "GET", url: "/@scope/actua1-package" });
+    const decision = await persistence.getPolicyDecision("@scope/actua1-package", "1.0.0", testConfig("ci").policy.version, {
+      tarballIntegrity: "sha512-test",
+      analyserVersion: "metadata-policy-2026-05-20.1"
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(decision).toMatchObject({
+      action: "block",
+      reasons: [
+        expect.objectContaining({
+          code: "SIMILAR_TO_POPULAR_PACKAGE",
+          evidence: expect.objectContaining({
+            candidate: "@scope/actual-package",
+            suggestedPackage: "@scope/actual-package",
+            reasons: expect.arrayContaining(["known_ecosystem_confusion"])
+          })
+        })
+      ]
+    });
+
+    await app.close();
+  });
+
   it("applies missing provenance policy before tarball download", async () => {
     const metadata = packageMetadata("popular-package", "2020-01-01T00:00:00.000Z");
     const fetchTarball = vi.fn();

@@ -1,7 +1,15 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import type { AnvilConfig } from "@anvil/config";
 import { loadConfig } from "@anvil/config";
-import { loadPopularPackageIndex, type PopularPackageIndex } from "@anvil/name-squatting";
+import {
+  defaultPopularPackageIndexObjectKey,
+  encodePopularPackageIndex,
+  loadActivePopularPackageIndex,
+  parsePopularPackageIndex,
+  popularPackageIndexDatedObjectKey,
+  type PopularPackageIndex
+} from "@anvil/name-squatting";
+import { createObjectStore, type ObjectStore } from "@anvil/object-store";
 import {
   createPersistence,
   type AnalysisReportRecord,
@@ -19,12 +27,18 @@ import { resolveOverrideExpiry, type Override } from "@anvil/shared";
 export type AdminDependencies = {
   config?: AnvilConfig;
   persistence?: AnvilPersistence;
+  objectStore?: ObjectStore;
 };
 
 export function buildAdmin(dependencies: AdminDependencies = {}): FastifyInstance {
   const config = dependencies.config ?? loadConfig();
   const persistence = dependencies.persistence ?? createPersistence(config);
-  const popularPackageIndex = loadPopularPackageIndex(config.POPULAR_PACKAGE_INDEX_PATH);
+  const objectStore = dependencies.objectStore ?? createObjectStore(config);
+  let popularPackageIndex = loadActivePopularPackageIndex({
+    objectStore,
+    objectKey: config.POPULAR_PACKAGE_INDEX_OBJECT_KEY,
+    indexPath: config.POPULAR_PACKAGE_INDEX_PATH
+  });
   const app = Fastify({ logger: { name: "anvil-admin" } });
   app.addContentTypeParser("application/x-www-form-urlencoded", { parseAs: "string" }, (_request, body, done) => {
     const text = Buffer.isBuffer(body) ? body.toString("utf8") : body;
@@ -75,7 +89,42 @@ export function buildAdmin(dependencies: AdminDependencies = {}): FastifyInstanc
     return { auditEvents: await persistence.listAuditEvents({ limit: parseLimit(query.limit) }) };
   });
 
-  app.get("/api/popular-package-index", async () => popularPackageIndex);
+  app.get("/api/popular-package-index", async () => await popularPackageIndex);
+
+  app.post<{
+    Body: Record<string, unknown>;
+  }>("/api/popular-package-index", async (request, reply) => {
+    if (!isAdminRequest(request.headers.authorization, request.headers.cookie, config.ADMIN_TOKEN)) {
+      return reply.code(401).send({ error: "ANVIL_ADMIN_TOKEN_REQUIRED" });
+    }
+
+    try {
+      const generatedAt = typeof request.body.generatedAt === "string" ? request.body.generatedAt : new Date().toISOString();
+      const index = {
+        ...parsePopularPackageIndex({ ...request.body, generatedAt }, "upload"),
+        generatedAt
+      };
+      const activeKey = config.POPULAR_PACKAGE_INDEX_OBJECT_KEY || defaultPopularPackageIndexObjectKey;
+      const datedKey = popularPackageIndexDatedObjectKey(generatedAt);
+      const encoded = encodePopularPackageIndex(index);
+      await objectStore.put(datedKey, encoded);
+      if (activeKey !== datedKey) await objectStore.put(activeKey, encoded);
+
+      const storedIndex = { ...index, source: `object:${activeKey}` };
+      popularPackageIndex = Promise.resolve(storedIndex);
+      await persistence.putAuditEvent({
+        actor: typeof request.body.uploadedBy === "string" ? request.body.uploadedBy : "admin-ui",
+        eventType: "popular_index.updated",
+        targetType: "popular_index",
+        targetId: activeKey,
+        metadata: { activeKey, datedKey, packageCount: index.popularPackages.length, knownConfusionCount: Object.keys(index.knownConfusions).length }
+      });
+
+      return reply.code(201).send({ ok: true, activeKey, datedKey, index: storedIndex });
+    } catch (error) {
+      return reply.code(400).send({ error: "ANVIL_POPULAR_INDEX_INVALID", message: error instanceof Error ? error.message : String(error) });
+    }
+  });
 
   app.get("/api/node-base/reports", async (request) => {
     const query = request.query as { reportType?: string; risk?: string; limit?: string };
@@ -185,12 +234,13 @@ export function buildAdmin(dependencies: AdminDependencies = {}): FastifyInstanc
   });
 
   app.get("/", async (request, reply) => {
-    const [decisions, reports, nodeBaseReports, overrides, auditEvents] = await Promise.all([
+    const [decisions, reports, nodeBaseReports, overrides, auditEvents, activePopularPackageIndex] = await Promise.all([
       persistence.listPolicyDecisions({ limit: 50 }),
       persistence.listAnalysisReports({ limit: 20 }),
       persistence.listNodeBaseReports({ limit: 20 }),
       persistence.listOverrides({ limit: 20 }),
-      persistence.listAuditEvents({ limit: 20 })
+      persistence.listAuditEvents({ limit: 20 }),
+      popularPackageIndex
     ]);
     const isAdmin = isAdminRequest(request.headers.authorization, request.headers.cookie, config.ADMIN_TOKEN);
 
@@ -224,7 +274,7 @@ export function buildAdmin(dependencies: AdminDependencies = {}): FastifyInstanc
       <section>
         <h2>Popular Package Index</h2>
         <p><a href="/popular-package-index">View typo-squatting reference index</a></p>
-        ${popularPackageIndexSummary(popularPackageIndex)}
+        ${popularPackageIndexSummary(activePopularPackageIndex)}
       </section>
       <section>
         <h2>Overrides</h2>
@@ -448,20 +498,21 @@ export function buildAdmin(dependencies: AdminDependencies = {}): FastifyInstanc
   });
 
   app.get("/popular-package-index", async (_request, reply) => {
+    const activePopularPackageIndex = await popularPackageIndex;
     reply.type("text/html");
     return page(
       "Popular Package Index",
       `<section>
         <h2>Index Summary</h2>
-        ${popularPackageIndexSummary(popularPackageIndex)}
+        ${popularPackageIndexSummary(activePopularPackageIndex)}
       </section>
       <section>
         <h2>Popular Packages</h2>
-        ${popularPackageTable(popularPackageIndex)}
+        ${popularPackageTable(activePopularPackageIndex)}
       </section>
       <section>
         <h2>Known Ecosystem Confusions</h2>
-        ${knownConfusionTable(popularPackageIndex)}
+        ${knownConfusionTable(activePopularPackageIndex)}
       </section>`
     );
   });

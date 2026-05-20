@@ -2,7 +2,16 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
-import { detectNameSquatting, jaroWinklerSimilarity, loadPopularPackageIndex, parsePopularPackageIndex } from "./index.js";
+import {
+  detectNameSquatting,
+  encodePopularPackageIndex,
+  jaroWinklerSimilarity,
+  loadActivePopularPackageIndex,
+  loadPopularPackageIndex,
+  loadPopularPackageIndexFromObjectStore,
+  parsePopularPackageIndex,
+  popularPackageIndexDatedObjectKey
+} from "./index.js";
 
 describe("detectNameSquatting", () => {
   it("detects tanstack confusion", () => {
@@ -79,5 +88,25 @@ describe("detectNameSquatting", () => {
 
   it("rejects malformed popular package indexes", () => {
     expect(() => parsePopularPackageIndex({ popularPackages: [{ weeklyDownloads: -1 }] })).toThrow("Popular package entries require a name.");
+  });
+
+  it("loads and encodes object-store backed indexes", async () => {
+    const index = parsePopularPackageIndex({
+      generatedAt: "2026-05-20T12:30:00.000Z",
+      popularPackages: [{ name: "real-package", weeklyDownloads: 50_000 }],
+      knownConfusions: { "rea1-package": "real-package" }
+    });
+    const store = new Map<string, Uint8Array>([["popular-index/npm/latest.json", encodePopularPackageIndex(index)]]);
+
+    const loaded = await loadPopularPackageIndexFromObjectStore({ get: async (key) => store.get(key) });
+    const active = await loadActivePopularPackageIndex({ objectStore: { get: async (key) => store.get(key) }, objectKey: "popular-index/npm/latest.json" });
+
+    expect(loaded).toMatchObject({
+      source: "object:popular-index/npm/latest.json",
+      popularPackages: [{ name: "real-package", weeklyDownloads: 50_000 }],
+      knownConfusions: { "rea1-package": "real-package" }
+    });
+    expect(active.source).toBe("object:popular-index/npm/latest.json");
+    expect(popularPackageIndexDatedObjectKey("2026-05-20T12:30:00.000Z")).toBe("popular-index/npm/2026-05-20.json");
   });
 });

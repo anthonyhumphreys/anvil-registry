@@ -37,6 +37,7 @@ export default $config({
       RUNTIME_MODE: "production",
       OBJECT_STORE_DRIVER: "s3",
       S3_BUCKET: bucket.name,
+      POPULAR_PACKAGE_INDEX_OBJECT_KEY: "popular-index/npm/latest.json",
       QUEUE_DRIVER: "sqs",
       ANALYSIS_QUEUE_URL: queue.url,
       UPSTREAM_NPM_REGISTRY: "https://registry.npmjs.org",

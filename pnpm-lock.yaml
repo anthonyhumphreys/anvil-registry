@@ -32,6 +32,9 @@ importers:
       '@anvil/name-squatting':
         specifier: workspace:*
         version: link:../../packages/name-squatting
+      '@anvil/object-store':
+        specifier: workspace:*
+        version: link:../../packages/object-store
       '@anvil/persistence':
         specifier: workspace:*
         version: link:../../packages/persistence
@@ -101,6 +104,9 @@ importers:
       '@anvil/npm-registry':
         specifier: workspace:*
         version: link:../../packages/npm-registry
+      '@anvil/object-store':
+        specifier: workspace:*
+        version: link:../../packages/object-store
       '@anvil/package-analysis':
         specifier: workspace:*
         version: link:../../packages/package-analysis

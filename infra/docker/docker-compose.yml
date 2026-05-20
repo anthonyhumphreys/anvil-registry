@@ -13,6 +13,7 @@ services:
       QUEUE_DRIVER: bullmq
       REDIS_URL: redis://redis:6379
       OBJECT_STORE_DRIVER: s3
+      POPULAR_PACKAGE_INDEX_OBJECT_KEY: popular-index/npm/latest.json
       S3_ENDPOINT: http://minio:9000
       S3_BUCKET: anvil-package-cache
       S3_ACCESS_KEY_ID: minio
@@ -51,6 +52,7 @@ services:
       QUEUE_DRIVER: bullmq
       REDIS_URL: redis://redis:6379
       OBJECT_STORE_DRIVER: s3
+      POPULAR_PACKAGE_INDEX_OBJECT_KEY: popular-index/npm/latest.json
       S3_ENDPOINT: http://minio:9000
       S3_BUCKET: anvil-package-cache
       S3_ACCESS_KEY_ID: minio
@@ -83,6 +85,13 @@ services:
       ADMIN_TOKEN: local-dev-token
       DATABASE_URL: postgres://anvil:anvil@postgres:5432/anvil
       PERSISTENCE_DRIVER: postgres
+      OBJECT_STORE_DRIVER: s3
+      POPULAR_PACKAGE_INDEX_OBJECT_KEY: popular-index/npm/latest.json
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET: anvil-package-cache
+      S3_ACCESS_KEY_ID: minio
+      S3_SECRET_ACCESS_KEY: miniopassword
+      AWS_REGION: us-east-1
     depends_on:
       gateway:
         condition: service_healthy

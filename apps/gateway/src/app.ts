@@ -1,7 +1,7 @@
 import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
 import type { AnvilConfig } from "@anvil/config";
 import { loadConfig } from "@anvil/config";
-import { detectNameSquatting, loadPopularPackageIndex } from "@anvil/name-squatting";
+import { detectNameSquatting, loadActivePopularPackageIndex } from "@anvil/name-squatting";
 import {
   calculatePackageAgeDays,
   decodeRoutePackageName,
@@ -39,7 +39,11 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
   const persistence = dependencies.persistence ?? createPersistence(config);
   const objectStore = dependencies.objectStore ?? createObjectStore(config);
   const queue = dependencies.queue ?? createJobQueue(config);
-  const popularPackageIndex = loadPopularPackageIndex(config.POPULAR_PACKAGE_INDEX_PATH);
+  const popularPackageIndex = loadActivePopularPackageIndex({
+    objectStore,
+    objectKey: config.POPULAR_PACKAGE_INDEX_OBJECT_KEY,
+    indexPath: config.POPULAR_PACKAGE_INDEX_PATH
+  });
   const registry =
     dependencies.registry ??
     new NpmRegistryClient({
@@ -332,7 +336,7 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
     const existing = await persistence.getPolicyDecision(packageName, version, config.policy.version, decisionIdentity);
     if (existing) return existing;
 
-    const similarPackages = detectNameSquatting(packageName, popularPackageIndex).map((signal) => ({
+    const similarPackages = detectNameSquatting(packageName, await popularPackageIndex).map((signal) => ({
       name: signal.candidate,
       similarity: signal.similarity,
       weeklyDownloads: signal.weeklyDownloads,

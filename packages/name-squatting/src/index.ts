@@ -1,5 +1,11 @@
 import { readFileSync } from "node:fs";
 
+export const defaultPopularPackageIndexObjectKey = "popular-index/npm/latest.json";
+
+export type PopularPackageIndexObjectStore = {
+  get(key: string): Promise<Uint8Array | undefined>;
+};
+
 export type PopularPackage = {
   name: string;
   weeklyDownloads?: number;
@@ -50,6 +56,46 @@ export function loadPopularPackageIndex(indexPath?: string): PopularPackageIndex
   if (!indexPath) return defaultPopularPackageIndex;
   const parsed = JSON.parse(readFileSync(indexPath, "utf8")) as unknown;
   return parsePopularPackageIndex(parsed, indexPath);
+}
+
+export async function loadActivePopularPackageIndex(options: {
+  objectStore?: PopularPackageIndexObjectStore;
+  objectKey?: string;
+  indexPath?: string;
+  fallback?: PopularPackageIndex;
+}): Promise<PopularPackageIndex> {
+  const objectIndex = options.objectStore && options.objectKey ? await loadPopularPackageIndexFromObjectStore(options.objectStore, options.objectKey) : undefined;
+  if (objectIndex) return objectIndex;
+  if (options.indexPath) return loadPopularPackageIndex(options.indexPath);
+  return options.fallback ?? defaultPopularPackageIndex;
+}
+
+export async function loadPopularPackageIndexFromObjectStore(
+  objectStore: PopularPackageIndexObjectStore,
+  objectKey = defaultPopularPackageIndexObjectKey
+): Promise<PopularPackageIndex | undefined> {
+  const body = await objectStore.get(objectKey);
+  if (!body) return undefined;
+  return parsePopularPackageIndex(JSON.parse(new TextDecoder().decode(body)) as unknown, `object:${objectKey}`);
+}
+
+export function encodePopularPackageIndex(index: PopularPackageIndex): Uint8Array {
+  return new TextEncoder().encode(
+    `${JSON.stringify(
+      {
+        generatedAt: index.generatedAt,
+        popularPackages: index.popularPackages,
+        knownConfusions: index.knownConfusions
+      },
+      null,
+      2
+    )}\n`
+  );
+}
+
+export function popularPackageIndexDatedObjectKey(generatedAt: string | Date = new Date()): string {
+  const date = generatedAt instanceof Date ? generatedAt.toISOString().slice(0, 10) : generatedAt.slice(0, 10);
+  return `popular-index/npm/${date}.json`;
 }
 
 export function parsePopularPackageIndex(value: unknown, source = "inline"): PopularPackageIndex {

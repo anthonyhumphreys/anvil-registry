@@ -13,6 +13,7 @@
   "dependencies": {
     "@anvil/config": "workspace:*",
     "@anvil/name-squatting": "workspace:*",
+    "@anvil/object-store": "workspace:*",
     "@anvil/persistence": "workspace:*",
     "@anvil/shared": "workspace:*",
     "fastify": "^5.3.3"

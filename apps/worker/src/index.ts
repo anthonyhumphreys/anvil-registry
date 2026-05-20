@@ -1,7 +1,8 @@
 import { loadConfig } from "@anvil/config";
 import { createLogger } from "@anvil/logger";
-import { loadPopularPackageIndex } from "@anvil/name-squatting";
+import { loadActivePopularPackageIndex } from "@anvil/name-squatting";
 import { NpmDownloadsClient, NpmRegistryClient } from "@anvil/npm-registry";
+import { createObjectStore } from "@anvil/object-store";
 import { createPersistence } from "@anvil/persistence";
 import { createBullMqAnalysisWorker, createJobQueue, createSqsAnalysisWorker, type AnalysisWorkerHandle } from "@anvil/queue";
 import type { AnalysisJob } from "@anvil/shared";
@@ -15,7 +16,6 @@ export async function runWorkerCli(argv: string[] = process.argv.slice(2)): Prom
     const registry = new NpmRegistryClient({ name: "npmjs", baseUrl: config.UPSTREAM_NPM_REGISTRY });
     const downloadStats = new NpmDownloadsClient({ baseUrl: config.NPM_DOWNLOADS_API });
     const persistence = createPersistence(config);
-    const popularPackageIndex = loadPopularPackageIndex(config.POPULAR_PACKAGE_INDEX_PATH);
     const command = argv[0];
 
     if (command === "--health-check") {
@@ -25,6 +25,12 @@ export async function runWorkerCli(argv: string[] = process.argv.slice(2)): Prom
     }
 
     if (command) {
+      const objectStore = createObjectStore(config);
+      const popularPackageIndex = await loadActivePopularPackageIndex({
+        objectStore,
+        objectKey: config.POPULAR_PACKAGE_INDEX_OBJECT_KEY,
+        indexPath: config.POPULAR_PACKAGE_INDEX_PATH
+      });
       const result = await analysePackageTarget(command, { config, registry, persistence, downloadStats, popularPackageIndex });
       logger.info({ target: `${result.packageName}@${result.version}`, action: result.decision.action, score: result.decision.score }, "analysis complete");
       return 0;
@@ -43,12 +49,18 @@ export async function startWorker(): Promise<AnalysisWorkerHandle | undefined> {
   const registry = new NpmRegistryClient({ name: "npmjs", baseUrl: config.UPSTREAM_NPM_REGISTRY });
   const downloadStats = new NpmDownloadsClient({ baseUrl: config.NPM_DOWNLOADS_API });
   const persistence = createPersistence(config);
-  const popularPackageIndex = loadPopularPackageIndex(config.POPULAR_PACKAGE_INDEX_PATH);
 
   if (config.QUEUE_DRIVER === "memory") {
     logger.info("Worker started without external queue. Set QUEUE_DRIVER=bullmq or QUEUE_DRIVER=sqs to consume analysis jobs.");
     return undefined;
   }
+
+  const objectStore = createObjectStore(config);
+  const popularPackageIndex = await loadActivePopularPackageIndex({
+    objectStore,
+    objectKey: config.POPULAR_PACKAGE_INDEX_OBJECT_KEY,
+    indexPath: config.POPULAR_PACKAGE_INDEX_PATH
+  });
 
   const handler = async (job: AnalysisJob) => {
     const result = await analyseAnalysisJob(job, { config, registry, persistence, downloadStats, popularPackageIndex });

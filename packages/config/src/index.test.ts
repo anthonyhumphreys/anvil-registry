@@ -37,10 +37,12 @@ describe("config", () => {
   it("loads the optional popular package index path", () => {
     const config = loadConfig({
       ...process.env,
-      POPULAR_PACKAGE_INDEX_PATH: "/etc/anvil/popular-index/npm/latest.json"
+      POPULAR_PACKAGE_INDEX_PATH: "/etc/anvil/popular-index/npm/latest.json",
+      POPULAR_PACKAGE_INDEX_OBJECT_KEY: "popular-index/npm/2026-05-20.json"
     });
 
     expect(config.POPULAR_PACKAGE_INDEX_PATH).toBe("/etc/anvil/popular-index/npm/latest.json");
+    expect(config.POPULAR_PACKAGE_INDEX_OBJECT_KEY).toBe("popular-index/npm/2026-05-20.json");
   });
 
   it("loads LLM review policy from environment flags", () => {
