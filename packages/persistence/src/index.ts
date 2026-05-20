@@ -25,7 +25,7 @@ export interface AnvilPersistence {
   getAnalysisReport(packageName: string, version: string, identity?: AnalysisReportIdentity): Promise<AnalysisReport | undefined>;
   listAnalysisReports(options?: { packageName?: string; version?: string; limit?: number }): Promise<AnalysisReportRecord[]>;
   putLlmRiskReview(review: LlmRiskReviewInput): Promise<void>;
-  listLlmRiskReviews(options?: { packageName?: string; version?: string; limit?: number }): Promise<LlmRiskReviewRecord[]>;
+  listLlmRiskReviews(options?: { packageName?: string; version?: string; limit?: number; identity?: LlmRiskReviewIdentity }): Promise<LlmRiskReviewRecord[]>;
   putNodeBaseReport(report: NodeBaseReportInput): Promise<NodeBaseReportRecord>;
   getNodeBaseReport(id: string): Promise<NodeBaseReportRecord | undefined>;
   listNodeBaseReports(options?: { reportType?: string; risk?: NodeBaseReportRisk; limit?: number }): Promise<NodeBaseReportRecord[]>;
@@ -53,6 +53,7 @@ export type PolicyDecisionIdentity = {
 };
 
 export type AnalysisReportIdentity = PolicyDecisionIdentity;
+export type LlmRiskReviewIdentity = PolicyDecisionIdentity;
 
 export type AnalysisReportRecord = {
   packageName: string;
@@ -83,6 +84,9 @@ export type PackageVersionRecord = PackageVersionInput & {
 export type LlmRiskReviewInput = {
   packageName: string;
   version: string;
+  tarballIntegrity?: string;
+  tarballShasum?: string;
+  analyserVersion?: string;
   provider: string;
   model: string;
   review: LlmRiskReview;
@@ -282,10 +286,11 @@ export class MemoryPersistence implements AnvilPersistence {
     });
   }
 
-  async listLlmRiskReviews(options: { packageName?: string; version?: string; limit?: number } = {}): Promise<LlmRiskReviewRecord[]> {
+  async listLlmRiskReviews(options: { packageName?: string; version?: string; limit?: number; identity?: LlmRiskReviewIdentity } = {}): Promise<LlmRiskReviewRecord[]> {
     return [...this.llmRiskReviews]
       .filter((record) => !options.packageName || record.packageName === options.packageName)
       .filter((record) => !options.version || record.version === options.version)
+      .filter((record) => !options.identity || identityMatches(record, options.identity))
       .sort((a, b) => Date.parse(b.createdAt ?? "") - Date.parse(a.createdAt ?? ""))
       .slice(0, options.limit ?? 50);
   }
@@ -338,7 +343,10 @@ function analysisReportKey(packageName: string, version: string, identity: Analy
   return `${packageName}@${version}:${identity.tarballIntegrity ?? ""}:${identity.tarballShasum ?? ""}:${identity.analyserVersion ?? ""}`;
 }
 
-function identityMatches(record: AnalysisReportRecord, identity: AnalysisReportIdentity) {
+function identityMatches(
+  record: Pick<AnalysisReportRecord, "tarballIntegrity" | "tarballShasum" | "analyserVersion">,
+  identity: AnalysisReportIdentity
+) {
   return (
     (identity.tarballIntegrity === undefined || record.tarballIntegrity === identity.tarballIntegrity) &&
     (identity.tarballShasum === undefined || record.tarballShasum === identity.tarballShasum) &&

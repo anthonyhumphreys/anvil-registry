@@ -8,6 +8,7 @@ import type {
   AnvilPersistence,
   AuditEventInput,
   AuditEventRecord,
+  LlmRiskReviewIdentity,
   LlmRiskReviewInput,
   LlmRiskReviewRecord,
   NodeBaseReportInput,
@@ -420,6 +421,9 @@ export class PostgresPersistence implements AnvilPersistence {
     await this.db.insert(schema.llmRiskReviews).values({
       packageName: review.packageName,
       version: review.version,
+      tarballIntegrity: review.tarballIntegrity ?? null,
+      tarballShasum: review.tarballShasum ?? null,
+      analyserVersion: review.analyserVersion ?? null,
       provider: review.provider,
       model: review.model,
       riskLevel: review.review.riskLevel,
@@ -428,11 +432,14 @@ export class PostgresPersistence implements AnvilPersistence {
     });
   }
 
-  async listLlmRiskReviews(options: { packageName?: string; version?: string; limit?: number } = {}): Promise<LlmRiskReviewRecord[]> {
+  async listLlmRiskReviews(options: { packageName?: string; version?: string; limit?: number; identity?: LlmRiskReviewIdentity } = {}): Promise<LlmRiskReviewRecord[]> {
     await this.ensureLlmRiskReviewSchema();
     const conditions = [
       options.packageName ? eq(schema.llmRiskReviews.packageName, options.packageName) : undefined,
-      options.version ? eq(schema.llmRiskReviews.version, options.version) : undefined
+      options.version ? eq(schema.llmRiskReviews.version, options.version) : undefined,
+      options.identity?.tarballIntegrity ? eq(schema.llmRiskReviews.tarballIntegrity, options.identity.tarballIntegrity) : undefined,
+      options.identity?.tarballShasum ? eq(schema.llmRiskReviews.tarballShasum, options.identity.tarballShasum) : undefined,
+      options.identity?.analyserVersion ? eq(schema.llmRiskReviews.analyserVersion, options.identity.analyserVersion) : undefined
     ].filter((condition): condition is SQL => Boolean(condition));
     const rows = await this.db
       .select()
@@ -444,6 +451,9 @@ export class PostgresPersistence implements AnvilPersistence {
     return rows.map((row) => ({
       packageName: row.packageName,
       version: row.version,
+      tarballIntegrity: row.tarballIntegrity ?? undefined,
+      tarballShasum: row.tarballShasum ?? undefined,
+      analyserVersion: row.analyserVersion ?? undefined,
       provider: row.provider,
       model: row.model,
       review: row.reviewJson as LlmRiskReview,
@@ -525,6 +535,9 @@ export class PostgresPersistence implements AnvilPersistence {
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         package_name text NOT NULL,
         version text NOT NULL,
+        tarball_integrity text,
+        tarball_shasum text,
+        analyser_version text,
         provider text NOT NULL,
         model text NOT NULL,
         risk_level text NOT NULL,
@@ -532,7 +545,11 @@ export class PostgresPersistence implements AnvilPersistence {
         review_json jsonb NOT NULL,
         created_at timestamptz NOT NULL DEFAULT now()
       );
+      ALTER TABLE llm_risk_reviews ADD COLUMN IF NOT EXISTS tarball_integrity text;
+      ALTER TABLE llm_risk_reviews ADD COLUMN IF NOT EXISTS tarball_shasum text;
+      ALTER TABLE llm_risk_reviews ADD COLUMN IF NOT EXISTS analyser_version text;
       CREATE INDEX IF NOT EXISTS llm_risk_reviews_lookup_idx ON llm_risk_reviews(package_name, version);
+      CREATE INDEX IF NOT EXISTS llm_risk_reviews_identity_idx ON llm_risk_reviews(package_name, version, tarball_integrity, tarball_shasum, analyser_version);
       CREATE INDEX IF NOT EXISTS llm_risk_reviews_provider_idx ON llm_risk_reviews(provider, model);
     `).then(() => undefined);
     await this.llmRiskReviewSchemaReady;

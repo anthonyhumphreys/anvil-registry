@@ -156,6 +156,9 @@ async function analysePackageVersion(
     await dependencies.persistence.putLlmRiskReview({
       packageName: target.packageName,
       version,
+      tarballIntegrity: targetMetadata.integrity,
+      tarballShasum: targetMetadata.shasum,
+      analyserVersion: report.analyserVersion,
       provider: dependencies.config.policy.llmReview.provider ?? "http",
       model: dependencies.config.policy.llmReview.model ?? "unspecified",
       review: llmRiskReview
@@ -171,6 +174,9 @@ async function analysePackageVersion(
         priority: options.priority,
         provider: dependencies.config.policy.llmReview.provider ?? "http",
         model: dependencies.config.policy.llmReview.model ?? "unspecified",
+        tarballIntegrity: targetMetadata.integrity,
+        tarballShasum: targetMetadata.shasum,
+        analyserVersion: report.analyserVersion,
         riskLevel: llmRiskReview.riskLevel,
         recommendedAction: llmRiskReview.recommendedAction
       }

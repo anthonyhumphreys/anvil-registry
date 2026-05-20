@@ -192,6 +192,9 @@ describe("MemoryPersistence", () => {
     await persistence.putLlmRiskReview({
       packageName: "pkg",
       version: "1.0.0",
+      tarballIntegrity: "sha512-current",
+      tarballShasum: "currentsum",
+      analyserVersion: "static-v1",
       provider: "stub",
       model: "none",
       review: {
@@ -201,6 +204,23 @@ describe("MemoryPersistence", () => {
         suspectedRiskTypes: ["install_script_abuse"],
         evidence: [{ signal: "NEW_INSTALL_SCRIPT", explanation: "Lifecycle script appeared.", source: "package_json" }],
         recommendedAction: "quarantine"
+      }
+    });
+    await persistence.putLlmRiskReview({
+      packageName: "pkg",
+      version: "1.0.0",
+      tarballIntegrity: "sha512-old",
+      tarballShasum: "oldsum",
+      analyserVersion: "static-v1",
+      provider: "stub",
+      model: "none",
+      review: {
+        riskLevel: "low",
+        confidence: "low",
+        summary: "No obvious issue.",
+        suspectedRiskTypes: [],
+        evidence: [],
+        recommendedAction: "allow"
       }
     });
     await persistence.putLlmRiskReview({
@@ -218,9 +238,14 @@ describe("MemoryPersistence", () => {
       }
     });
 
-    const reviews = await persistence.listLlmRiskReviews({ packageName: "pkg", version: "1.0.0" });
+    const reviews = await persistence.listLlmRiskReviews({
+      packageName: "pkg",
+      version: "1.0.0",
+      identity: { tarballIntegrity: "sha512-current", tarballShasum: "currentsum", analyserVersion: "static-v1" }
+    });
 
     expect(reviews).toHaveLength(1);
+    expect(reviews[0]).toMatchObject({ tarballIntegrity: "sha512-current", tarballShasum: "currentsum", analyserVersion: "static-v1" });
     expect(reviews[0]?.review.summary).toBe("Install script needs review.");
   });
 

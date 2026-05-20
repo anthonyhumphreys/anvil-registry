@@ -539,6 +539,8 @@ describe("gateway policy enforcement", () => {
     await persistence.putLlmRiskReview({
       packageName: "stable-package",
       version: "1.0.0",
+      tarballIntegrity: "sha512-test",
+      analyserVersion: "static-analysis-test",
       provider: "test-provider",
       model: "risk-reviewer",
       review: {
@@ -592,6 +594,59 @@ describe("gateway policy enforcement", () => {
           review: expect.objectContaining({ riskLevel: "high", summary: "Install path behavior needs human review." })
         })
       ]
+    });
+
+    await app.close();
+  });
+
+  it("does not apply stale LLM review evidence from a different tarball identity", async () => {
+    const persistence = new MemoryPersistence();
+    await persistence.putLlmRiskReview({
+      packageName: "stable-package",
+      version: "1.0.0",
+      tarballIntegrity: "sha512-old",
+      analyserVersion: "static-analysis-test",
+      provider: "test-provider",
+      model: "risk-reviewer",
+      review: {
+        riskLevel: "critical",
+        confidence: "high",
+        summary: "This belongs to an older tarball.",
+        suspectedRiskTypes: ["install_script_abuse"],
+        evidence: [{ signal: "OLD_TARBALL", explanation: "Old tarball evidence.", source: "metadata" }],
+        recommendedAction: "block"
+      }
+    });
+    const app = buildGateway({
+      config: loadConfig({
+        ...process.env,
+        RUNTIME_MODE: "ci",
+        PUBLIC_BASE_URL: "http://anvil.test",
+        PERSISTENCE_DRIVER: "memory",
+        LLM_REVIEW_ENABLED: "true"
+      }),
+      persistence,
+      queue: new MemoryJobQueue(),
+      registry: {
+        fetchMetadata: vi.fn(async () => packageMetadata("stable-package", "2020-01-01T00:00:00.000Z")),
+        fetchTarball: vi.fn()
+      },
+      downloadStats: noDownloadStats()
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/-/anvil/explain",
+      payload: { packageName: "stable-package", version: "1.0.0" }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      decision: {
+        action: "allow",
+        reasons: expect.not.arrayContaining([expect.objectContaining({ code: "LLM_RISK_REVIEW_FLAGGED" })])
+      },
+      llmRiskReviews: []
     });
 
     await app.close();

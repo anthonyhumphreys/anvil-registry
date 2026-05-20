@@ -72,6 +72,9 @@ export const llmRiskReviews = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     packageName: text("package_name").notNull(),
     version: text("version").notNull(),
+    tarballIntegrity: text("tarball_integrity"),
+    tarballShasum: text("tarball_shasum"),
+    analyserVersion: text("analyser_version"),
     provider: text("provider").notNull(),
     model: text("model").notNull(),
     riskLevel: text("risk_level").notNull(),
@@ -81,6 +84,7 @@ export const llmRiskReviews = pgTable(
   },
   (table) => ({
     llmReviewLookupIdx: index("llm_risk_reviews_lookup_idx").on(table.packageName, table.version),
+    llmReviewIdentityIdx: index("llm_risk_reviews_identity_idx").on(table.packageName, table.version, table.tarballIntegrity, table.tarballShasum, table.analyserVersion),
     llmReviewProviderIdx: index("llm_risk_reviews_provider_idx").on(table.provider, table.model)
   })
 );

@@ -394,9 +394,14 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
     const weeklyDownloads = await safeWeeklyDownloads(packageName);
     await persistPackageVersions(metadata, weeklyDownloads);
     const decision = await evaluateAndCache(metadata, version, "metadata_request", weeklyDownloads);
-    const [analysisReport, llmRiskReviews, override] = await Promise.all([
-      persistence.getAnalysisReport(packageName, version),
-      persistence.listLlmRiskReviews({ packageName, version, limit: 5 }),
+    const versionMetadata = toVersionMetadata(metadata, version);
+    const analysisIdentity = {
+      tarballIntegrity: versionMetadata?.integrity,
+      tarballShasum: versionMetadata?.shasum
+    };
+    const analysisReport = await persistence.getAnalysisReport(packageName, version, analysisIdentity);
+    const [llmRiskReviews, override] = await Promise.all([
+      persistence.listLlmRiskReviews({ packageName, version, limit: 5, identity: { ...analysisIdentity, analyserVersion: analysisReport?.analyserVersion } }),
       persistence.getOverride(packageName, version)
     ]);
 
@@ -419,7 +424,7 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
     };
     const [analysisReport, latestLlmReview] = await Promise.all([
       persistence.getAnalysisReport(packageName, version, analysisIdentity),
-      config.policy.llmReview.enabled ? persistence.listLlmRiskReviews({ packageName, version, limit: 1 }) : Promise.resolve([])
+      config.policy.llmReview.enabled ? persistence.listLlmRiskReviews({ packageName, version, limit: 1, identity: analysisIdentity }) : Promise.resolve([])
     ]);
     const decisionIdentity = {
       tarballIntegrity: versionMetadata?.integrity,

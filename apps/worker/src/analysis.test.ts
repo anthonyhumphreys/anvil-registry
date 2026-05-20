@@ -299,6 +299,9 @@ describe("worker analysis", () => {
     ]);
     expect(await persistence.listLlmRiskReviews({ packageName: "pkg", version: "1.0.0" })).toEqual([
       expect.objectContaining({
+        tarballIntegrity: "sha512-old",
+        tarballShasum: "oldsum",
+        analyserVersion: expect.any(String),
         provider: "test-provider",
         model: "test-model",
         review: expect.objectContaining({ riskLevel: "critical", recommendedAction: "block" })
@@ -354,6 +357,9 @@ describe("worker analysis", () => {
             priority: "high",
             provider: "test-provider",
             model: "test-model",
+            tarballIntegrity: "sha512-old",
+            tarballShasum: "oldsum",
+            analyserVersion: expect.any(String),
             riskLevel: "high",
             recommendedAction: "quarantine"
           })

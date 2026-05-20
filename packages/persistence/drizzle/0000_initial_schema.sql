@@ -61,6 +61,9 @@ CREATE TABLE IF NOT EXISTS llm_risk_reviews (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   package_name text NOT NULL,
   version text NOT NULL,
+  tarball_integrity text,
+  tarball_shasum text,
+  analyser_version text,
   provider text NOT NULL,
   model text NOT NULL,
   risk_level text NOT NULL,
@@ -69,7 +72,15 @@ CREATE TABLE IF NOT EXISTS llm_risk_reviews (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 --> statement-breakpoint
+ALTER TABLE llm_risk_reviews ADD COLUMN IF NOT EXISTS tarball_integrity text;
+--> statement-breakpoint
+ALTER TABLE llm_risk_reviews ADD COLUMN IF NOT EXISTS tarball_shasum text;
+--> statement-breakpoint
+ALTER TABLE llm_risk_reviews ADD COLUMN IF NOT EXISTS analyser_version text;
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS llm_risk_reviews_lookup_idx ON llm_risk_reviews(package_name, version);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS llm_risk_reviews_identity_idx ON llm_risk_reviews(package_name, version, tarball_integrity, tarball_shasum, analyser_version);
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS llm_risk_reviews_provider_idx ON llm_risk_reviews(provider, model);
 --> statement-breakpoint
