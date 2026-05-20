@@ -22,7 +22,7 @@ import {
   type PackageVersionRecord,
   type PolicyDecisionRecord
 } from "@anvil/persistence";
-import { overrideCreateRequestSchema, overrideRevokeRequestSchema, resolveOverrideExpiry, type Override } from "@anvil/shared";
+import { llmReviewRequestBodySchema, overrideCreateRequestSchema, overrideRevokeRequestSchema, resolveOverrideExpiry, type Override } from "@anvil/shared";
 
 export type AdminDependencies = {
   config?: AnvilConfig;
@@ -245,7 +245,7 @@ export function buildAdmin(dependencies: AdminDependencies = {}): FastifyInstanc
   });
 
   app.post<{
-    Body: { requestedBy?: string; priority?: "low" | "normal" | "high" };
+    Body: unknown;
     Params: { packageName: string; version: string };
   }>("/api/packages/:packageName/:version/llm-review", async (request, reply) => {
     if (!isAdminRequest(request.headers.authorization, request.headers.cookie, config.ADMIN_TOKEN)) {
@@ -254,8 +254,12 @@ export function buildAdmin(dependencies: AdminDependencies = {}): FastifyInstanc
     if (!config.policy.llmReview.enabled) return reply.code(409).send({ error: "ANVIL_LLM_REVIEW_DISABLED" });
 
     const params = request.params as { packageName: string; version: string };
-    const requestedBy = request.body.requestedBy || "admin-ui";
-    const priority = ["low", "normal", "high"].includes(request.body.priority ?? "") ? request.body.priority : "high";
+    const parsed = llmReviewRequestBodySchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "ANVIL_LLM_REVIEW_REQUEST_INVALID", issues: validationIssues(parsed.error) });
+    }
+    const requestedBy = parsed.data.requestedBy ?? "admin-ui";
+    const priority = parsed.data.priority ?? "high";
     const response = await fetchGateway(`${config.ANVIL_API_BASE_URL.replace(/\/+$/, "")}/-/anvil/llm-review`, {
       method: "POST",
       headers: {

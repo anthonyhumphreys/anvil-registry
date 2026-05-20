@@ -95,6 +95,15 @@ export const packageTargetRequestSchema = z
 
 export type PackageTargetRequest = z.infer<typeof packageTargetRequestSchema>;
 
+export const llmReviewRequestBodySchema = z
+  .object({
+    requestedBy: optionalTrimmedString(200),
+    priority: analysisJobPrioritySchema.optional()
+  })
+  .strict();
+
+export type LlmReviewRequestBody = z.infer<typeof llmReviewRequestBodySchema>;
+
 export const overrideCreateRequestSchema = z
   .object({
     packageName: requiredTrimmedString(214),

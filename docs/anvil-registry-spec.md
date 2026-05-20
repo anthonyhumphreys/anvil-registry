@@ -322,6 +322,8 @@ The gateway exposes `POST /-/anvil/analyze` so developer tools can enqueue expli
 
 The gateway also exposes token-gated `POST /-/anvil/llm-review` for reviewer-requested model context when LLM review is enabled. It accepts the same single-target or `targets` array shape as `/analyze`, deduplicates exact package/version pairs, enqueues high-priority `manual_review` jobs with `runLlmReview: true`, and records `llm_review.enqueued` audit events. The worker must still respect the private-package opt-in; this route is a review trigger, not a permission slip to leak private source because someone got enthusiastic.
 
+The Admin package review action validates its `requestedBy` and `priority` fields before forwarding to the gateway, and defaults empty form submissions to `admin-ui`/`high`.
+
 ---
 
 ## 5.3 `apps/admin`

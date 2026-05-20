@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildPolicyDecisionAuditEvent,
+  llmReviewRequestBodySchema,
   nodeBaseReportSubmissionSchema,
   overrideCreateRequestSchema,
   overrideRevokeRequestSchema,
@@ -119,6 +120,21 @@ describe("package target request schema", () => {
     expect(packageTargetRequestSchema.safeParse({ targets: [{ packageName: "" }] }).success).toBe(false);
     expect(packageTargetRequestSchema.safeParse({ packageName: "pkg", priority: "urgent" }).success).toBe(false);
     expect(packageTargetRequestSchema.safeParse({ packageName: "pkg", unexpected: true }).success).toBe(false);
+  });
+});
+
+describe("LLM review request body schema", () => {
+  it("normalizes reviewer and priority fields", () => {
+    expect(llmReviewRequestBodySchema.parse({ requestedBy: " reviewer ", priority: "normal" })).toEqual({
+      requestedBy: "reviewer",
+      priority: "normal"
+    });
+    expect(llmReviewRequestBodySchema.parse({ requestedBy: "" })).toEqual({});
+  });
+
+  it("rejects invalid reviewer request fields", () => {
+    expect(llmReviewRequestBodySchema.safeParse({ priority: "urgent" }).success).toBe(false);
+    expect(llmReviewRequestBodySchema.safeParse({ requestedBy: "reviewer", extra: true }).success).toBe(false);
   });
 });
 

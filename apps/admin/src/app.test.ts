@@ -496,17 +496,39 @@ describe("admin app", () => {
       headers: { "content-type": "application/x-www-form-urlencoded", cookie },
       payload: "requestedBy=reviewer&priority=normal"
     });
+    const defaulted = await app.inject({
+      method: "POST",
+      url: "/api/packages/pkg/1.0.0/llm-review",
+      headers: { cookie }
+    });
+    const invalid = await app.inject({
+      method: "POST",
+      url: "/api/packages/pkg/1.0.0/llm-review",
+      headers: { "content-type": "application/x-www-form-urlencoded", cookie },
+      payload: "requestedBy=reviewer&priority=urgent"
+    });
 
     expect(page.statusCode).toBe(200);
     expect(page.body).toContain("Request LLM Review");
     expect(response.statusCode).toBe(202);
+    expect(defaulted.statusCode).toBe(202);
+    expect(invalid.statusCode).toBe(400);
+    expect(invalid.json()).toMatchObject({ error: "ANVIL_LLM_REVIEW_REQUEST_INVALID" });
     expect(response.json()).toMatchObject({ queued: 1 });
-    expect(fetchGateway).toHaveBeenCalledWith(
+    expect(fetchGateway).toHaveBeenNthCalledWith(
+      1,
       "http://gateway.test/-/anvil/llm-review",
       expect.objectContaining({
         method: "POST",
         headers: expect.objectContaining({ authorization: "Bearer secret" }),
         body: JSON.stringify({ packageName: "pkg", version: "1.0.0", requestedBy: "reviewer", priority: "normal" })
+      })
+    );
+    expect(fetchGateway).toHaveBeenNthCalledWith(
+      2,
+      "http://gateway.test/-/anvil/llm-review",
+      expect.objectContaining({
+        body: JSON.stringify({ packageName: "pkg", version: "1.0.0", requestedBy: "admin-ui", priority: "high" })
       })
     );
     await app.close();
