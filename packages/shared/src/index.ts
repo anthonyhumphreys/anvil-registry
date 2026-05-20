@@ -59,6 +59,37 @@ export type Override = {
   expiresAt?: string;
 };
 
+const requiredTrimmedString = (max: number) => z.string().trim().min(1).max(max);
+const optionalTrimmedString = (max: number) =>
+  z.preprocess((value) => {
+    if (typeof value !== "string") return value;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }, z.string().max(max).optional());
+
+export const overrideCreateRequestSchema = z
+  .object({
+    packageName: requiredTrimmedString(214),
+    version: optionalTrimmedString(128),
+    action: policyActionSchema.default("allow"),
+    reason: requiredTrimmedString(1000),
+    approvedBy: optionalTrimmedString(200),
+    expiresAt: optionalTrimmedString(100)
+  })
+  .strict();
+
+export type OverrideCreateRequest = z.infer<typeof overrideCreateRequestSchema>;
+
+export const overrideRevokeRequestSchema = z
+  .object({
+    packageName: requiredTrimmedString(214),
+    version: optionalTrimmedString(128),
+    revokedBy: optionalTrimmedString(200)
+  })
+  .strict();
+
+export type OverrideRevokeRequest = z.infer<typeof overrideRevokeRequestSchema>;
+
 export function resolveOverrideExpiry(expiresAt: string | undefined, defaultExpiryDays: number, now = Date.now()): string | undefined | null {
   const explicitExpiry = expiresAt?.trim();
   if (explicitExpiry) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildPolicyDecisionAuditEvent, nodeBaseReportSubmissionSchema, resolveOverrideExpiry } from "./index.js";
+import { buildPolicyDecisionAuditEvent, nodeBaseReportSubmissionSchema, overrideCreateRequestSchema, overrideRevokeRequestSchema, resolveOverrideExpiry } from "./index.js";
 
 describe("buildPolicyDecisionAuditEvent", () => {
   it("builds the shared policy decision audit event shape", () => {
@@ -52,6 +52,38 @@ describe("resolveOverrideExpiry", () => {
 
   it("rejects invalid explicit expiry timestamps", () => {
     expect(resolveOverrideExpiry("next whenever-ish", 30)).toBeNull();
+  });
+});
+
+describe("override request schemas", () => {
+  it("normalizes override create requests", () => {
+    expect(
+      overrideCreateRequestSchema.parse({
+        packageName: " @scope/pkg ",
+        version: "",
+        reason: " intentional ",
+        approvedBy: " reviewer ",
+        expiresAt: ""
+      })
+    ).toEqual({
+      packageName: "@scope/pkg",
+      action: "allow",
+      reason: "intentional",
+      approvedBy: "reviewer"
+    });
+  });
+
+  it("rejects invalid override create requests", () => {
+    expect(overrideCreateRequestSchema.safeParse({ packageName: "pkg", reason: "intentional", action: "approve" }).success).toBe(false);
+    expect(overrideCreateRequestSchema.safeParse({ packageName: "", reason: "intentional" }).success).toBe(false);
+    expect(overrideCreateRequestSchema.safeParse({ packageName: "pkg", reason: "" }).success).toBe(false);
+  });
+
+  it("normalizes override revoke requests", () => {
+    expect(overrideRevokeRequestSchema.parse({ packageName: " pkg ", version: "", revokedBy: " reviewer " })).toEqual({
+      packageName: "pkg",
+      revokedBy: "reviewer"
+    });
   });
 });
 

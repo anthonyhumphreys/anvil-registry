@@ -407,11 +407,19 @@ describe("admin app", () => {
       method: "POST",
       url: "/api/overrides",
       headers: { authorization: "Bearer secret" },
-      payload: { packageName: "pkg", version: "1.0.0", reason: "intentional" }
+      payload: { packageName: " pkg ", version: " 1.0.0 ", reason: " intentional " }
+    });
+    const invalid = await app.inject({
+      method: "POST",
+      url: "/api/overrides",
+      headers: { authorization: "Bearer secret" },
+      payload: { packageName: "pkg", reason: "intentional", action: "approve" }
     });
 
     expect(rejected.statusCode).toBe(401);
     expect(accepted.statusCode).toBe(201);
+    expect(invalid.statusCode).toBe(400);
+    expect(invalid.json()).toMatchObject({ error: "ANVIL_OVERRIDE_INVALID" });
     expect(await persistence.getOverride("pkg", "1.0.0")).toMatchObject({ reason: "intentional", expiresAt: "2026-06-19T00:00:00.000Z" });
     expect(await persistence.listAuditEvents()).toHaveLength(1);
     await app.close();
@@ -557,10 +565,18 @@ describe("admin app", () => {
       method: "POST",
       url: "/api/overrides/revoke",
       headers: { authorization: "Bearer secret" },
-      payload: { packageName: "pkg", version: "1.0.0", revokedBy: "reviewer" }
+      payload: { packageName: " pkg ", version: " 1.0.0 ", revokedBy: " reviewer " }
+    });
+    const invalid = await app.inject({
+      method: "POST",
+      url: "/api/overrides/revoke",
+      headers: { authorization: "Bearer secret" },
+      payload: { packageName: "" }
     });
 
     expect(response.statusCode).toBe(200);
+    expect(invalid.statusCode).toBe(400);
+    expect(invalid.json()).toMatchObject({ error: "ANVIL_OVERRIDE_REVOKE_INVALID" });
     expect(await persistence.getOverride("pkg", "1.0.0")).toBeUndefined();
     expect(await persistence.getPolicyDecision("pkg", "1.0.0", loadConfig().policy.version)).toBeUndefined();
     expect(await persistence.listAuditEvents()).toEqual([

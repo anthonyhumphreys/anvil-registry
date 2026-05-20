@@ -22,7 +22,7 @@ import {
   type PackageVersionRecord,
   type PolicyDecisionRecord
 } from "@anvil/persistence";
-import { resolveOverrideExpiry, type Override } from "@anvil/shared";
+import { overrideCreateRequestSchema, overrideRevokeRequestSchema, resolveOverrideExpiry, type Override } from "@anvil/shared";
 
 export type AdminDependencies = {
   config?: AnvilConfig;
@@ -180,23 +180,26 @@ export function buildAdmin(dependencies: AdminDependencies = {}): FastifyInstanc
   });
 
   app.post<{
-    Body: { packageName: string; version?: string; action?: Override["action"]; reason?: string; approvedBy?: string; expiresAt?: string };
+    Body: unknown;
   }>("/api/overrides", async (request, reply) => {
     if (!isAdminRequest(request.headers.authorization, request.headers.cookie, config.ADMIN_TOKEN)) {
       return reply.code(401).send({ error: "ANVIL_ADMIN_TOKEN_REQUIRED" });
     }
-    if (!request.body.packageName || !request.body.reason) {
-      return reply.code(400).send({ error: "ANVIL_OVERRIDE_REQUIRES_PACKAGE_AND_REASON" });
+    const parsed = overrideCreateRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "ANVIL_OVERRIDE_INVALID", issues: validationIssues(parsed.error) });
     }
-    const expiresAt = resolveOverrideExpiry(request.body.expiresAt, config.policy.overrides.defaultExpiryDays);
+    const body = parsed.data;
+
+    const expiresAt = resolveOverrideExpiry(body.expiresAt, config.policy.overrides.defaultExpiryDays);
     if (expiresAt === null) return reply.code(400).send({ error: "ANVIL_OVERRIDE_EXPIRES_AT_INVALID" });
 
     const override = {
-      packageName: request.body.packageName,
-      version: request.body.version || undefined,
-      action: request.body.action ?? "allow",
-      reason: request.body.reason,
-      approvedBy: request.body.approvedBy ?? "admin-ui",
+      packageName: body.packageName,
+      version: body.version,
+      action: body.action,
+      reason: body.reason,
+      approvedBy: body.approvedBy ?? "admin-ui",
       expiresAt
     };
     await persistence.putOverride(override);
@@ -214,20 +217,24 @@ export function buildAdmin(dependencies: AdminDependencies = {}): FastifyInstanc
   });
 
   app.post<{
-    Body: { packageName: string; version?: string; revokedBy?: string };
+    Body: unknown;
   }>("/api/overrides/revoke", async (request, reply) => {
     if (!isAdminRequest(request.headers.authorization, request.headers.cookie, config.ADMIN_TOKEN)) {
       return reply.code(401).send({ error: "ANVIL_ADMIN_TOKEN_REQUIRED" });
     }
-    if (!request.body.packageName) return reply.code(400).send({ error: "ANVIL_OVERRIDE_REVOKE_REQUIRES_PACKAGE" });
+    const parsed = overrideRevokeRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "ANVIL_OVERRIDE_REVOKE_INVALID", issues: validationIssues(parsed.error) });
+    }
+    const body = parsed.data;
 
-    const revoked = await persistence.revokeOverride(request.body.packageName, request.body.version || undefined, request.body.revokedBy ?? "admin-ui");
+    const revoked = await persistence.revokeOverride(body.packageName, body.version, body.revokedBy ?? "admin-ui");
     if (!revoked) return reply.code(404).send({ error: "ANVIL_OVERRIDE_NOT_FOUND" });
 
     if (revoked.override.version) await persistence.deletePolicyDecision(revoked.override.packageName, revoked.override.version, config.policy.version);
     else await persistence.deletePolicyDecisionsForPackage(revoked.override.packageName, config.policy.version);
     await persistence.putAuditEvent({
-      actor: request.body.revokedBy ?? "admin-ui",
+      actor: body.revokedBy ?? "admin-ui",
       eventType: "override.revoked",
       targetType: "package",
       targetId: `${revoked.override.packageName}${revoked.override.version ? `@${revoked.override.version}` : ""}`,
@@ -1722,6 +1729,10 @@ function isAdminRequest(authorization: string | undefined, cookieHeader: string 
   if (!adminToken) return true;
   if (authorization === `Bearer ${adminToken}`) return true;
   return parseCookies(cookieHeader).anvil_admin_token === adminToken;
+}
+
+function validationIssues(error: { issues: Array<{ path: Array<string | number>; message: string }> }) {
+  return error.issues.map((issue) => ({ path: issue.path.join("."), message: issue.message }));
 }
 
 function parseCookies(cookieHeader: string | undefined) {
