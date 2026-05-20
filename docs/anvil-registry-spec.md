@@ -326,7 +326,7 @@ The admin UI provides human review and policy management.
 - Quarantined package list.
 - Package version detail page.
 - Analysis report viewer.
-- LLM risk review viewer.
+- LLM risk review viewer and reviewer-triggered LLM review request.
 - Override approval workflow.
 - Policy configuration.
 - Audit log.

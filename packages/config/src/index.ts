@@ -13,6 +13,7 @@ const envSchema = z.object({
   HOST: z.string().default("0.0.0.0"),
   PORT: z.coerce.number().int().positive().default(4873),
   PUBLIC_BASE_URL: z.string().url().default("http://localhost:4873"),
+  ANVIL_API_BASE_URL: z.string().url().default("http://localhost:4873"),
   UPSTREAM_NPM_REGISTRY: z.string().url().default("https://registry.npmjs.org"),
   NPM_DOWNLOADS_API: z.string().url().default("https://api.npmjs.org/downloads"),
   CACHE_DIR: z.string().default(".anvil/cache"),

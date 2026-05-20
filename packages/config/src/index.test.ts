@@ -34,6 +34,15 @@ describe("config", () => {
     expect(config.QUEUE_DRIVER).toBe("sqs");
   });
 
+  it("loads the internal gateway API base URL for admin actions", () => {
+    const config = loadConfig({
+      ...process.env,
+      ANVIL_API_BASE_URL: "http://gateway:4873"
+    });
+
+    expect(config.ANVIL_API_BASE_URL).toBe("http://gateway:4873");
+  });
+
   it("loads the optional popular package index path", () => {
     const config = loadConfig({
       ...process.env,

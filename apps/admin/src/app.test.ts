@@ -403,6 +403,93 @@ describe("admin app", () => {
     await app.close();
   });
 
+  it("renders and submits package LLM review requests through the gateway", async () => {
+    const persistence = new MemoryPersistence();
+    await seed(persistence);
+    const fetchGateway = vi.fn(async () => new Response(JSON.stringify({ ok: true, queued: 1, jobs: [{ packageName: "pkg", version: "1.0.0" }] }), {
+      headers: { "content-type": "application/json" },
+      status: 202
+    }));
+    const app = buildAdmin({
+      config: loadConfig({
+        ...process.env,
+        ADMIN_TOKEN: "secret",
+        ANVIL_API_BASE_URL: "http://gateway.test",
+        LLM_REVIEW_ENABLED: "true",
+        LLM_REVIEW_ENDPOINT: "https://llm.example.test/review"
+      }),
+      persistence,
+      fetch: fetchGateway as unknown as typeof globalThis.fetch
+    });
+
+    const session = await app.inject({
+      method: "POST",
+      url: "/-/admin/session",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      payload: "token=secret"
+    });
+    const cookie = session.headers["set-cookie"];
+    const page = await app.inject({ method: "GET", url: "/packages/pkg/1.0.0", headers: { cookie } });
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/packages/pkg/1.0.0/llm-review",
+      headers: { "content-type": "application/x-www-form-urlencoded", cookie },
+      payload: "requestedBy=reviewer&priority=normal"
+    });
+
+    expect(page.statusCode).toBe(200);
+    expect(page.body).toContain("Request LLM Review");
+    expect(response.statusCode).toBe(202);
+    expect(response.json()).toMatchObject({ queued: 1 });
+    expect(fetchGateway).toHaveBeenCalledWith(
+      "http://gateway.test/-/anvil/llm-review",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ authorization: "Bearer secret" }),
+        body: JSON.stringify({ packageName: "pkg", version: "1.0.0", requestedBy: "reviewer", priority: "normal" })
+      })
+    );
+    await app.close();
+  });
+
+  it("protects and disables admin LLM review requests when required", async () => {
+    const fetchGateway = vi.fn();
+    const protectedApp = buildAdmin({
+      config: loadConfig({
+        ...process.env,
+        ADMIN_TOKEN: "secret",
+        ANVIL_API_BASE_URL: "http://gateway.test",
+        LLM_REVIEW_ENABLED: "true",
+        LLM_REVIEW_ENDPOINT: "https://llm.example.test/review"
+      }),
+      fetch: fetchGateway as unknown as typeof globalThis.fetch
+    });
+    const disabledApp = buildAdmin({
+      config: loadConfig({
+        ...process.env,
+        ANVIL_API_BASE_URL: "http://gateway.test"
+      }),
+      fetch: fetchGateway as unknown as typeof globalThis.fetch
+    });
+
+    const rejected = await protectedApp.inject({
+      method: "POST",
+      url: "/api/packages/pkg/1.0.0/llm-review",
+      payload: { requestedBy: "reviewer" }
+    });
+    const disabled = await disabledApp.inject({
+      method: "POST",
+      url: "/api/packages/pkg/1.0.0/llm-review",
+      payload: { requestedBy: "reviewer" }
+    });
+
+    expect(rejected.statusCode).toBe(401);
+    expect(disabled.statusCode).toBe(409);
+    expect(fetchGateway).not.toHaveBeenCalled();
+    await protectedApp.close();
+    await disabledApp.close();
+  });
+
   it("revokes overrides, clears cached decisions, and writes audit events", async () => {
     const persistence = new MemoryPersistence();
     await persistence.putOverride({ packageName: "pkg", version: "1.0.0", action: "allow", reason: "temporary", approvedBy: "test" });

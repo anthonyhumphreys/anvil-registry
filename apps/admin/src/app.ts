@@ -28,12 +28,14 @@ export type AdminDependencies = {
   config?: AnvilConfig;
   persistence?: AnvilPersistence;
   objectStore?: ObjectStore;
+  fetch?: typeof fetch;
 };
 
 export function buildAdmin(dependencies: AdminDependencies = {}): FastifyInstance {
   const config = dependencies.config ?? loadConfig();
   const persistence = dependencies.persistence ?? createPersistence(config);
   const objectStore = dependencies.objectStore ?? createObjectStore(config);
+  const fetchGateway = dependencies.fetch ?? globalThis.fetch;
   let popularPackageIndex = loadActivePopularPackageIndex({
     objectStore,
     objectKey: config.POPULAR_PACKAGE_INDEX_OBJECT_KEY,
@@ -233,6 +235,39 @@ export function buildAdmin(dependencies: AdminDependencies = {}): FastifyInstanc
     return { ok: true };
   });
 
+  app.post<{
+    Body: { requestedBy?: string; priority?: "low" | "normal" | "high" };
+    Params: { packageName: string; version: string };
+  }>("/api/packages/:packageName/:version/llm-review", async (request, reply) => {
+    if (!isAdminRequest(request.headers.authorization, request.headers.cookie, config.ADMIN_TOKEN)) {
+      return reply.code(401).send({ error: "ANVIL_ADMIN_TOKEN_REQUIRED" });
+    }
+    if (!config.policy.llmReview.enabled) return reply.code(409).send({ error: "ANVIL_LLM_REVIEW_DISABLED" });
+
+    const params = request.params as { packageName: string; version: string };
+    const requestedBy = request.body.requestedBy || "admin-ui";
+    const priority = ["low", "normal", "high"].includes(request.body.priority ?? "") ? request.body.priority : "high";
+    const response = await fetchGateway(`${config.ANVIL_API_BASE_URL.replace(/\/+$/, "")}/-/anvil/llm-review`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...(config.ADMIN_TOKEN ? { authorization: `Bearer ${config.ADMIN_TOKEN}` } : {})
+      },
+      body: JSON.stringify({
+        packageName: params.packageName,
+        version: params.version,
+        requestedBy,
+        priority
+      })
+    });
+    const body = await response.json().catch(() => undefined);
+    if (!response.ok) {
+      return reply.code(response.status).send(body ?? { error: "ANVIL_LLM_REVIEW_REQUEST_FAILED" });
+    }
+
+    return reply.code(202).send(body);
+  });
+
   app.get("/", async (request, reply) => {
     const [decisions, reports, nodeBaseReports, overrides, auditEvents, activePopularPackageIndex] = await Promise.all([
       persistence.listPolicyDecisions({ limit: 50 }),
@@ -326,6 +361,7 @@ export function buildAdmin(dependencies: AdminDependencies = {}): FastifyInstanc
       </section>
       <section>
         <h2>LLM Risk Reviews</h2>
+        ${llmReviewRequestPanel(params.packageName, params.version, isAdmin, config.policy.llmReview.enabled)}
         ${llmRiskReviewTable(review.llmRiskReviews)}
       </section>
       <section>
@@ -1278,6 +1314,20 @@ function overrideForm(packageName = "", version = "") {
   </form>`;
 }
 
+function llmReviewRequestPanel(packageName: string, version: string, isAdmin: boolean, llmReviewEnabled: boolean) {
+  if (!llmReviewEnabled) return `<p class="empty">LLM review is disabled for this environment.</p>`;
+  if (!isAdmin) return `<p class="empty">Enter the local admin token to request LLM review.</p>`;
+  return `<form method="post" action="${escapeHtml(llmReviewRequestUrl(packageName, version))}" class="llm-review-form">
+    <input name="requestedBy" placeholder="requested by" aria-label="Requested by" value="admin-ui" />
+    <select name="priority" aria-label="Priority">
+      <option value="high">high</option>
+      <option value="normal">normal</option>
+      <option value="low">low</option>
+    </select>
+    <button type="submit">Request LLM Review</button>
+  </form>`;
+}
+
 function adminSessionPanel(isAdmin: boolean, invalidToken: boolean, tokenRequired: boolean) {
   if (!tokenRequired) return "";
   if (!invalidToken && !isAdmin) {
@@ -1407,11 +1457,12 @@ function page(title: string, body: string) {
     .pill { display: inline-block; border-radius: 999px; padding: 2px 8px; background: #eef1ef; font-size: 12px; font-weight: 700; }
     .empty { color: #66706c; }
     .override-form { display: grid; grid-template-columns: 1.2fr .7fr .7fr 1.5fr 1fr auto; gap: 8px; margin-bottom: 12px; }
+    .llm-review-form { display: grid; grid-template-columns: minmax(180px, 320px) minmax(120px, 160px) auto; gap: 8px; margin-bottom: 12px; max-width: 680px; }
     .token-form { display: grid; grid-template-columns: minmax(220px, 360px) auto; gap: 8px; max-width: 540px; }
     .inline-form { margin: 0; }
     input, select, button { min-height: 36px; border: 1px solid #c7ceca; border-radius: 6px; padding: 0 10px; background: #fff; font: inherit; }
     button { background: #1d2525; color: white; border-color: #1d2525; font-weight: 700; }
-    @media (max-width: 760px) { header { padding: 20px; } main { padding: 16px; } .override-form { grid-template-columns: 1fr; } table { display: block; overflow-x: auto; } }
+    @media (max-width: 760px) { header { padding: 20px; } main { padding: 16px; } .override-form, .llm-review-form { grid-template-columns: 1fr; } table { display: block; overflow-x: auto; } }
   </style>
 </head>
 <body>
@@ -1490,6 +1541,10 @@ function reviewUrl(packageName: string, version: string) {
 
 function decisionHistoryUrl(packageName: string, version: string) {
   return `/packages/${encodeURIComponent(packageName)}/${encodeURIComponent(version)}/decisions`;
+}
+
+function llmReviewRequestUrl(packageName: string, version: string) {
+  return `/api/packages/${encodeURIComponent(packageName)}/${encodeURIComponent(version)}/llm-review`;
 }
 
 function analysisReportUrl(record: AnalysisReportRecord) {
