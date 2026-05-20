@@ -74,6 +74,21 @@ export type AnalysisJobReason = z.infer<typeof analysisJobReasonSchema>;
 export const analysisJobPrioritySchema = z.enum(["low", "normal", "high"]);
 export type AnalysisJobPriority = z.infer<typeof analysisJobPrioritySchema>;
 
+export const analysisJobSchema = z
+  .object({
+    id: optionalTrimmedString(128),
+    packageName: requiredTrimmedString(214),
+    version: requiredTrimmedString(128),
+    requestedBy: optionalTrimmedString(200),
+    reason: analysisJobReasonSchema,
+    priority: analysisJobPrioritySchema,
+    runLlmReview: z.boolean().optional(),
+    createdAt: requiredTrimmedString(100)
+  })
+  .strict();
+
+export type AnalysisJob = z.infer<typeof analysisJobSchema>;
+
 export const packageTargetSchema = z
   .object({
     packageName: requiredTrimmedString(214),
@@ -297,17 +312,6 @@ export type PolicyInput = {
   override?: Override;
   similarPackages?: Array<{ name: string; similarity: number; weeklyDownloads?: number; reasons?: string[]; suggestedPackage?: string }>;
   policy: PolicyConfig;
-};
-
-export type AnalysisJob = {
-  id?: string;
-  packageName: string;
-  version: string;
-  requestedBy?: string;
-  reason: "metadata_request" | "tarball_request" | "lockfile_scan" | "manual_review";
-  priority: "low" | "normal" | "high";
-  runLlmReview?: boolean;
-  createdAt: string;
 };
 
 export const nodeBaseReportSubmissionSchema = z

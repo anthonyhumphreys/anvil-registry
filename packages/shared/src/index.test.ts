@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  analysisJobSchema,
   buildPolicyDecisionAuditEvent,
   llmReviewRequestBodySchema,
   nodeBaseReportSubmissionSchema,
@@ -120,6 +121,52 @@ describe("package target request schema", () => {
     expect(packageTargetRequestSchema.safeParse({ targets: [{ packageName: "" }] }).success).toBe(false);
     expect(packageTargetRequestSchema.safeParse({ packageName: "pkg", priority: "urgent" }).success).toBe(false);
     expect(packageTargetRequestSchema.safeParse({ packageName: "pkg", unexpected: true }).success).toBe(false);
+  });
+});
+
+describe("analysis job schema", () => {
+  it("normalizes valid analysis jobs", () => {
+    expect(
+      analysisJobSchema.parse({
+        id: " job-1 ",
+        packageName: " @scope/pkg ",
+        version: " 1.0.0 ",
+        requestedBy: " reviewer ",
+        reason: "tarball_request",
+        priority: "high",
+        runLlmReview: true,
+        createdAt: " 2026-05-20T00:00:00.000Z "
+      })
+    ).toEqual({
+      id: "job-1",
+      packageName: "@scope/pkg",
+      version: "1.0.0",
+      requestedBy: "reviewer",
+      reason: "tarball_request",
+      priority: "high",
+      runLlmReview: true,
+      createdAt: "2026-05-20T00:00:00.000Z"
+    });
+  });
+
+  it("rejects malformed analysis jobs", () => {
+    expect(analysisJobSchema.safeParse({ version: "1.0.0", reason: "metadata_request", priority: "normal", createdAt: "now" }).success).toBe(false);
+    expect(
+      analysisJobSchema.safeParse({ packageName: "pkg", version: "1.0.0", reason: "whatever", priority: "normal", createdAt: "now" }).success
+    ).toBe(false);
+    expect(
+      analysisJobSchema.safeParse({ packageName: "pkg", version: "1.0.0", reason: "metadata_request", priority: "urgent", createdAt: "now" }).success
+    ).toBe(false);
+    expect(
+      analysisJobSchema.safeParse({
+        packageName: "pkg",
+        version: "1.0.0",
+        reason: "metadata_request",
+        priority: "normal",
+        createdAt: "now",
+        extra: true
+      }).success
+    ).toBe(false);
   });
 });
 

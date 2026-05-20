@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { loadConfig } from "@anvil/config";
 import {
   BullMqJobQueue,
@@ -149,15 +149,67 @@ describe("queue factory", () => {
       VisibilityTimeout: 0
     });
   });
+
+  it("returns malformed SQS analysis jobs to the queue without calling the handler", async () => {
+    let sawRetry!: () => void;
+    const retrySeen = new Promise<void>((resolve) => {
+      sawRetry = resolve;
+    });
+    let worker: SqsAnalysisWorker | undefined;
+    const client = new FakeSqsClient([
+      {
+        Messages: [
+          {
+            MessageId: "message-1",
+            ReceiptHandle: "receipt-1",
+            Body: JSON.stringify({
+              packageName: "pkg",
+              version: "1.0.0",
+              reason: "metadata_request",
+              priority: "urgent",
+              createdAt: "2026-05-20T00:00:00.000Z"
+            })
+          }
+        ]
+      }
+    ]);
+    client.onCommand = (commandName) => {
+      if (commandName === "ChangeMessageVisibilityCommand") {
+        client.destroy();
+        void worker?.close();
+        sawRetry();
+      }
+    };
+    const handler = vi.fn(async () => {});
+
+    worker = createSqsAnalysisWorker({
+      queueUrl: "https://sqs.example.test/queue",
+      region: "us-east-1",
+      waitTimeSeconds: 0,
+      client,
+      handler
+    });
+
+    await retrySeen;
+    expect(handler).not.toHaveBeenCalled();
+    expect(client.commands.find((command) => command.constructor.name === "ChangeMessageVisibilityCommand")?.input).toMatchObject({
+      QueueUrl: "https://sqs.example.test/queue",
+      ReceiptHandle: "receipt-1",
+      VisibilityTimeout: 0
+    });
+    expect(client.commands.map((command) => command.constructor.name)).not.toContain("DeleteMessageCommand");
+  });
 });
 
 class FakeSqsClient implements SqsClientLike {
   readonly commands: Array<{ constructor: { name: string }; input: Record<string, unknown> }> = [];
   onCommand?: (commandName: string) => void;
+  private destroyed = false;
 
   constructor(private readonly receiveResponses: unknown[] = []) {}
 
   async send(command: Parameters<SqsClientLike["send"]>[0]): Promise<unknown> {
+    if (this.destroyed) throw new Error("SQS client closed");
     const recorded = command as unknown as { constructor: { name: string }; input: Record<string, unknown> };
     this.commands.push(recorded);
     this.onCommand?.(recorded.constructor.name);
@@ -165,5 +217,7 @@ class FakeSqsClient implements SqsClientLike {
     return {};
   }
 
-  destroy(): void {}
+  destroy(): void {
+    this.destroyed = true;
+  }
 }

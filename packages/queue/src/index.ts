@@ -8,7 +8,7 @@ import {
 } from "@aws-sdk/client-sqs";
 import { Queue, type Job, type WorkerOptions } from "bullmq";
 import type { AnvilConfig } from "@anvil/config";
-import type { AnalysisJob } from "@anvil/shared";
+import { analysisJobSchema, type AnalysisJob } from "@anvil/shared";
 
 export interface JobQueue {
   healthCheck?(): Promise<void>;
@@ -233,7 +233,7 @@ function priorityValue(priority: AnalysisJob["priority"]): number {
 }
 
 function parseSqsAnalysisJob(body: string, messageId?: string): AnalysisJob {
-  const parsed = JSON.parse(body) as AnalysisJob;
+  const parsed = analysisJobSchema.parse(JSON.parse(body));
   return { ...parsed, id: parsed.id ?? messageId };
 }
 
