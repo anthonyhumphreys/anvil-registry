@@ -1,7 +1,16 @@
+import { readFileSync } from "node:fs";
+
 export type PopularPackage = {
   name: string;
   weeklyDownloads?: number;
   aliases?: string[];
+};
+
+export type PopularPackageIndex = {
+  generatedAt?: string;
+  source: string;
+  popularPackages: PopularPackage[];
+  knownConfusions: Record<string, string>;
 };
 
 export type NameSquattingSignal = {
@@ -30,6 +39,38 @@ export const knownEcosystemConfusions: Record<string, string> = {
   "@vite/plugin-react": "@vitejs/plugin-react",
   loadash: "lodash"
 };
+
+export const defaultPopularPackageIndex: PopularPackageIndex = {
+  source: "built-in",
+  popularPackages: defaultPopularPackages,
+  knownConfusions: knownEcosystemConfusions
+};
+
+export function loadPopularPackageIndex(indexPath?: string): PopularPackageIndex {
+  if (!indexPath) return defaultPopularPackageIndex;
+  const parsed = JSON.parse(readFileSync(indexPath, "utf8")) as unknown;
+  return parsePopularPackageIndex(parsed, indexPath);
+}
+
+export function parsePopularPackageIndex(value: unknown, source = "inline"): PopularPackageIndex {
+  if (!isRecord(value)) throw new Error("Popular package index must be a JSON object.");
+  const popularPackages = value.popularPackages ?? value.packages;
+  if (!Array.isArray(popularPackages)) throw new Error("Popular package index requires a popularPackages array.");
+  const knownConfusions = value.knownConfusions ?? value.knownEcosystemConfusions ?? {};
+  if (!isRecord(knownConfusions)) throw new Error("Popular package index knownConfusions must be an object.");
+
+  return {
+    generatedAt: typeof value.generatedAt === "string" ? value.generatedAt : undefined,
+    source,
+    popularPackages: popularPackages.map(parsePopularPackage),
+    knownConfusions: Object.fromEntries(
+      Object.entries(knownConfusions).map(([requested, suggested]) => {
+        if (typeof suggested !== "string" || !suggested) throw new Error(`Known confusion for ${requested} must be a package name.`);
+        return [requested.toLowerCase(), suggested];
+      })
+    )
+  };
+}
 
 export function splitPackageName(packageName: string): { scope?: string; name: string } {
   if (!packageName.startsWith("@")) return { name: packageName };
@@ -122,12 +163,15 @@ export function jaroWinklerSimilarity(a: string, b: string): number {
 
 export function detectNameSquatting(
   packageName: string,
-  popularPackages: PopularPackage[] = defaultPopularPackages
+  indexOrPackages: PopularPackage[] | PopularPackageIndex = defaultPopularPackageIndex
 ): NameSquattingSignal[] {
+  const index = Array.isArray(indexOrPackages)
+    ? { ...defaultPopularPackageIndex, popularPackages: indexOrPackages }
+    : indexOrPackages;
   const requested = splitPackageName(packageName);
-  const knownCandidate = knownEcosystemConfusions[packageName.toLowerCase()];
+  const knownCandidate = index.knownConfusions[packageName.toLowerCase()];
 
-  return popularPackages
+  return index.popularPackages
     .filter((candidate) => candidate.name !== packageName)
     .map((candidate) => {
       const candidateParts = splitPackageName(candidate.name);
@@ -227,4 +271,24 @@ function normaliseVisual(value: string): string {
     .replace(/[5s]/g, "s")
     .replace(/[2z]/g, "z")
     .replace(/[8b]/g, "b");
+}
+
+function parsePopularPackage(value: unknown): PopularPackage {
+  if (!isRecord(value)) throw new Error("Popular package entries must be objects.");
+  if (typeof value.name !== "string" || !value.name) throw new Error("Popular package entries require a name.");
+  if (value.weeklyDownloads !== undefined && (typeof value.weeklyDownloads !== "number" || value.weeklyDownloads < 0)) {
+    throw new Error(`Popular package ${value.name} has invalid weeklyDownloads.`);
+  }
+  if (value.aliases !== undefined && (!Array.isArray(value.aliases) || value.aliases.some((alias) => typeof alias !== "string" || !alias))) {
+    throw new Error(`Popular package ${value.name} has invalid aliases.`);
+  }
+  return {
+    name: value.name,
+    weeklyDownloads: value.weeklyDownloads,
+    aliases: value.aliases
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }

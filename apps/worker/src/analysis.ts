@@ -1,7 +1,7 @@
 import semver from "semver";
 import type { AnvilConfig } from "@anvil/config";
 import { createLlmRiskReviewProvider, type LlmRiskReviewProvider } from "@anvil/llm-risk-review";
-import { detectNameSquatting } from "@anvil/name-squatting";
+import { detectNameSquatting, loadPopularPackageIndex, type PopularPackageIndex } from "@anvil/name-squatting";
 import type { NpmRegistryClient } from "@anvil/npm-registry";
 import { calculatePackageAgeDays, toVersionMetadata } from "@anvil/npm-registry";
 import { analyseFileTree, analyseManifestChange, mergeAnalysisReports, parseNpmTarball } from "@anvil/package-analysis";
@@ -19,6 +19,7 @@ export type WorkerAnalysisDependencies = {
   };
   provenanceVerifier?: ProvenanceVerifier;
   llmRiskReviewProvider?: LlmRiskReviewProvider;
+  popularPackageIndex?: PopularPackageIndex;
 };
 
 export async function analysePackageTarget(target: string, dependencies: WorkerAnalysisDependencies) {
@@ -71,7 +72,8 @@ async function analysePackageVersion(target: { packageName: string; version: str
     : manifestReport;
   const weeklyDownloads = await dependencies.downloadStats?.getWeeklyDownloads(target.packageName);
   const packageAgeDays = calculatePackageAgeDays(targetMetadata.publishedAt);
-  const similarPackages = detectNameSquatting(target.packageName).map((signal) => ({
+  const popularPackageIndex = dependencies.popularPackageIndex ?? loadPopularPackageIndex(dependencies.config.POPULAR_PACKAGE_INDEX_PATH);
+  const similarPackages = detectNameSquatting(target.packageName, popularPackageIndex).map((signal) => ({
     name: signal.candidate,
     similarity: signal.similarity,
     weeklyDownloads: signal.weeklyDownloads,

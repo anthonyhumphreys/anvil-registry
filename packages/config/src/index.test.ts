@@ -34,6 +34,15 @@ describe("config", () => {
     expect(config.QUEUE_DRIVER).toBe("sqs");
   });
 
+  it("loads the optional popular package index path", () => {
+    const config = loadConfig({
+      ...process.env,
+      POPULAR_PACKAGE_INDEX_PATH: "/etc/anvil/popular-index/npm/latest.json"
+    });
+
+    expect(config.POPULAR_PACKAGE_INDEX_PATH).toBe("/etc/anvil/popular-index/npm/latest.json");
+  });
+
   it("loads LLM review policy from environment flags", () => {
     const config = loadConfig({
       ...process.env,

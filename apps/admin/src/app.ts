@@ -1,6 +1,7 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import type { AnvilConfig } from "@anvil/config";
 import { loadConfig } from "@anvil/config";
+import { loadPopularPackageIndex, type PopularPackageIndex } from "@anvil/name-squatting";
 import {
   createPersistence,
   type AnalysisReportRecord,
@@ -23,6 +24,7 @@ export type AdminDependencies = {
 export function buildAdmin(dependencies: AdminDependencies = {}): FastifyInstance {
   const config = dependencies.config ?? loadConfig();
   const persistence = dependencies.persistence ?? createPersistence(config);
+  const popularPackageIndex = loadPopularPackageIndex(config.POPULAR_PACKAGE_INDEX_PATH);
   const app = Fastify({ logger: { name: "anvil-admin" } });
   app.addContentTypeParser("application/x-www-form-urlencoded", { parseAs: "string" }, (_request, body, done) => {
     const text = Buffer.isBuffer(body) ? body.toString("utf8") : body;
@@ -72,6 +74,8 @@ export function buildAdmin(dependencies: AdminDependencies = {}): FastifyInstanc
     const query = request.query as { limit?: string };
     return { auditEvents: await persistence.listAuditEvents({ limit: parseLimit(query.limit) }) };
   });
+
+  app.get("/api/popular-package-index", async () => popularPackageIndex);
 
   app.get("/api/node-base/reports", async (request) => {
     const query = request.query as { reportType?: string; risk?: string; limit?: string };
@@ -216,6 +220,11 @@ export function buildAdmin(dependencies: AdminDependencies = {}): FastifyInstanc
         <p><a href="/node-base/reports">View all Node Base reports</a></p>
         ${nodeBaseReportTypeSummary(nodeBaseReports)}
         ${nodeBaseReportTable(nodeBaseReports)}
+      </section>
+      <section>
+        <h2>Popular Package Index</h2>
+        <p><a href="/popular-package-index">View typo-squatting reference index</a></p>
+        ${popularPackageIndexSummary(popularPackageIndex)}
       </section>
       <section>
         <h2>Overrides</h2>
@@ -438,6 +447,25 @@ export function buildAdmin(dependencies: AdminDependencies = {}): FastifyInstanc
     );
   });
 
+  app.get("/popular-package-index", async (_request, reply) => {
+    reply.type("text/html");
+    return page(
+      "Popular Package Index",
+      `<section>
+        <h2>Index Summary</h2>
+        ${popularPackageIndexSummary(popularPackageIndex)}
+      </section>
+      <section>
+        <h2>Popular Packages</h2>
+        ${popularPackageTable(popularPackageIndex)}
+      </section>
+      <section>
+        <h2>Known Ecosystem Confusions</h2>
+        ${knownConfusionTable(popularPackageIndex)}
+      </section>`
+    );
+  });
+
   return app;
 }
 
@@ -545,6 +573,47 @@ function reportTable(reports: AnalysisReportRecord[]) {
           <td>${record.report.score}</td>
           <td>${analysisReportIdentityDetails(record)}</td>
           <td>${escapeHtml(formatDate(record.createdAt))}</td>
+        </tr>`
+      )
+      .join("")}</tbody>
+  </table>`;
+}
+
+function popularPackageIndexSummary(index: PopularPackageIndex) {
+  return `<div class="summary">
+    ${summaryTile("Source", index.source, "muted")}
+    ${summaryTile("Generated", index.generatedAt ?? "unknown", "muted")}
+    ${summaryTile("Packages", index.popularPackages.length, "ok")}
+    ${summaryTile("Known Confusions", Object.keys(index.knownConfusions).length, "warn")}
+  </div>`;
+}
+
+function popularPackageTable(index: PopularPackageIndex) {
+  if (index.popularPackages.length === 0) return `<p class="empty">No popular packages configured.</p>`;
+  return `<table>
+    <thead><tr><th>Package</th><th>Weekly Downloads</th><th>Aliases</th></tr></thead>
+    <tbody>${index.popularPackages
+      .map(
+        (record) => `<tr>
+          <td>${escapeHtml(record.name)}</td>
+          <td>${escapeHtml(record.weeklyDownloads ?? "unknown")}</td>
+          <td>${escapeHtml(record.aliases?.join(", ") ?? "")}</td>
+        </tr>`
+      )
+      .join("")}</tbody>
+  </table>`;
+}
+
+function knownConfusionTable(index: PopularPackageIndex) {
+  const rows = Object.entries(index.knownConfusions);
+  if (rows.length === 0) return `<p class="empty">No known ecosystem confusions configured.</p>`;
+  return `<table>
+    <thead><tr><th>Requested Package</th><th>Likely Intended Package</th></tr></thead>
+    <tbody>${rows
+      .map(
+        ([requested, suggested]) => `<tr>
+          <td>${escapeHtml(requested)}</td>
+          <td>${escapeHtml(suggested)}</td>
         </tr>`
       )
       .join("")}</tbody>

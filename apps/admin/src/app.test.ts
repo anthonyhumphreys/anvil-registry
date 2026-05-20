@@ -21,11 +21,12 @@ describe("admin app", () => {
     expect(response.body).toContain("Recent Analysis Reports");
     expect(response.body).toContain("Node Base Reports");
     expect(response.body).toContain("dependency");
+    expect(response.body).toContain("Popular Package Index");
     expect(response.body).toContain("Audit Events");
     await app.close();
   });
 
-  it("exposes JSON decision, report, override, and audit-event lists", async () => {
+  it("exposes JSON decision, report, override, index, and audit-event lists", async () => {
     const persistence = new MemoryPersistence();
     await seed(persistence);
     const app = buildAdmin({ config: loadConfig(), persistence });
@@ -34,6 +35,7 @@ describe("admin app", () => {
     const reports = await app.inject({ method: "GET", url: "/api/reports" });
     const overrides = await app.inject({ method: "GET", url: "/api/overrides" });
     const nodeBaseReports = await app.inject({ method: "GET", url: "/api/node-base/reports" });
+    const popularPackageIndex = await app.inject({ method: "GET", url: "/api/popular-package-index" });
     const auditEvents = await app.inject({ method: "GET", url: "/api/audit-events" });
 
     expect(decisions.json().decisions).toHaveLength(1);
@@ -41,7 +43,23 @@ describe("admin app", () => {
     expect(overrides.json().overrides).toHaveLength(1);
     expect(nodeBaseReports.json().reports).toHaveLength(1);
     expect(nodeBaseReports.json().reports[0]).toMatchObject({ source: "devcontainer", projectName: "demo", reportType: "dependency" });
+    expect(popularPackageIndex.json().popularPackages).toEqual(expect.arrayContaining([expect.objectContaining({ name: "lodash" })]));
+    expect(popularPackageIndex.json().knownConfusions).toMatchObject({ loadash: "lodash" });
     expect(auditEvents.json().auditEvents).toHaveLength(1);
+    await app.close();
+  });
+
+  it("renders the popular package index viewer", async () => {
+    const app = buildAdmin({ config: loadConfig() });
+
+    const response = await app.inject({ method: "GET", url: "/popular-package-index" });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain("Index Summary");
+    expect(response.body).toContain("Popular Packages");
+    expect(response.body).toContain("Known Ecosystem Confusions");
+    expect(response.body).toContain("@tanstack/react-query");
+    expect(response.body).toContain("@tenstack/react-query");
     await app.close();
   });
 

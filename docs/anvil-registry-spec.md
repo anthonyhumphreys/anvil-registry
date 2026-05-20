@@ -626,6 +626,18 @@ Detects typo-squatting, scope-squatting, and brand confusion.
 
 Detector output should preserve the likely intended package and the reasons that matched, such as `known_ecosystem_confusion`, `similar_scope`, `missing_character`, `extra_character`, `transposed_characters`, `pluralisation_variant`, and `visual_similarity`.
 
+The gateway, worker, and admin UI load the popular package index from `POPULAR_PACKAGE_INDEX_PATH` when configured. The JSON index contains:
+
+```json
+{
+  "generatedAt": "2026-05-20T00:00:00.000Z",
+  "popularPackages": [{ "name": "lodash", "weeklyDownloads": 60000000, "aliases": ["loadash"] }],
+  "knownConfusions": { "loadash": "lodash" }
+}
+```
+
+If no path is configured, Anvil uses the built-in seed index. Admin exposes the active index at `GET /api/popular-package-index` and `/popular-package-index` so reviewers can inspect which package names and known confusion pairs are driving deterministic typo-squatting evidence.
+
 ### Example detection
 
 ```text

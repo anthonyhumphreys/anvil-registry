@@ -1,5 +1,8 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
-import { detectNameSquatting, jaroWinklerSimilarity } from "./index.js";
+import { detectNameSquatting, jaroWinklerSimilarity, loadPopularPackageIndex, parsePopularPackageIndex } from "./index.js";
 
 describe("detectNameSquatting", () => {
   it("detects tanstack confusion", () => {
@@ -42,5 +45,39 @@ describe("detectNameSquatting", () => {
   it("uses Jaro-Winkler similarity as an additional signal", () => {
     expect(jaroWinklerSimilarity("fastfy", "fastify")).toBeGreaterThan(0.9);
     expect(detectNameSquatting("fastfy", [{ name: "fastify" }])[0]?.reasons).toContain("high_jaro_winkler_similarity");
+  });
+
+  it("loads a configurable popular package index", () => {
+    const directory = mkdtempSync(join(tmpdir(), "anvil-popular-index-"));
+    const indexPath = join(directory, "latest.json");
+    writeFileSync(
+      indexPath,
+      JSON.stringify({
+        generatedAt: "2026-05-20T00:00:00.000Z",
+        popularPackages: [{ name: "@scope/actual-package", weeklyDownloads: 123_000, aliases: ["actual-package"] }],
+        knownConfusions: { "@scope/actua1-package": "@scope/actual-package" }
+      })
+    );
+
+    try {
+      const index = loadPopularPackageIndex(indexPath);
+      expect(index).toMatchObject({
+        generatedAt: "2026-05-20T00:00:00.000Z",
+        source: indexPath,
+        popularPackages: [{ name: "@scope/actual-package", weeklyDownloads: 123_000, aliases: ["actual-package"] }],
+        knownConfusions: { "@scope/actua1-package": "@scope/actual-package" }
+      });
+      expect(detectNameSquatting("@scope/actua1-package", index)[0]).toMatchObject({
+        candidate: "@scope/actual-package",
+        suggestedPackage: "@scope/actual-package",
+        reasons: expect.arrayContaining(["known_ecosystem_confusion"])
+      });
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects malformed popular package indexes", () => {
+    expect(() => parsePopularPackageIndex({ popularPackages: [{ weeklyDownloads: -1 }] })).toThrow("Popular package entries require a name.");
   });
 });

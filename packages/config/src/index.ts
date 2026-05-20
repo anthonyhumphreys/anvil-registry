@@ -16,6 +16,7 @@ const envSchema = z.object({
   UPSTREAM_NPM_REGISTRY: z.string().url().default("https://registry.npmjs.org"),
   NPM_DOWNLOADS_API: z.string().url().default("https://api.npmjs.org/downloads"),
   CACHE_DIR: z.string().default(".anvil/cache"),
+  POPULAR_PACKAGE_INDEX_PATH: z.string().optional(),
   PERSISTENCE_DRIVER: z.enum(["memory", "postgres"]).default("memory"),
   DATABASE_URL: z.string().optional(),
   DATABASE_HOST: z.string().optional(),
