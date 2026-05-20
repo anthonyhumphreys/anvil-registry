@@ -185,6 +185,26 @@ LOG
 SH
 chmod +x "$WORK_DIR/bin/strace"
 
+cat > "$WORK_DIR/bin/npm" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+echo "> observed-pkg@1.0.0 install"
+echo "node install.js"
+SH
+chmod +x "$WORK_DIR/bin/npm"
+
+(
+  cd "$WORK_DIR/project"
+  ANVIL_REPORT_DIR="$WORK_DIR/observed" \
+  NPM_TOKEN="very-secret" \
+  PATH="$WORK_DIR/bin:$PATH" \
+    anvil-npm-ci-observed >/tmp/anvil-npm-ci-observed.out
+)
+assert_jq '.environment.NPM_TOKEN == "[redacted]"' "$WORK_DIR/observed/environment-snapshot.json"
+assert_jq '.redaction | contains("redacted")' "$WORK_DIR/observed/environment-snapshot.json"
+assert_jq '.summary.outboundConnections == 1' "$WORK_DIR/observed/ioc-report.json"
+test -s "$WORK_DIR/observed/ioc-report.md"
+
 ANVIL_REPORT_DIR="$WORK_DIR/network" PATH="$WORK_DIR/bin:$PATH" anvil-network-monitor -- node -e "process.exit(0)" >/tmp/anvil-network-monitor.out
 assert_jq '.summary.outboundConnections == 1' "$WORK_DIR/network/network-report.json"
 assert_jq '.mediumConfidenceFindings[] | select(.code == "DIRECT_IP_CONNECTION")' "$WORK_DIR/network/network-report.json"

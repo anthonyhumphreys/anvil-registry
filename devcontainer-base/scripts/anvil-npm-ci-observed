@@ -4,6 +4,31 @@ set -euo pipefail
 REPORT_DIR="${ANVIL_REPORT_DIR:-.anvil/reports}"
 mkdir -p "$REPORT_DIR"
 
+node - "$REPORT_DIR/environment-snapshot.json" <<'NODE'
+const fs = require("fs");
+
+const snapshotPath = process.argv[2];
+const sensitiveName = /(TOKEN|SECRET|PASSWORD|PASSWD|PRIVATE|CREDENTIAL|AUTH|COOKIE|SESSION|DATABASE_URL|KEY)$/i;
+const environment = Object.fromEntries(
+  Object.entries(process.env)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => [key, sensitiveName.test(key) ? "[redacted]" : value])
+);
+
+fs.writeFileSync(
+  snapshotPath,
+  `${JSON.stringify(
+    {
+      generatedAt: new Date().toISOString(),
+      redaction: "Environment variable values whose names look credential-bearing are redacted.",
+      environment
+    },
+    null,
+    2
+  )}\n`
+);
+NODE
+
 export NPM_CONFIG_IGNORE_SCRIPTS=false
 export NPM_CONFIG_FOREGROUND_SCRIPTS=true
 
@@ -93,6 +118,7 @@ NODE
 
 echo "[anvil] npm exited with $NPM_EXIT"
 echo "[anvil] IOC report written to $REPORT_DIR/ioc-report.json"
+echo "[anvil] Environment snapshot written to $REPORT_DIR/environment-snapshot.json"
 anvil-submit-report-if-configured "$REPORT_DIR/lifecycle-scripts.json" lifecycle
 anvil-submit-report-if-configured "$REPORT_DIR/ioc-report.json" ioc
 anvil-risk-gate "$REPORT_DIR/ioc-report.json" ioc
