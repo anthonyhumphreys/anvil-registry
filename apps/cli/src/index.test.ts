@@ -590,6 +590,34 @@ importers:
     expect(writes.join("")).toContain("Anvil smoke check passed.");
   });
 
+  it("smoke tests scoped package paths with split URL encoding", async () => {
+    const fetch = vi.fn(async (url: string) => {
+      if (url.endsWith("/-/health")) return jsonResponse({ ok: true });
+      if (url.endsWith("/-/ready")) return jsonResponse({ ok: true, checks: [{ component: "persistence", ok: true }] });
+      if (url === "http://anvil.test/%40scope/pkg") {
+        return jsonResponse({
+          name: "@scope/pkg",
+          "dist-tags": { latest: "1.0.0" },
+          versions: {
+            "1.0.0": {
+              dist: {
+                tarball: "http://anvil.test/@scope/pkg/-/pkg-1.0.0.tgz"
+              }
+            }
+          }
+        });
+      }
+      if (url === "http://anvil.test/@scope/pkg/-/pkg-1.0.0.tgz") return new Response(new Uint8Array([1, 2, 3]));
+      throw new Error(`Unexpected URL ${url}`);
+    });
+    const dependencies = fakeDependencies({ fetch: fetch as unknown as typeof globalThis.fetch });
+
+    await expect(run(["smoke", "@scope/pkg"], dependencies)).resolves.toBe(0);
+
+    expect(fetch).toHaveBeenCalledWith("http://anvil.test/%40scope/pkg", undefined);
+    expect(fetch).toHaveBeenCalledWith("http://anvil.test/@scope/pkg/-/pkg-1.0.0.tgz");
+  });
+
   it("fails smoke tests when tarball URLs are not rewritten through the gateway", async () => {
     const dependencies = fakeDependencies({
       fetch: vi.fn(async (url: string) => {
@@ -602,6 +630,29 @@ importers:
             "1.0.0": {
               dist: {
                 tarball: "https://registry.npmjs.org/pkg/-/pkg-1.0.0.tgz"
+              }
+            }
+          }
+        });
+      }) as unknown as typeof globalThis.fetch
+    });
+
+    await expect(run(["smoke", "pkg"], dependencies)).resolves.toBe(1);
+    expect(dependencies.stderr.write).toHaveBeenCalledWith(expect.stringContaining("Tarball URL was not rewritten through Anvil"));
+  });
+
+  it("fails smoke tests when same-origin tarball URLs are not package tarball routes", async () => {
+    const dependencies = fakeDependencies({
+      fetch: vi.fn(async (url: string) => {
+        if (url.endsWith("/-/health")) return jsonResponse({ ok: true });
+        if (url.endsWith("/-/ready")) return jsonResponse({ ok: true });
+        return jsonResponse({
+          name: "pkg",
+          "dist-tags": { latest: "1.0.0" },
+          versions: {
+            "1.0.0": {
+              dist: {
+                tarball: "http://anvil.test/not-the-package/-/pkg-1.0.0.tgz"
               }
             }
           }

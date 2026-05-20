@@ -201,7 +201,7 @@ async function smoke(args: string[], dependencies: CliDependencies): Promise<num
   const versionMetadata = metadata.versions?.[version];
   const tarballUrl = versionMetadata?.dist?.tarball;
   if (!tarballUrl) throw new Error(`Metadata for ${packageName}@${version} did not include a tarball URL.`);
-  if (!isGatewayTarballUrl(tarballUrl, registryUrl)) throw new Error(`Tarball URL was not rewritten through Anvil: ${tarballUrl}`);
+  if (!isGatewayTarballUrl(tarballUrl, registryUrl, packageName)) throw new Error(`Tarball URL was not rewritten through Anvil: ${tarballUrl}`);
   dependencies.stdout.write(`Metadata proxy/rewrite: ok (${packageName}@${version})\n`);
 
   const tarball = await requestBytes(dependencies, tarballUrl);
@@ -563,13 +563,21 @@ type LlmRiskReviewRecord = {
   createdAt?: string;
 };
 
-function isGatewayTarballUrl(tarballUrl: string, registryUrl: string): boolean {
+function isGatewayTarballUrl(tarballUrl: string, registryUrl: string, packageName: string): boolean {
   try {
-    const tarball = new URL(tarballUrl);
     const registry = new URL(registryUrl);
-    return tarball.origin === registry.origin;
+    const tarball = new URL(tarballUrl, registry);
+    return tarball.origin === registry.origin && decodeUrlPath(tarball.pathname).startsWith(`/${packageName}/-/`);
   } catch {
-    return tarballUrl.startsWith("/");
+    return false;
+  }
+}
+
+function decodeUrlPath(pathname: string): string {
+  try {
+    return decodeURIComponent(pathname);
+  } catch {
+    return pathname;
   }
 }
 
