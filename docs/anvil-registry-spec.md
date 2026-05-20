@@ -368,6 +368,7 @@ anvil explain react@19.0.0
 anvil explain @tanstack/react-query@latest
 anvil warm package-lock.json
 anvil approve package@version --reason "intentional dependency" --expires-at 2026-06-20T00:00:00Z
+anvil revoke package@version --revoked-by reviewer
 anvil llm-review package@version --requested-by reviewer
 anvil popular-index show
 anvil popular-index upload popular-index.json --generated-at 2026-05-20T00:00:00Z
@@ -1483,6 +1484,7 @@ When blocked, return useful JSON.
 
 - Admin dashboard.
 - Override approval.
+- Override revoke.
 - Audit log.
 - `anvil scan`.
 - `anvil explain`.

@@ -489,6 +489,33 @@ importers:
     );
   });
 
+  it("revokes approval overrides with admin token", async () => {
+    const writes: string[] = [];
+    const dependencies = fakeDependencies({
+      fetch: vi.fn(async () => jsonResponse({ ok: true })),
+      env: { ANVIL_REGISTRY_URL: "http://anvil.test", ADMIN_TOKEN: "secret" },
+      stdout: {
+        write: (value: string) => {
+          writes.push(value);
+          return true;
+        }
+      }
+    });
+
+    const exitCode = await run(["revoke", "@scope/pkg@1.0.0", "--revoked-by", "reviewer"], dependencies);
+
+    expect(exitCode).toBe(0);
+    expect(dependencies.fetch).toHaveBeenCalledWith(
+      "http://anvil.test/-/anvil/override/revoke",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ authorization: "Bearer secret" }),
+        body: JSON.stringify({ packageName: "@scope/pkg", version: "1.0.0", revokedBy: "reviewer" })
+      })
+    );
+    expect(writes.join("")).toContain("Revoked override for @scope/pkg@1.0.0.");
+  });
+
   it("queues forced LLM reviews with admin token", async () => {
     const writes: string[] = [];
     const dependencies = fakeDependencies({

@@ -31,6 +31,7 @@ export async function run(argv: string[], dependencies: CliDependencies = defaul
     if (command === "warm") return await warm(args, dependencies);
     if (command === "smoke") return await smoke(args, dependencies);
     if (command === "approve") return await approve(args, dependencies);
+    if (command === "revoke") return await revoke(args, dependencies);
     if (command === "llm-review") return await llmReview(args, dependencies);
     if (command === "popular-index" && args[0] === "show") return await popularIndexShow(args.slice(1), dependencies);
     if (command === "popular-index" && args[0] === "upload") return await popularIndexUpload(args.slice(1), dependencies);
@@ -236,6 +237,25 @@ async function approve(args: string[], dependencies: CliDependencies): Promise<n
     body: JSON.stringify({ ...target, reason, action: action ?? "allow", ...(expiresAt ? { expiresAt } : {}) })
   });
   dependencies.stdout.write(`Approved override for ${target.packageName}@${target.version}.\n`);
+  return 0;
+}
+
+async function revoke(args: string[], dependencies: CliDependencies): Promise<number> {
+  const targetArg = args[0];
+  if (!targetArg) throw new Error("Usage: anvil revoke package@version [--revoked-by reviewer]");
+  const revokedBy = readFlag(args, "--revoked-by") ?? "anvil-cli";
+  const target = parseTarget(targetArg);
+  const registryUrl = registryBaseUrl(dependencies.env);
+
+  await requestJson(dependencies, `${registryUrl}/-/anvil/override/revoke`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      ...(dependencies.env.ADMIN_TOKEN ? { authorization: `Bearer ${dependencies.env.ADMIN_TOKEN}` } : {})
+    },
+    body: JSON.stringify({ ...target, revokedBy })
+  });
+  dependencies.stdout.write(`Revoked override for ${target.packageName}@${target.version}.\n`);
   return 0;
 }
 
@@ -637,6 +657,7 @@ function usage() {
   anvil warm package-lock.json
   anvil smoke [package]
   anvil approve package@version --reason "intentional dependency" [--expires-at 2026-06-20T00:00:00Z]
+  anvil revoke package@version [--revoked-by reviewer]
   anvil llm-review package@version [--requested-by reviewer] [--priority high]
   anvil popular-index show
   anvil popular-index upload popular-index.json [--generated-at 2026-05-20T00:00:00Z]
