@@ -64,23 +64,39 @@ export async function parseLockfile(path: string, read: ReadTextFile = (filePath
 function parsePackageLock(content: string): PackageTarget[] {
   const parsed = JSON.parse(content) as {
     packages?: Record<string, { version?: string }>;
-    dependencies?: Record<string, { version?: string }>;
+    dependencies?: Record<string, PackageLockDependency>;
   };
   const targets = new Map<string, PackageTarget>();
 
   for (const [path, metadata] of Object.entries(parsed.packages ?? {})) {
     if (!path.startsWith("node_modules/") || !metadata.version) continue;
-    const packageName = path.slice("node_modules/".length);
-    if (packageName.includes("/node_modules/")) continue;
+    const packageName = packageNameFromNodeModulesPath(path);
+    if (!packageName) continue;
     targets.set(`${packageName}@${metadata.version}`, { packageName, version: metadata.version });
   }
 
-  for (const [packageName, metadata] of Object.entries(parsed.dependencies ?? {})) {
-    if (!metadata.version) continue;
-    targets.set(`${packageName}@${metadata.version}`, { packageName, version: metadata.version });
-  }
+  collectPackageLockDependencies(parsed.dependencies, targets);
 
   return [...targets.values()].sort(compareTargets);
+}
+
+type PackageLockDependency = {
+  version?: string;
+  dependencies?: Record<string, PackageLockDependency>;
+};
+
+function packageNameFromNodeModulesPath(path: string): string | undefined {
+  const marker = "node_modules/";
+  const index = path.lastIndexOf(marker);
+  if (index === -1) return undefined;
+  return path.slice(index + marker.length);
+}
+
+function collectPackageLockDependencies(dependencies: Record<string, PackageLockDependency> | undefined, targets: Map<string, PackageTarget>) {
+  for (const [packageName, metadata] of Object.entries(dependencies ?? {})) {
+    if (metadata.version) targets.set(`${packageName}@${metadata.version}`, { packageName, version: metadata.version });
+    collectPackageLockDependencies(metadata.dependencies, targets);
+  }
 }
 
 function parsePnpmLock(content: string): PackageTarget[] {

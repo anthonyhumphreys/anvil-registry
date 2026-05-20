@@ -14,14 +14,29 @@ describe("cli", () => {
           "": { version: "1.0.0" },
           "node_modules/@scope/pkg": { version: "1.2.3" },
           "node_modules/lodash": { version: "4.17.21" },
-          "node_modules/a/node_modules/b": { version: "1.0.0" }
+          "node_modules/a/node_modules/b": { version: "1.0.0" },
+          "node_modules/a/node_modules/@deep/pkg": { version: "2.0.0" }
+        },
+        dependencies: {
+          top: {
+            version: "3.0.0",
+            dependencies: {
+              nested: { version: "4.0.0" },
+              "@nested/scope": { version: "5.0.0" }
+            }
+          }
         }
       })
     );
 
     expect(targets).toEqual([
+      { packageName: "@deep/pkg", version: "2.0.0" },
+      { packageName: "@nested/scope", version: "5.0.0" },
       { packageName: "@scope/pkg", version: "1.2.3" },
-      { packageName: "lodash", version: "4.17.21" }
+      { packageName: "b", version: "1.0.0" },
+      { packageName: "lodash", version: "4.17.21" },
+      { packageName: "nested", version: "4.0.0" },
+      { packageName: "top", version: "3.0.0" }
     ]);
   });
 
