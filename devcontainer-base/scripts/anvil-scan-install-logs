@@ -91,10 +91,16 @@ console.log(JSON.stringify({
 
 function summarizeProcesses(text) {
   const execs = [];
+  const forks = [];
   const commandCounts = new Map();
   const execRegex = /^(?:(\d+)\s+)?execve\("([^"]+)",\s+\[([^\]]*)\]/;
+  const forkRegex = /^(?:(\d+)\s+)?(clone3?|fork|vfork)\([^=]*(?:=|<unfinished \.\.\.>).*/;
+  const resumedForkRegex = /^(?:(\d+)\s+)?<\.\.\. (clone3?|fork|vfork) resumed>.*=\s*(\d+)/;
 
   for (const [index, line] of text.split(/\r?\n/).entries()) {
+    const fork = parseForkLine(line, forkRegex, resumedForkRegex);
+    if (fork && forks.length < 100) forks.push({ ...fork, line: index + 1 });
+
     const match = line.match(execRegex);
     if (!match) continue;
     const [, pid, path, rawArgs] = match;
@@ -115,8 +121,53 @@ function summarizeProcesses(text) {
   return {
     totalExecs: [...commandCounts.values()].reduce((sum, count) => sum + count, 0),
     uniqueCommands: [...commandCounts.entries()].map(([command, count]) => ({ command, count })).sort((left, right) => right.count - left.count),
-    execs
+    execs,
+    forks,
+    processTree: buildProcessTree(execs, forks)
   };
+}
+
+function parseForkLine(line, forkRegex, resumedForkRegex) {
+  const resumed = line.match(resumedForkRegex);
+  if (resumed) {
+    const [, parentPid, syscall, childPid] = resumed;
+    if (!parentPid || !childPid || childPid === "0") return undefined;
+    return { parentPid, childPid, syscall };
+  }
+
+  const fork = line.match(forkRegex);
+  if (!fork) return undefined;
+  const [, parentPid, syscall] = fork;
+  const childPid = line.match(/=\s*(\d+)/)?.[1];
+  if (!parentPid || !childPid || childPid === "0") return undefined;
+  return { parentPid, childPid, syscall };
+}
+
+function buildProcessTree(execs, forks) {
+  const byPid = new Map();
+  for (const fork of forks) {
+    if (!byPid.has(fork.childPid)) {
+      byPid.set(fork.childPid, {
+        pid: fork.childPid,
+        parentPid: fork.parentPid,
+        spawnSyscall: fork.syscall,
+        spawnLine: fork.line
+      });
+    }
+  }
+
+  for (const exec of execs) {
+    if (!exec.pid) continue;
+    byPid.set(exec.pid, {
+      ...(byPid.get(exec.pid) || { pid: exec.pid }),
+      path: exec.path,
+      command: exec.command,
+      args: exec.args,
+      execLine: exec.line
+    });
+  }
+
+  return [...byPid.values()].sort((left, right) => Number(left.pid) - Number(right.pid)).slice(0, 100);
 }
 
 function summarizeNetwork(text) {

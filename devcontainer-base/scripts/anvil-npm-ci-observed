@@ -92,6 +92,17 @@ if (report.processSummary?.uniqueCommands?.length) {
 } else {
   lines.push("No process executions captured.", "");
 }
+lines.push("## Process Tree", "");
+if (report.processSummary?.processTree?.length) {
+  for (const process of report.processSummary.processTree.slice(0, 30)) {
+    const parent = process.parentPid ? ` parent=${process.parentPid}` : "";
+    const command = process.command || process.path || "(unknown)";
+    lines.push(`- pid=${process.pid}${parent} ${command}`);
+  }
+  lines.push("");
+} else {
+  lines.push("No parent/child process relationships captured.", "");
+}
 lines.push("## Network Summary", "");
 if (report.networkSummary?.connections?.length) {
   for (const connection of report.networkSummary.connections.slice(0, 20)) {

