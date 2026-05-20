@@ -32,6 +32,36 @@ describe("evaluatePolicy", () => {
     });
   });
 
+  it("does not hard-block similar packages without low-adoption evidence", () => {
+    const decision = evaluatePolicy({
+      packageName: "@tenstack/react-query",
+      version: "1.0.0",
+      runtimeMode: "ci",
+      weeklyDownloads: 25_000,
+      similarPackages: [{ name: "@tanstack/react-query", similarity: 0.95, weeklyDownloads: 4_000_000, reasons: ["known_ecosystem_confusion"], suggestedPackage: "@tanstack/react-query" }],
+      policy: defaultPolicyConfig
+    });
+
+    expect(decision.action).toBe("quarantine");
+    expect(decision.reasons.find((reason) => reason.code === "SIMILAR_TO_POPULAR_PACKAGE")).toMatchObject({
+      severity: "medium",
+      evidence: { weeklyDownloads: 25_000 }
+    });
+  });
+
+  it("warns on similar packages when downloads are unavailable", () => {
+    const decision = evaluatePolicy({
+      packageName: "@tenstack/react-query",
+      version: "1.0.0",
+      runtimeMode: "development",
+      similarPackages: [{ name: "@tanstack/react-query", similarity: 0.95, weeklyDownloads: 4_000_000, reasons: ["known_ecosystem_confusion"], suggestedPackage: "@tanstack/react-query" }],
+      policy: defaultPolicyConfig
+    });
+
+    expect(decision.action).toBe("warn");
+    expect(decision.reasons.find((reason) => reason.code === "SIMILAR_TO_POPULAR_PACKAGE")).toMatchObject({ severity: "medium" });
+  });
+
   it("honours active allow overrides", () => {
     const decision = evaluatePolicy({
       packageName: "fresh-package",

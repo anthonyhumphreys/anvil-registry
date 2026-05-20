@@ -52,14 +52,16 @@ export function evaluatePolicy(input: PolicyInput): PolicyDecision {
 
   const bestSimilarPackage = input.similarPackages?.[0];
   if (bestSimilarPackage && bestSimilarPackage.similarity >= 0.82) {
+    const lowAdoption = typeof input.weeklyDownloads === "number" && input.weeklyDownloads < input.policy.lowDownloadThreshold;
     reasons.push({
       code: "SIMILAR_TO_POPULAR_PACKAGE",
       message: `Package name is similar to ${bestSimilarPackage.name}.`,
-      severity: input.policy.blockSimilarLowDownloadPackages ? "critical" : "medium",
+      severity: lowAdoption && input.policy.blockSimilarLowDownloadPackages ? "critical" : "medium",
       evidence: {
         candidate: bestSimilarPackage.name,
         suggestedPackage: bestSimilarPackage.suggestedPackage ?? bestSimilarPackage.name,
         similarity: bestSimilarPackage.similarity,
+        weeklyDownloads: input.weeklyDownloads,
         reasons: bestSimilarPackage.reasons
       }
     });
