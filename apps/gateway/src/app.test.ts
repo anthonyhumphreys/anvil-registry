@@ -347,7 +347,9 @@ describe("gateway policy enforcement", () => {
         fetchMetadata: vi.fn(async () => metadata),
         fetchTarball: vi.fn()
       },
-      downloadStats: noDownloadStats()
+      downloadStats: {
+        getWeeklyDownloads: vi.fn(async () => 10)
+      }
     });
 
     const response = await app.inject({ method: "GET", url: "/@scope/actua1-package" });
@@ -359,7 +361,7 @@ describe("gateway policy enforcement", () => {
     expect(response.statusCode).toBe(200);
     expect(decision).toMatchObject({
       action: "block",
-      reasons: [
+      reasons: expect.arrayContaining([
         expect.objectContaining({
           code: "SIMILAR_TO_POPULAR_PACKAGE",
           evidence: expect.objectContaining({
@@ -368,7 +370,7 @@ describe("gateway policy enforcement", () => {
             reasons: expect.arrayContaining(["known_ecosystem_confusion"])
           })
         })
-      ]
+      ])
     });
 
     await app.close();
