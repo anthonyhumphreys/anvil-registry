@@ -78,4 +78,6 @@ If the gateway has `ADMIN_TOKEN` configured, pass it as `ANVIL_ADMIN_TOKEN`.
 
 When `ANVIL_REGISTRY_URL` is set, `anvil-npm-ci-safe`, `anvil-npm-ci-observed`, and `anvil-dep-report` automatically submit their generated JSON reports. Submission failures warn but do not fail the install unless `ANVIL_REPORT_SUBMIT_STRICT=true` is set.
 
+`anvil-dep-report` also uses `ANVIL_DEP_REPORT_REGISTRY_URL` or `ANVIL_REGISTRY_URL` to enrich reports with registry metadata when available. Registry lookups are bounded by `ANVIL_DEP_REPORT_REGISTRY_TIMEOUT_MS` and `ANVIL_DEP_REPORT_REGISTRY_MAX_PACKAGES`.
+
 Observed mode is opt-in because dependency install scripts are where supply-chain incidents go to feel important.

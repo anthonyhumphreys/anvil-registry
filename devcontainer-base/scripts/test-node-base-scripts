@@ -13,7 +13,7 @@ assert_jq() {
   jq -e "$filter" "$file" >/dev/null
 }
 
-mkdir -p "$WORK_DIR/project/node_modules/safe-pkg" "$WORK_DIR/project/node_modules/bad-pkg"
+mkdir -p "$WORK_DIR/project/node_modules/safe-pkg" "$WORK_DIR/project/node_modules/bad-pkg" "$WORK_DIR/project/node_modules/loadash"
 cat > "$WORK_DIR/project/node_modules/safe-pkg/package.json" <<'JSON'
 {
   "name": "safe-pkg",
@@ -33,6 +33,12 @@ cat > "$WORK_DIR/project/node_modules/bad-pkg/package.json" <<'JSON'
   }
 }
 JSON
+cat > "$WORK_DIR/project/node_modules/loadash/package.json" <<'JSON'
+{
+  "name": "loadash",
+  "version": "1.0.0"
+}
+JSON
 
 (
   cd "$WORK_DIR/project"
@@ -42,8 +48,14 @@ JSON
   assert_jq '.policy.strict.enabled == false' lifecycle.json
 
   ANVIL_REPORT_DIR="$WORK_DIR/project/reports" anvil-dep-report >/tmp/anvil-dep-report.out
+  assert_jq '.summary.packagesScanned == 3' reports/dependency-report.json
   assert_jq '.summary.packagesWithLifecycleScripts == 2' reports/dependency-report.json
+  assert_jq '.summary.packagesWithMetadataFindings >= 1' reports/dependency-report.json
+  assert_jq '.summary.lowConfidenceFindings >= 1' reports/dependency-report.json
   assert_jq '.policy.strict.riskLevel == "high"' reports/dependency-report.json
+  assert_jq '.metadataReview.registry.enabled == false' reports/dependency-report.json
+  assert_jq '.metadataReview.packages[] | select(.name == "loadash") | .findings[] | select(.code == "SUSPICIOUS_PACKAGE_NAME" and .suggestedPackage == "lodash")' reports/dependency-report.json
+  assert_jq '.metadataReview.packages[] | select(.name == "loadash") | .findings[] | select(.code == "LOW_QUALITY_PACKAGE_METADATA")' reports/dependency-report.json
   test -s reports/dependency-report.md
 )
 
