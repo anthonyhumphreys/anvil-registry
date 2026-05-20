@@ -307,7 +307,7 @@ The command must exit `0` only when the worker can reach required runtime depend
 
 ### Manual and lockfile analysis enqueue
 
-The gateway exposes `POST /-/anvil/analyze` so developer tools can enqueue explicit package analysis without waiting for a blocked metadata or tarball request. It accepts either a single `packageName`/`version` pair or a `targets` array, deduplicates exact package/version pairs, and enqueues `AnalysisJob` messages with `manual_review` by default. CLI lockfile warming uses `reason: "lockfile_scan"` so worker output can be traced back to preinstall review rather than install-path enforcement.
+The gateway exposes `POST /-/anvil/analyze` so developer tools can enqueue explicit package analysis without waiting for a blocked metadata or tarball request. It accepts either a single `packageName`/`version` pair or a `targets` array, deduplicates exact package/version pairs, and enqueues `AnalysisJob` messages with `manual_review` by default. CLI lockfile warming uses `reason: "lockfile_scan"` so worker output can be traced back to preinstall review rather than install-path enforcement. `anvil scan --queue-analysis` uses the same route for risky or not-yet-reviewed lockfile targets after printing the policy verdict.
 
 ---
 
@@ -352,7 +352,7 @@ The CLI gives developers a way to inspect decisions before install or CI.
 
 ```bash
 anvil scan package-lock.json
-anvil scan pnpm-lock.yaml
+anvil scan pnpm-lock.yaml --queue-analysis
 anvil explain react@19.0.0
 anvil explain @tanstack/react-query@latest
 anvil warm package-lock.json

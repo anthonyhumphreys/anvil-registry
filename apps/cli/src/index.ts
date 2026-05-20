@@ -138,13 +138,21 @@ async function explain(args: string[], dependencies: CliDependencies): Promise<n
 }
 
 async function scan(args: string[], dependencies: CliDependencies): Promise<number> {
-  const path = args[0];
-  if (!path) throw new Error("Usage: anvil scan package-lock.json|pnpm-lock.yaml");
+  const path = firstPositionalArg(args);
+  if (!path) throw new Error("Usage: anvil scan package-lock.json|pnpm-lock.yaml [--queue-analysis]");
+  const shouldQueueAnalysis = hasFlag(args, "--queue-analysis");
   const targets = await parseLockfile(path, dependencies.readFile);
   const results = await Promise.all(targets.map((target) => explainTarget(target, dependencies)));
   const risky = results.filter((result) => result.decision.action !== "allow");
+  const analysisTargets = results
+    .filter((result) => result.decision.action !== "allow" || !result.analysisReport)
+    .map((result) => ({ packageName: result.packageName, version: result.version }));
 
   dependencies.stdout.write(`Scanned ${results.length} package versions from ${path}.\n`);
+  if (shouldQueueAnalysis) {
+    const queued = await enqueueAnalysisTargets(analysisTargets, dependencies, registryBaseUrl(dependencies.env));
+    dependencies.stdout.write(`Queued analysis for ${queued} risky or unreviewed package versions from ${path}.\n`);
+  }
   if (risky.length === 0) {
     dependencies.stdout.write("No blocked, quarantined, or warned packages found.\n");
     return 0;
@@ -478,6 +486,14 @@ function readFlag(args: string[], flag: string): string | undefined {
   return args[index + 1];
 }
 
+function firstPositionalArg(args: string[]): string | undefined {
+  return args.find((arg) => !arg.startsWith("--"));
+}
+
+function hasFlag(args: string[], flag: string): boolean {
+  return args.includes(flag);
+}
+
 function formatAction(action: PolicyDecision["action"]) {
   if (action === "block") return "blocked";
   if (action === "quarantine") return "quarantined";
@@ -537,8 +553,8 @@ function usage() {
   return `Usage:
   anvil doctor
   anvil explain package@version
-  anvil scan package-lock.json
-  anvil scan pnpm-lock.yaml
+  anvil scan package-lock.json [--queue-analysis]
+  anvil scan pnpm-lock.yaml [--queue-analysis]
   anvil warm package-lock.json
   anvil smoke [package]
   anvil approve package@version --reason "intentional dependency"

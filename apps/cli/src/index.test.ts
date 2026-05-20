@@ -176,6 +176,76 @@ importers:
     await expect(run(["scan", "package-lock.json"], dependencies)).resolves.toBe(1);
   });
 
+  it("queues risky and unreviewed package analysis during scans when requested", async () => {
+    const writes: string[] = [];
+    const fetch = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === "http://anvil.test/-/anvil/explain") {
+        const body = JSON.parse(String(init?.body)) as { packageName: string; version: string };
+        const action = body.packageName === "bad-pkg" ? "block" : "allow";
+        return jsonResponse({
+          packageName: body.packageName,
+          version: body.version,
+          decision: {
+            action,
+            score: action === "block" ? 95 : 0,
+            reasons: action === "block" ? [{ code: "SIMILAR_TO_POPULAR_PACKAGE", message: "Looks like something else.", severity: "critical" }] : [],
+            explanation: `${body.packageName}@${body.version} is ${action}.`
+          },
+          ...(body.packageName === "reviewed-pkg"
+            ? {
+                analysisReport: {
+                  packageName: "reviewed-pkg",
+                  version: body.version,
+                  analyserVersion: "static-analysis-test",
+                  policyVersion: "test-policy",
+                  score: 0,
+                  signals: [],
+                  createdAt: "2026-05-20T12:00:00.000Z"
+                }
+              }
+            : {})
+        });
+      }
+      if (url === "http://anvil.test/-/anvil/analyze") {
+        expect(init).toMatchObject({ method: "POST" });
+        expect(JSON.parse(String(init?.body))).toEqual({
+          targets: [
+            { packageName: "bad-pkg", version: "1.0.0" },
+            { packageName: "unreviewed-pkg", version: "2.0.0" }
+          ],
+          reason: "lockfile_scan",
+          priority: "normal",
+          requestedBy: "anvil-cli"
+        });
+        return jsonResponse({ ok: true, queued: 2 });
+      }
+      throw new Error(`Unexpected URL ${url}`);
+    });
+    const dependencies = fakeDependencies({
+      readFile: vi.fn(async () =>
+        JSON.stringify({
+          packages: {
+            "node_modules/bad-pkg": { version: "1.0.0" },
+            "node_modules/unreviewed-pkg": { version: "2.0.0" },
+            "node_modules/reviewed-pkg": { version: "3.0.0" }
+          }
+        })
+      ),
+      fetch: fetch as unknown as typeof globalThis.fetch,
+      stdout: {
+        write: (value: string) => {
+          writes.push(value);
+          return true;
+        }
+      }
+    });
+
+    const exitCode = await run(["scan", "--queue-analysis", "package-lock.json"], dependencies);
+
+    expect(exitCode).toBe(1);
+    expect(writes.join("")).toContain("Queued analysis for 2 risky or unreviewed package versions from package-lock.json.");
+  });
+
   it("warms metadata and queues lockfile analysis jobs", async () => {
     const writes: string[] = [];
     const fetch = vi.fn(async (url: string, init?: RequestInit) => {
