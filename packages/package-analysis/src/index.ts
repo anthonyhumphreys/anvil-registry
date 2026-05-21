@@ -231,6 +231,16 @@ export function analyseFileTree(
       });
     }
 
+    if (!isNew && baseline && !baseline.executable && isExecutable(file)) {
+      findings.push({
+        path: file.path,
+        code: "SUSPICIOUS_FILE_ADDED",
+        reason: "Existing file became executable in the package tarball.",
+        severity: "medium",
+        evidence: { size: file.size, previousModes: baseline.modes.map(fileMode), mode: fileMode(file.mode), executableChanged: true }
+      });
+    }
+
     if (isNew && isHiddenPath(file.path)) {
       findings.push({
         path: file.path,
@@ -757,11 +767,15 @@ function fileMode(mode: number) {
 }
 
 function baselineFileStats(baselineFiles: TarballFile[][]) {
-  const stats = new Map<string, { maxSize: number }>();
+  const stats = new Map<string, { executable: boolean; maxSize: number; modes: number[] }>();
   for (const file of baselineFiles.flat()) {
     if (file.type !== "file") continue;
     const current = stats.get(file.path);
-    stats.set(file.path, { maxSize: Math.max(current?.maxSize ?? 0, file.size) });
+    stats.set(file.path, {
+      executable: Boolean(current?.executable || isExecutable(file)),
+      maxSize: Math.max(current?.maxSize ?? 0, file.size),
+      modes: [...new Set([...(current?.modes ?? []), file.mode])].sort((left, right) => left - right)
+    });
   }
   return stats;
 }

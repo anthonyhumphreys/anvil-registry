@@ -325,6 +325,42 @@ describe("analyseManifestChange", () => {
     expect(result.fileFindings).not.toContainEqual(expect.objectContaining({ path: "docs/example.js", code: "NETWORK_ACCESS_IN_INSTALL_PATH" }));
   });
 
+  it("flags existing files that become executable", () => {
+    const baseline = parseNpmTarball(
+      makeTarball([
+        {
+          path: "package/scripts/setup.sh",
+          content: "echo preparing package",
+          mode: 0o644
+        }
+      ])
+    );
+    const target = parseNpmTarball(
+      makeTarball([
+        {
+          path: "package/scripts/setup.sh",
+          content: "echo preparing package",
+          mode: 0o755
+        }
+      ])
+    );
+
+    const result = analyseFileTree(target, [baseline]);
+
+    expect(result.fileFindings).toContainEqual(
+      expect.objectContaining({
+        path: "scripts/setup.sh",
+        code: "SUSPICIOUS_FILE_ADDED",
+        reason: "Existing file became executable in the package tarball.",
+        evidence: expect.objectContaining({
+          executableChanged: true,
+          previousModes: ["0o644"],
+          mode: "0o755"
+        })
+      })
+    );
+  });
+
   it("flags missing and invalid packed package manifests", () => {
     const missing = analyseFileTree(
       parseNpmTarball(
