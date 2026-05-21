@@ -178,7 +178,7 @@ export function rewriteMetadataTarballs(metadata: NpmPackageMetadata, publicBase
   const rewritten: NpmPackageMetadata = structuredClone(metadata);
   for (const versionMetadata of Object.values(rewritten.versions ?? {})) {
     if (!versionMetadata.dist?.tarball) continue;
-    versionMetadata.dist.tarball = tarballProxyUrl(publicBaseUrl, versionMetadata.name, versionMetadata.dist.tarball);
+    versionMetadata.dist.tarball = tarballProxyUrl(publicBaseUrl, rewritten.name, versionMetadata.dist.tarball);
   }
   return rewritten;
 }

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { NpmDownloadsClient, encodePackagePath, toVersionMetadata } from "./index.js";
+import { NpmDownloadsClient, encodePackagePath, rewriteMetadataTarballs, toVersionMetadata } from "./index.js";
 
 describe("npm registry helpers", () => {
   afterEach(() => {
@@ -8,6 +8,26 @@ describe("npm registry helpers", () => {
 
   it("encodes scoped package metadata paths without collapsing the slash", () => {
     expect(encodePackagePath("@scope/pkg")).toBe("%40scope/pkg");
+  });
+
+  it("rewrites tarball URLs using the requested package metadata name", () => {
+    const rewritten = rewriteMetadataTarballs(
+      {
+        name: "@scope/pkg",
+        versions: {
+          "1.0.0": {
+            name: "mismatched-name",
+            version: "1.0.0",
+            dist: {
+              tarball: "https://registry.example/mismatched-name/-/pkg-1.0.0.tgz"
+            }
+          }
+        }
+      },
+      "https://anvil.example"
+    );
+
+    expect(rewritten.versions?.["1.0.0"]?.dist?.tarball).toBe("https://anvil.example/@scope/pkg/-/pkg-1.0.0.tgz");
   });
 
   it("fetches weekly download counts from the npm downloads API", async () => {
