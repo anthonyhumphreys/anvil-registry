@@ -43,6 +43,15 @@ describe("config", () => {
     expect(config.ANVIL_API_BASE_URL).toBe("http://gateway:4873");
   });
 
+  it("loads the npm metadata cache TTL", () => {
+    const config = loadConfig({
+      ...process.env,
+      NPM_METADATA_CACHE_TTL_SECONDS: "60"
+    });
+
+    expect(config.NPM_METADATA_CACHE_TTL_SECONDS).toBe(60);
+  });
+
   it("defaults the admin API base URL to the public base URL", () => {
     const config = loadConfig({
       ...process.env,

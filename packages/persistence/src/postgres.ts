@@ -47,8 +47,17 @@ export class PostgresPersistence implements AnvilPersistence {
   }
 
   async getMetadata(packageName: string): Promise<unknown | undefined> {
+    return (await this.getMetadataRecord(packageName))?.metadata;
+  }
+
+  async getMetadataRecord(packageName: string): Promise<{ packageName: string; metadata: unknown; updatedAt?: string } | undefined> {
     const [row] = await this.db.select().from(schema.packages).where(eq(schema.packages.name, packageName)).limit(1);
-    return row?.metadataJson ?? undefined;
+    if (!row) return undefined;
+    return {
+      packageName,
+      metadata: row.metadataJson,
+      updatedAt: row.updatedAt.toISOString()
+    };
   }
 
   async putMetadata(packageName: string, metadata: unknown): Promise<void> {

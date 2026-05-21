@@ -8,6 +8,7 @@ export * as persistenceSchema from "./schema.js";
 export interface AnvilPersistence {
   healthCheck?(): Promise<void>;
   getMetadata(packageName: string): Promise<unknown | undefined>;
+  getMetadataRecord(packageName: string): Promise<PackageMetadataRecord | undefined>;
   putMetadata(packageName: string, metadata: unknown): Promise<void>;
   putPackageVersion(version: PackageVersionInput): Promise<void>;
   getPackageVersion(packageName: string, version: string): Promise<PackageVersionRecord | undefined>;
@@ -79,6 +80,12 @@ export type PackageVersionInput = {
   cachedTarballKey?: string;
 };
 
+export type PackageMetadataRecord = {
+  packageName: string;
+  metadata: unknown;
+  updatedAt?: string;
+};
+
 export type PackageVersionRecord = PackageVersionInput & {
   createdAt?: string;
   updatedAt?: string;
@@ -147,7 +154,7 @@ export type AuditEventRecord = AuditEventInput & {
 };
 
 export class MemoryPersistence implements AnvilPersistence {
-  private readonly metadata = new Map<string, unknown>();
+  private readonly metadata = new Map<string, PackageMetadataRecord>();
   private readonly packageVersions = new Map<string, PackageVersionRecord>();
   private readonly decisions = new Map<string, PolicyDecisionRecord>();
   private readonly overrides = new Map<string, OverrideRecord>();
@@ -160,11 +167,19 @@ export class MemoryPersistence implements AnvilPersistence {
   async healthCheck(): Promise<void> {}
 
   async getMetadata(packageName: string): Promise<unknown | undefined> {
+    return this.metadata.get(packageName)?.metadata;
+  }
+
+  async getMetadataRecord(packageName: string): Promise<PackageMetadataRecord | undefined> {
     return this.metadata.get(packageName);
   }
 
   async putMetadata(packageName: string, metadata: unknown): Promise<void> {
-    this.metadata.set(packageName, metadata);
+    this.metadata.set(packageName, {
+      packageName,
+      metadata,
+      updatedAt: new Date().toISOString()
+    });
   }
 
   async putPackageVersion(version: PackageVersionInput): Promise<void> {

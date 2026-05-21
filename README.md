@@ -45,6 +45,8 @@ pnpm dev:worker
 
 The defaults use in-memory adapters unless environment variables select Postgres, S3/MinIO, or BullMQ/SQS.
 
+Gateway metadata responses are cached in persistence and refreshed after `NPM_METADATA_CACHE_TTL_SECONDS` seconds. The default is `300`; set it to `0` to force every metadata request back to the upstream registry during debugging.
+
 ## Docker Compose
 
 Start the local stack:

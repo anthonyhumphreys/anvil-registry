@@ -373,8 +373,8 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
   }
 
   async function fetchMetadata(packageName: string): Promise<NpmPackageMetadata> {
-    const cached = await persistence.getMetadata(packageName);
-    if (cached) return cached as NpmPackageMetadata;
+    const cached = await persistence.getMetadataRecord(packageName);
+    if (cached && isFreshMetadata(cached.updatedAt, config.NPM_METADATA_CACHE_TTL_SECONDS)) return cached.metadata as NpmPackageMetadata;
     const metadata = await registry.fetchMetadata(packageName);
     await persistence.putMetadata(packageName, metadata);
     return metadata;
@@ -622,6 +622,14 @@ function safeDecodeURIComponent(value: string): string {
   } catch {
     return value;
   }
+}
+
+function isFreshMetadata(updatedAt: string | undefined, ttlSeconds: number) {
+  if (ttlSeconds === 0) return false;
+  if (!updatedAt) return true;
+  const updatedAtMs = Date.parse(updatedAt);
+  if (Number.isNaN(updatedAtMs)) return false;
+  return Date.now() - updatedAtMs <= ttlSeconds * 1000;
 }
 
 function analysisTargetsFromBody(body: PackageTargetRequest) {

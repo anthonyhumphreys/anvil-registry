@@ -28,6 +28,7 @@ const envSchema = z.object({
   ANVIL_API_BASE_URL: optionalEnvUrl,
   UPSTREAM_NPM_REGISTRY: z.string().url().default("https://registry.npmjs.org"),
   NPM_DOWNLOADS_API: z.string().url().default("https://api.npmjs.org/downloads"),
+  NPM_METADATA_CACHE_TTL_SECONDS: z.coerce.number().int().min(0).default(300),
   CACHE_DIR: z.string().default(".anvil/cache"),
   POPULAR_PACKAGE_INDEX_PATH: z.string().optional(),
   POPULAR_PACKAGE_INDEX_OBJECT_KEY: z.string().default("popular-index/npm/latest.json"),

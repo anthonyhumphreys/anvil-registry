@@ -45,6 +45,19 @@ describe("MemoryPersistence", () => {
     expect(await persistence.listPackageVersions({ packageName: "pkg" })).toHaveLength(1);
   });
 
+  it("stores package metadata with a cache timestamp", async () => {
+    const persistence = new MemoryPersistence();
+
+    await persistence.putMetadata("pkg", { name: "pkg" });
+
+    expect(await persistence.getMetadata("pkg")).toEqual({ name: "pkg" });
+    expect(await persistence.getMetadataRecord("pkg")).toMatchObject({
+      packageName: "pkg",
+      metadata: { name: "pkg" },
+      updatedAt: expect.any(String)
+    });
+  });
+
   it("ignores expired and revoked overrides", async () => {
     const persistence = new MemoryPersistence();
     await persistence.putOverride({

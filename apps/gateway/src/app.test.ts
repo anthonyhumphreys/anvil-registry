@@ -214,6 +214,59 @@ describe("gateway policy enforcement", () => {
     await app.close();
   });
 
+  it("refreshes stale cached upstream metadata", async () => {
+    const staleMetadata = packageMetadata("stable-package", "2020-01-01T00:00:00.000Z");
+    staleMetadata["dist-tags"] = { ...staleMetadata["dist-tags"], latest: "1.0.0" };
+    const freshMetadata = packageMetadata("stable-package", "2020-01-01T00:00:00.000Z");
+    freshMetadata.versions = {
+      ...freshMetadata.versions,
+      "1.0.1": {
+        ...freshMetadata.versions?.["1.0.0"],
+        name: "stable-package",
+        version: "1.0.1",
+        dist: {
+          tarball: "https://registry.npmjs.org/stable-package/-/stable-package-1.0.1.tgz",
+          integrity: "sha512-new",
+          shasum: "newsum"
+        }
+      }
+    };
+    freshMetadata["dist-tags"] = {
+      ...freshMetadata["dist-tags"],
+      latest: "1.0.1"
+    };
+    const persistence = new StaleMetadataPersistence("2000-01-01T00:00:00.000Z");
+    await persistence.putMetadata("stable-package", staleMetadata);
+    const fetchMetadata = vi.fn(async () => freshMetadata);
+    const app = buildGateway({
+      config: loadConfig({
+        ...process.env,
+        RUNTIME_MODE: "development",
+        PUBLIC_BASE_URL: "http://anvil.test",
+        PERSISTENCE_DRIVER: "memory",
+        NPM_METADATA_CACHE_TTL_SECONDS: "300"
+      }),
+      persistence,
+      queue: new MemoryJobQueue(),
+      registry: {
+        fetchMetadata,
+        fetchTarball: vi.fn()
+      },
+      downloadStats: noDownloadStats()
+    });
+
+    const response = await app.inject({ method: "GET", url: "/stable-package" });
+    const body = response.json<NpmPackageMetadata>();
+
+    expect(response.statusCode).toBe(200);
+    expect(fetchMetadata).toHaveBeenCalledTimes(1);
+    expect(body["dist-tags"]?.latest).toBe("1.0.1");
+    expect(body.versions?.["1.0.1"]?.dist?.tarball).toBe("http://anvil.test/stable-package/-/stable-package-1.0.1.tgz");
+    expect(await persistence.getMetadata("stable-package")).toMatchObject({ "dist-tags": { latest: "1.0.1" } });
+
+    await app.close();
+  });
+
   it("accepts split URL-encoded scoped metadata and tarball paths", async () => {
     const metadata = packageMetadata("@scope/pkg", "2020-01-01T00:00:00.000Z");
     const fetchMetadata = vi.fn(async () => metadata);
@@ -1213,6 +1266,22 @@ class TestObjectStore implements ObjectStore {
 
   async put(key: string, body: Uint8Array): Promise<void> {
     this.objects.set(key, body);
+  }
+}
+
+class StaleMetadataPersistence extends MemoryPersistence {
+  constructor(private readonly updatedAt: string) {
+    super();
+  }
+
+  override async getMetadataRecord(packageName: string) {
+    const metadata = await super.getMetadata(packageName);
+    if (!metadata) return undefined;
+    return {
+      packageName,
+      metadata,
+      updatedAt: this.updatedAt
+    };
   }
 }
 
