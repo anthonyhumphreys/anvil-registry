@@ -88,6 +88,9 @@ export function createAnvilSstConfig(
         LLM_REVIEW_RUN_ON_QUARANTINE: env.LLM_REVIEW_RUN_ON_QUARANTINE ?? "false",
         LLM_REVIEW_INCLUDE_PRIVATE_PACKAGES: env.LLM_REVIEW_INCLUDE_PRIVATE_PACKAGES ?? "false"
       };
+      const cloudWatchLogging = {
+        retention: "1 month"
+      };
       const gatewayDomain = loadBalancerDomain(env.ANVIL_GATEWAY_DOMAIN, env.ANVIL_GATEWAY_CERT_ARN);
       const adminDomain = loadBalancerDomain(env.ANVIL_ADMIN_DOMAIN, env.ANVIL_ADMIN_CERT_ARN);
       const gatewayDomainName = loadBalancerDomainName(gatewayDomain);
@@ -105,6 +108,7 @@ export function createAnvilSstConfig(
           DATABASE_READY_ATTEMPTS: "60",
           DATABASE_READY_DELAY_MS: "1000"
         },
+        logging: cloudWatchLogging,
         link: [database]
       });
 
@@ -141,6 +145,7 @@ export function createAnvilSstConfig(
           PUBLIC_BASE_URL: publicBaseUrl,
           ADMIN_TOKEN: adminToken.value
         },
+        logging: cloudWatchLogging,
         link: [bucket, queue, database, adminToken, ...upstreamRegistryAuthSecretLinks]
       });
 
@@ -177,6 +182,7 @@ export function createAnvilSstConfig(
           ANVIL_API_BASE_URL: adminApiBaseUrl,
           ADMIN_TOKEN: adminToken.value
         },
+        logging: cloudWatchLogging,
         link: [bucket, database, adminToken, ...upstreamRegistryAuthSecretLinks]
       });
 
@@ -198,6 +204,7 @@ export function createAnvilSstConfig(
           ...llmReviewEnvironment,
           LLM_REVIEW_API_KEY: llmReviewApiKey.value
         },
+        logging: cloudWatchLogging,
         link: [bucket, queue, database, llmReviewApiKey, ...upstreamRegistryAuthSecretLinks]
       });
 

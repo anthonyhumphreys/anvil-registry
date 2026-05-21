@@ -97,6 +97,7 @@ describe("SST infrastructure shape", () => {
         DATABASE_READY_ATTEMPTS: "60",
         DATABASE_READY_DELAY_MS: "1000"
       }),
+      logging: { retention: "1 month" },
       link: [expect.objectContaining({ type: "Postgres", name: "Database" })]
     });
 
@@ -114,6 +115,7 @@ describe("SST infrastructure shape", () => {
         PUBLIC_BASE_URL: "https://npm.example.test",
         ADMIN_TOKEN: "secret:AdminToken"
       }),
+      logging: { retention: "1 month" },
       link: expect.arrayContaining([
         expect.objectContaining({ type: "Bucket", name: "PackageCache" }),
         expect.objectContaining({ type: "Queue", name: "AnalysisQueue" }),
@@ -134,6 +136,7 @@ describe("SST infrastructure shape", () => {
         ANVIL_API_BASE_URL: "https://admin.example.test",
         ADMIN_TOKEN: "secret:AdminToken"
       }),
+      logging: { retention: "1 month" },
       link: expect.arrayContaining([
         expect.objectContaining({ type: "Bucket", name: "PackageCache" }),
         expect.objectContaining({ type: "Postgres", name: "Database" }),
@@ -151,6 +154,7 @@ describe("SST infrastructure shape", () => {
         ...llmReviewEnvironment,
         LLM_REVIEW_API_KEY: "secret:LlmReviewApiKey"
       }),
+      logging: { retention: "1 month" },
       link: expect.arrayContaining([
         expect.objectContaining({ type: "Bucket", name: "PackageCache" }),
         expect.objectContaining({ type: "Queue", name: "AnalysisQueue" }),
