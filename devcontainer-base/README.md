@@ -24,10 +24,11 @@ From the repo root:
 ```bash
 pnpm test:node-base
 pnpm smoke:node-base-image
+pnpm smoke:node-base-image-observed
 pnpm smoke:node-base-image-report
 ```
 
-`test:node-base` exercises the helper scripts against synthetic package trees and install logs. `smoke:node-base-image` builds the devcontainer image and verifies the runtime defaults that matter most: non-root user, safe npm config, helper command installation, and writable report directory. `smoke:node-base-image-report` runs report submission from inside the built image through the local Anvil Registry gateway, then verifies the persisted report through Admin and the CLI.
+`test:node-base` exercises the helper scripts against synthetic package trees and install logs. `smoke:node-base-image` builds the devcontainer image and verifies the runtime defaults that matter most: non-root user, safe npm config, helper command installation, and writable report directory. `smoke:node-base-image-observed` runs observed install mode inside the built image against a synthetic lifecycle-script dependency and verifies the generated IOC, lifecycle, and redacted environment reports. `smoke:node-base-image-report` runs report submission from inside the built image through the local Anvil Registry gateway, then verifies the persisted report through Admin and the CLI.
 
 ## Network Policy
 

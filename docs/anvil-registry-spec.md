@@ -1124,6 +1124,12 @@ Use the Node Base image smoke to verify that the devcontainer image builds, defa
 pnpm smoke:node-base-image
 ```
 
+Use the observed-mode image smoke to verify that the built Node Base image can run an install with lifecycle scripts explicitly enabled under `strace`, capture IOC/network evidence, write lifecycle and environment reports, and redact credential-shaped environment values:
+
+```bash
+pnpm smoke:node-base-image-observed
+```
+
 Use the image-to-registry smoke to verify that the built Node Base image can submit a generated report through the local gateway and that Admin/CLI can read the persisted report:
 
 ```bash

@@ -15,6 +15,7 @@
     "smoke:llm-review": "./scripts/smoke-llm-review",
     "smoke:local": "ANVIL_REGISTRY_URL=http://localhost:4873 ANVIL_ADMIN_URL=http://localhost:3000 pnpm --filter @anvil/cli dev -- smoke",
     "smoke:node-base-image": "./scripts/smoke-node-base-image",
+    "smoke:node-base-image-observed": "./scripts/smoke-node-base-image-observed",
     "smoke:node-base-image-report": "./scripts/smoke-node-base-image-report",
     "smoke:node-base-report": "./scripts/smoke-node-base-report",
     "sst:migrate": "pnpm --dir infra/sst sst shell -- pnpm --filter @anvil/infra-sst migrate:run",
