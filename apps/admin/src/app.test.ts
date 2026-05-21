@@ -513,6 +513,20 @@ describe("admin app", () => {
     await app.close();
   });
 
+  it("treats malformed admin cookies as unauthenticated", async () => {
+    const app = buildAdmin({ config: loadConfig({ ...process.env, ADMIN_TOKEN: "secret" }) });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/",
+      headers: { cookie: "anvil_admin_token=%E0%A4%A" }
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.body).toContain("Admin token required");
+    await app.close();
+  });
+
   it("renders and submits package LLM review requests through the gateway", async () => {
     const persistence = new MemoryPersistence();
     await seed(persistence);

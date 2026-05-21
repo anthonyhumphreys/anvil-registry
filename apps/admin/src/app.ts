@@ -1799,9 +1799,17 @@ function parseCookies(cookieHeader: string | undefined) {
   for (const part of cookieHeader?.split(";") ?? []) {
     const [name, ...valueParts] = part.trim().split("=");
     if (!name) continue;
-    cookies[name] = decodeURIComponent(valueParts.join("="));
+    cookies[name] = safeDecodeURIComponent(valueParts.join("="));
   }
   return cookies;
+}
+
+function safeDecodeURIComponent(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 function serializeCookie(
