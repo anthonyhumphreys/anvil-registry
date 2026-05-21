@@ -1,3 +1,4 @@
+import { ZodError } from "zod";
 import { describe, expect, it } from "vitest";
 import { loadConfig, resolveDatabaseUrl } from "./index.js";
 
@@ -84,6 +85,15 @@ describe("config", () => {
       { name: "npmjs", baseUrl: "https://registry.npmjs.org" },
       { name: "internal", baseUrl: "https://npm.pkg.example.test", scopes: ["@internal"], authToken: "secret-token" }
     ]);
+  });
+
+  it("reports malformed upstream registry JSON as a config validation error", () => {
+    expect(() =>
+      loadConfig({
+        ...process.env,
+        UPSTREAM_NPM_REGISTRIES_JSON: "{"
+      })
+    ).toThrow(ZodError);
   });
 
   it("defaults the admin API base URL to the public base URL", () => {

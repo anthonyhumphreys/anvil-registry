@@ -24,7 +24,11 @@ const jsonEnv = z.preprocess((value) => {
   if (typeof value !== "string") return value;
   const trimmed = value.trim();
   if (!trimmed) return undefined;
-  return JSON.parse(trimmed) as unknown;
+  try {
+    return JSON.parse(trimmed) as unknown;
+  } catch {
+    return value;
+  }
 }, z.unknown().optional());
 
 const upstreamRegistrySchema = z
