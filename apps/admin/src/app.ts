@@ -47,6 +47,17 @@ export function buildAdmin(dependencies: AdminDependencies = {}): FastifyInstanc
     const text = Buffer.isBuffer(body) ? body.toString("utf8") : body;
     done(null, Object.fromEntries(new URLSearchParams(text)));
   });
+  app.addHook("preHandler", async (request, reply) => {
+    const path = request.url.split("?")[0] ?? request.url;
+    if (!config.ADMIN_TOKEN || path === "/-/health" || path === "/-/admin/session" || path === "/-/admin/logout") return;
+    if (isAdminRequest(request.headers.authorization, request.headers.cookie, config.ADMIN_TOKEN)) return;
+
+    if (path.startsWith("/api/")) {
+      return reply.code(401).send({ error: "ANVIL_ADMIN_TOKEN_REQUIRED" });
+    }
+
+    return reply.code(401).type("text/html").send(page("Anvil Admin", `${adminSessionPanel(false, false, true)}<p class="empty">Admin token required.</p>`));
+  });
 
   app.get("/-/health", async () => ({ ok: true, service: "anvil-admin" }));
 

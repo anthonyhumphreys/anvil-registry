@@ -348,7 +348,7 @@ The admin UI provides human review and policy management.
 - Audit log.
 - Popular package index viewer.
 
-Admin exposes `GET /api/policy` and `/policy` so reviewers can inspect the runtime mode and effective deterministic policy. Policy editing is intentionally not part of this slice; config still comes from environment and deployment configuration.
+Admin exposes `GET /api/policy` and `/policy` so reviewers can inspect the runtime mode and effective deterministic policy. Policy editing is intentionally not part of this slice; config still comes from environment and deployment configuration. When `ADMIN_TOKEN` is configured, Admin pages and API routes require the bearer token or the local admin session cookie.
 
 Admin package review URLs must preserve scoped package names with URL encoding, for example `/packages/%40scope%2Fpkg/1.0.0`.
 

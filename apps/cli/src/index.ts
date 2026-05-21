@@ -341,7 +341,9 @@ async function overrides(args: string[], dependencies: CliDependencies): Promise
   addOptionalParam(params, "packageName", readFlag(args, "--package"));
   addOptionalParam(params, "version", readFlag(args, "--version"));
 
-  const result = await requestJson<{ overrides: OverrideRecord[] }>(dependencies, `${adminUrl}/api/overrides?${params.toString()}`);
+  const result = await requestJson<{ overrides: OverrideRecord[] }>(dependencies, `${adminUrl}/api/overrides?${params.toString()}`, {
+    headers: adminAuthHeader(dependencies.env)
+  });
   dependencies.stdout.write(`Overrides: ${result.overrides.length}\n`);
   if (result.overrides.length === 0) {
     dependencies.stdout.write("No overrides found.\n");
@@ -356,7 +358,9 @@ async function auditEvents(args: string[], dependencies: CliDependencies): Promi
   const params = new URLSearchParams({ limit: readFlag(args, "--limit") ?? "20" });
   addOptionalParam(params, "targetId", readFlag(args, "--target"));
 
-  const result = await requestJson<{ auditEvents: AuditEventRecord[] }>(dependencies, `${adminUrl}/api/audit-events?${params.toString()}`);
+  const result = await requestJson<{ auditEvents: AuditEventRecord[] }>(dependencies, `${adminUrl}/api/audit-events?${params.toString()}`, {
+    headers: adminAuthHeader(dependencies.env)
+  });
   dependencies.stdout.write(`Audit events: ${result.auditEvents.length}\n`);
   if (result.auditEvents.length === 0) {
     dependencies.stdout.write("No audit events found.\n");
@@ -368,7 +372,9 @@ async function auditEvents(args: string[], dependencies: CliDependencies): Promi
 
 async function popularIndexShow(_args: string[], dependencies: CliDependencies): Promise<number> {
   const adminUrl = adminBaseUrl(dependencies.env);
-  const index = await requestJson<PopularPackageIndex>(dependencies, `${adminUrl}/api/popular-package-index`);
+  const index = await requestJson<PopularPackageIndex>(dependencies, `${adminUrl}/api/popular-package-index`, {
+    headers: adminAuthHeader(dependencies.env)
+  });
   printPopularPackageIndex(index, dependencies);
   return 0;
 }
@@ -428,7 +434,8 @@ async function analysisReport(args: string[], dependencies: CliDependencies): Pr
   const query = params.toString();
   const result = await requestJson<{ report: AnalysisReportRecord }>(
     dependencies,
-    `${adminUrl}/api/reports/${encodeURIComponent(target.packageName)}/${encodeURIComponent(target.version)}${query ? `?${query}` : ""}`
+    `${adminUrl}/api/reports/${encodeURIComponent(target.packageName)}/${encodeURIComponent(target.version)}${query ? `?${query}` : ""}`,
+    { headers: adminAuthHeader(dependencies.env) }
   );
 
   printAnalysisReport(result.report, dependencies);
@@ -454,7 +461,8 @@ async function analysisReportCompare(args: string[], dependencies: CliDependenci
   const query = params.toString();
   const result = await requestJson<AnalysisReportComparisonResult>(
     dependencies,
-    `${adminUrl}/api/packages/${encodeURIComponent(target.packageName)}/${encodeURIComponent(target.version)}/reports/compare${query ? `?${query}` : ""}`
+    `${adminUrl}/api/packages/${encodeURIComponent(target.packageName)}/${encodeURIComponent(target.version)}/reports/compare${query ? `?${query}` : ""}`,
+    { headers: adminAuthHeader(dependencies.env) }
   );
 
   printAnalysisReportComparison(result, dependencies);
@@ -469,7 +477,9 @@ async function nodeBaseReports(args: string[], dependencies: CliDependencies): P
   const params = new URLSearchParams({ limit });
   if (reportType) params.set("reportType", reportType);
   if (risk) params.set("risk", risk);
-  const result = await requestJson<{ reports: NodeBaseReportRecord[] }>(dependencies, `${adminUrl}/api/node-base/reports?${params.toString()}`);
+  const result = await requestJson<{ reports: NodeBaseReportRecord[] }>(dependencies, `${adminUrl}/api/node-base/reports?${params.toString()}`, {
+    headers: adminAuthHeader(dependencies.env)
+  });
   const reports = result.reports ?? [];
 
   dependencies.stdout.write(`Node Base reports: ${reports.length}${reportType ? ` (${reportType})` : ""}${risk ? ` risk=${risk}` : ""}\n`);
@@ -490,7 +500,9 @@ async function nodeBaseReport(args: string[], dependencies: CliDependencies): Pr
   const id = args[0];
   if (!id) throw new Error("Usage: anvil node-base report <id>");
   const adminUrl = adminBaseUrl(dependencies.env);
-  const result = await requestJson<{ report: NodeBaseReportRecord }>(dependencies, `${adminUrl}/api/node-base/reports/${encodeURIComponent(id)}`);
+  const result = await requestJson<{ report: NodeBaseReportRecord }>(dependencies, `${adminUrl}/api/node-base/reports/${encodeURIComponent(id)}`, {
+    headers: adminAuthHeader(dependencies.env)
+  });
   printNodeBaseReport(result.report, dependencies);
   return nodeBaseReportRisk(result.report).high > 0 ? 1 : 0;
 }

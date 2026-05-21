@@ -46,10 +46,10 @@ ANVIL_PROJECT_NAME="$PROJECT_NAME" \
 ANVIL_REPORT_SOURCE="anvil-node-base-smoke" \
   "$ROOT_DIR/devcontainer-base/scripts/anvil-submit-report" "$REPORT_PATH" network
 
-REPORT_ID="$(node - "$ADMIN_URL" "$PROJECT_NAME" <<'NODE'
-const [adminUrl, projectName] = process.argv.slice(2);
+REPORT_ID="$(node - "$ADMIN_URL" "$ADMIN_TOKEN" "$PROJECT_NAME" <<'NODE'
+const [adminUrl, adminToken, projectName] = process.argv.slice(2);
 const endpoint = `${adminUrl.replace(/\/+$/, "")}/api/node-base/reports?reportType=network&limit=50`;
-const response = await fetch(endpoint);
+const response = await fetch(endpoint, { headers: { authorization: `Bearer ${adminToken}` } });
 if (!response.ok) {
   console.error(`[anvil] Failed to query Admin reports: ${response.status} ${response.statusText}`);
   process.exit(1);
@@ -67,7 +67,7 @@ NODE
 echo "[anvil] Admin API found report $REPORT_ID"
 
 LIST_OUTPUT="$(
-  ANVIL_ADMIN_URL="$ADMIN_URL" pnpm --dir "$ROOT_DIR" --filter @anvil/cli dev -- node-base reports --type network --limit 50
+  ANVIL_ADMIN_URL="$ADMIN_URL" ANVIL_ADMIN_TOKEN="$ADMIN_TOKEN" pnpm --dir "$ROOT_DIR" --filter @anvil/cli dev -- node-base reports --type network --limit 50
 )"
 if [[ "$LIST_OUTPUT" != *"$PROJECT_NAME"* ]]; then
   echo "$LIST_OUTPUT"
@@ -76,7 +76,7 @@ if [[ "$LIST_OUTPUT" != *"$PROJECT_NAME"* ]]; then
 fi
 
 DETAIL_OUTPUT="$(
-  ANVIL_ADMIN_URL="$ADMIN_URL" pnpm --dir "$ROOT_DIR" --filter @anvil/cli dev -- node-base report "$REPORT_ID"
+  ANVIL_ADMIN_URL="$ADMIN_URL" ANVIL_ADMIN_TOKEN="$ADMIN_TOKEN" pnpm --dir "$ROOT_DIR" --filter @anvil/cli dev -- node-base report "$REPORT_ID"
 )"
 if [[ "$DETAIL_OUTPUT" != *"NON_STANDARD_PORT"* || "$DETAIL_OUTPUT" != *"198.51.100.10:8080"* ]]; then
   echo "$DETAIL_OUTPUT"

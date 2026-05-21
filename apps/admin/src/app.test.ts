@@ -26,7 +26,7 @@ describe("admin app", () => {
     await seed(persistence);
     const app = buildAdmin({ config: loadConfig({ ...process.env, ADMIN_TOKEN: "secret" }), persistence });
 
-    const response = await app.inject({ method: "GET", url: "/" });
+    const response = await app.inject({ method: "GET", url: "/", headers: { authorization: "Bearer secret" } });
 
     expect(response.statusCode).toBe(200);
     expect(response.headers["content-type"]).toContain("text/html");
@@ -71,6 +71,24 @@ describe("admin app", () => {
     expect(popularPackageIndex.json().knownConfusions).toMatchObject({ loadash: "lodash" });
     expect(auditEvents.json().auditEvents).toHaveLength(1);
     expect(filteredAuditEvents.json().auditEvents).toHaveLength(1);
+    await app.close();
+  });
+
+  it("requires the admin token for admin pages and APIs when configured", async () => {
+    const persistence = new MemoryPersistence();
+    await seed(persistence);
+    const app = buildAdmin({ config: loadConfig({ ...process.env, ADMIN_TOKEN: "secret" }), persistence });
+
+    const apiRejected = await app.inject({ method: "GET", url: "/api/reports" });
+    const pageRejected = await app.inject({ method: "GET", url: "/" });
+    const apiAccepted = await app.inject({ method: "GET", url: "/api/reports", headers: { authorization: "Bearer secret" } });
+
+    expect(apiRejected.statusCode).toBe(401);
+    expect(apiRejected.json()).toMatchObject({ error: "ANVIL_ADMIN_TOKEN_REQUIRED" });
+    expect(pageRejected.statusCode).toBe(401);
+    expect(pageRejected.body).toContain("Admin token required");
+    expect(apiAccepted.statusCode).toBe(200);
+    expect(apiAccepted.json().reports).toHaveLength(1);
     await app.close();
   });
 
@@ -142,7 +160,7 @@ describe("admin app", () => {
         knownConfusions: { "rea1-package": "real-package" }
       }
     });
-    const index = await app.inject({ method: "GET", url: "/api/popular-package-index" });
+    const index = await app.inject({ method: "GET", url: "/api/popular-package-index", headers: { authorization: "Bearer secret" } });
 
     expect(rejected.statusCode).toBe(401);
     expect(invalid.statusCode).toBe(400);
@@ -461,7 +479,8 @@ describe("admin app", () => {
       payload: "packageName=form-pkg&version=1.0.0"
     });
 
-    expect(dashboard.body).toContain("Unlock Overrides");
+    expect(dashboard.statusCode).toBe(401);
+    expect(dashboard.body).toContain("Admin token required");
     expect(session.statusCode).toBe(302);
     expect(String(cookie)).toContain("anvil_admin_token=");
     expect(created.statusCode).toBe(201);
