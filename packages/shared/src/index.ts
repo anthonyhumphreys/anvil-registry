@@ -72,6 +72,10 @@ const optionalTrimmedString = (max: number) =>
     const trimmed = value.trim();
     return trimmed.length > 0 ? trimmed : undefined;
   }, z.string().max(max).optional());
+const packageNameString = () => requiredTrimmedString(214).refine(isValidPackageName, { message: "Invalid npm package name." });
+const optionalPackageNameString = () => optionalTrimmedString(214).refine((value) => value === undefined || isValidPackageName(value), { message: "Invalid npm package name." });
+const versionRefString = () => requiredTrimmedString(128).refine(isValidVersionRef, { message: "Invalid package version or dist-tag." });
+const optionalVersionRefString = () => optionalTrimmedString(128).refine((value) => value === undefined || isValidVersionRef(value), { message: "Invalid package version or dist-tag." });
 
 export const analysisJobReasonSchema = z.enum(["metadata_request", "tarball_request", "lockfile_scan", "manual_review"]);
 export type AnalysisJobReason = z.infer<typeof analysisJobReasonSchema>;
@@ -82,8 +86,8 @@ export type AnalysisJobPriority = z.infer<typeof analysisJobPrioritySchema>;
 export const analysisJobSchema = z
   .object({
     id: optionalTrimmedString(128),
-    packageName: requiredTrimmedString(214),
-    version: requiredTrimmedString(128),
+    packageName: packageNameString(),
+    version: versionRefString(),
     requestedBy: optionalTrimmedString(200),
     reason: analysisJobReasonSchema,
     priority: analysisJobPrioritySchema,
@@ -96,8 +100,8 @@ export type AnalysisJob = z.infer<typeof analysisJobSchema>;
 
 export const packageTargetSchema = z
   .object({
-    packageName: requiredTrimmedString(214),
-    version: optionalTrimmedString(128)
+    packageName: packageNameString(),
+    version: optionalVersionRefString()
   })
   .strict();
 
@@ -105,8 +109,8 @@ export type PackageTarget = z.infer<typeof packageTargetSchema>;
 
 export const packageTargetRequestSchema = z
   .object({
-    packageName: optionalTrimmedString(214),
-    version: optionalTrimmedString(128),
+    packageName: optionalPackageNameString(),
+    version: optionalVersionRefString(),
     targets: z.array(packageTargetSchema).max(100).optional(),
     reason: analysisJobReasonSchema.optional(),
     priority: analysisJobPrioritySchema.optional(),
@@ -127,8 +131,8 @@ export type LlmReviewRequestBody = z.infer<typeof llmReviewRequestBodySchema>;
 
 export const overrideCreateRequestSchema = z
   .object({
-    packageName: requiredTrimmedString(214),
-    version: optionalTrimmedString(128),
+    packageName: packageNameString(),
+    version: optionalVersionRefString(),
     action: policyActionSchema.default("allow"),
     reason: requiredTrimmedString(1000),
     approvedBy: optionalTrimmedString(200),
@@ -140,8 +144,8 @@ export type OverrideCreateRequest = z.infer<typeof overrideCreateRequestSchema>;
 
 export const overrideRevokeRequestSchema = z
   .object({
-    packageName: requiredTrimmedString(214),
-    version: optionalTrimmedString(128),
+    packageName: packageNameString(),
+    version: optionalVersionRefString(),
     revokedBy: optionalTrimmedString(200)
   })
   .strict();
@@ -157,6 +161,14 @@ export function resolveOverrideExpiry(expiresAt: string | undefined, defaultExpi
 
   if (defaultExpiryDays <= 0) return undefined;
   return new Date(now + defaultExpiryDays * 24 * 60 * 60 * 1000).toISOString();
+}
+
+function isValidPackageName(value: string) {
+  return /^(?:@[A-Za-z0-9][A-Za-z0-9._~-]*\/)?[A-Za-z0-9][A-Za-z0-9._~-]*$/.test(value);
+}
+
+function isValidVersionRef(value: string) {
+  return /^[A-Za-z0-9][A-Za-z0-9._+~-]*$/.test(value);
 }
 
 export type PolicyConfig = {

@@ -85,6 +85,8 @@ describe("override request schemas", () => {
   it("rejects invalid override create requests", () => {
     expect(overrideCreateRequestSchema.safeParse({ packageName: "pkg", reason: "intentional", action: "approve" }).success).toBe(false);
     expect(overrideCreateRequestSchema.safeParse({ packageName: "", reason: "intentional" }).success).toBe(false);
+    expect(overrideCreateRequestSchema.safeParse({ packageName: "../pkg", reason: "intentional" }).success).toBe(false);
+    expect(overrideCreateRequestSchema.safeParse({ packageName: "@scope/pkg", version: "../latest", reason: "intentional" }).success).toBe(false);
     expect(overrideCreateRequestSchema.safeParse({ packageName: "pkg", reason: "" }).success).toBe(false);
   });
 
@@ -119,6 +121,10 @@ describe("package target request schema", () => {
   it("rejects malformed package target requests", () => {
     expect(packageTargetRequestSchema.safeParse({ targets: [null] }).success).toBe(false);
     expect(packageTargetRequestSchema.safeParse({ targets: [{ packageName: "" }] }).success).toBe(false);
+    expect(packageTargetRequestSchema.safeParse({ targets: [{ packageName: "@scope" }] }).success).toBe(false);
+    expect(packageTargetRequestSchema.safeParse({ targets: [{ packageName: "@scope/pkg/extra" }] }).success).toBe(false);
+    expect(packageTargetRequestSchema.safeParse({ packageName: "../pkg" }).success).toBe(false);
+    expect(packageTargetRequestSchema.safeParse({ packageName: "pkg", version: "1.0.0/evil" }).success).toBe(false);
     expect(packageTargetRequestSchema.safeParse({ packageName: "pkg", priority: "urgent" }).success).toBe(false);
     expect(packageTargetRequestSchema.safeParse({ packageName: "pkg", unexpected: true }).success).toBe(false);
   });
@@ -151,6 +157,9 @@ describe("analysis job schema", () => {
 
   it("rejects malformed analysis jobs", () => {
     expect(analysisJobSchema.safeParse({ version: "1.0.0", reason: "metadata_request", priority: "normal", createdAt: "now" }).success).toBe(false);
+    expect(
+      analysisJobSchema.safeParse({ packageName: "pkg/extra", version: "1.0.0", reason: "metadata_request", priority: "normal", createdAt: "now" }).success
+    ).toBe(false);
     expect(
       analysisJobSchema.safeParse({ packageName: "pkg", version: "1.0.0", reason: "whatever", priority: "normal", createdAt: "now" }).success
     ).toBe(false);
