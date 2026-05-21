@@ -71,6 +71,43 @@ JSON
   test -s reports/dependency-report.md
 )
 
+mkdir -p "$WORK_DIR/safe-bin"
+cat > "$WORK_DIR/safe-bin/npm" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$*" != "ci --ignore-scripts" ]]; then
+  echo "[anvil-test] expected npm ci --ignore-scripts, got: $*" >&2
+  exit 64
+fi
+touch "$ANVIL_SAFE_NPM_CALLED"
+SH
+chmod +x "$WORK_DIR/safe-bin/npm"
+
+(
+  cd "$WORK_DIR/project"
+  ANVIL_REPORT_DIR="$WORK_DIR/safe-reports" \
+  ANVIL_SAFE_NPM_CALLED="$WORK_DIR/safe-npm-called" \
+  PATH="$WORK_DIR/safe-bin:$PATH" \
+    anvil-npm-ci-safe >/tmp/anvil-npm-ci-safe.out
+)
+test -e "$WORK_DIR/safe-npm-called"
+assert_jq '.summary.packagesWithLifecycleScripts == 2' "$WORK_DIR/safe-reports/lifecycle-scripts.json"
+
+set +e
+(
+  cd "$WORK_DIR/project"
+  ANVIL_STRICT=true \
+  ANVIL_REPORT_DIR="$WORK_DIR/safe-strict-reports" \
+  ANVIL_SAFE_NPM_CALLED="$WORK_DIR/safe-strict-npm-called" \
+  PATH="$WORK_DIR/safe-bin:$PATH" \
+    anvil-npm-ci-safe >/tmp/anvil-npm-ci-safe-strict.out
+)
+SAFE_STRICT_STATUS=$?
+set -e
+test "$SAFE_STRICT_STATUS" = "20"
+test -e "$WORK_DIR/safe-strict-npm-called"
+assert_jq '.summary.packagesWithLifecycleScripts == 2' "$WORK_DIR/safe-strict-reports/lifecycle-scripts.json"
+
 mkdir -p "$WORK_DIR/logs"
 cat > "$WORK_DIR/logs/npm-install.log" <<'LOG'
 > bad-pkg@1.0.0 install
