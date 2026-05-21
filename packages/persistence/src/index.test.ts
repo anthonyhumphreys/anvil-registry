@@ -8,10 +8,11 @@ describe("MemoryPersistence", () => {
   it("loads checked-in Drizzle migrations", () => {
     const migrations = readMigrationFiles({ migrationsFolder: resolve(dirname(fileURLToPath(import.meta.url)), "../drizzle") });
 
-    expect(migrations).toHaveLength(1);
+    expect(migrations).toHaveLength(2);
     expect(migrations[0]?.sql.join("\n")).toContain("CREATE TABLE IF NOT EXISTS packages");
     expect(migrations[0]?.sql.join("\n")).toContain("CREATE UNIQUE INDEX IF NOT EXISTS analysis_reports_identity_idx");
-    expect(migrations[0]?.sql.join("\n")).toContain("CREATE TABLE IF NOT EXISTS policy_configs");
+    expect(migrations[1]?.sql.join("\n")).toContain("CREATE TABLE IF NOT EXISTS policy_configs");
+    expect(migrations[1]?.sql.join("\n")).toContain("CREATE UNIQUE INDEX IF NOT EXISTS policy_configs_name_version_idx");
   });
 
   it("stores package versions and preserves existing fields on partial updates", async () => {
