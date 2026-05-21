@@ -204,6 +204,43 @@ alias-left-pad@npm:left-pad@^1.3.0:
     await expect(run(["--", "doctor"], dependencies)).resolves.toBe(0);
   });
 
+  it("prints readiness component failures from doctor", async () => {
+    const writes: string[] = [];
+    const dependencies = fakeDependencies({
+      fetch: vi.fn(async (url: string) => {
+        if (url.endsWith("/-/health")) return jsonResponse({ ok: true });
+        if (url.endsWith("/-/ready")) {
+          return new Response(
+            JSON.stringify({
+              ok: false,
+              upstream: "https://registry.npmjs.org",
+              checks: [
+                { component: "persistence", ok: true },
+                { component: "queue", ok: false, error: "queue unavailable" }
+              ]
+            }),
+            { status: 503, headers: { "content-type": "application/json" } }
+          );
+        }
+        return jsonResponse({ runtimeMode: "ci" });
+      }) as unknown as typeof globalThis.fetch,
+      stdout: {
+        write: (value: string) => {
+          writes.push(value);
+          return true;
+        }
+      }
+    });
+
+    const exitCode = await run(["doctor"], dependencies);
+
+    expect(exitCode).toBe(1);
+    expect(writes.join("")).toContain("Anvil gateway: not ready");
+    expect(writes.join("")).toContain("Readiness checks:");
+    expect(writes.join("")).toContain("- persistence: ok");
+    expect(writes.join("")).toContain("- queue: failed (queue unavailable)");
+  });
+
   it("reports non-JSON failed responses with their HTTP status", async () => {
     const dependencies = fakeDependencies({
       fetch: vi.fn(async () => new Response("upstream unavailable", { status: 502, statusText: "Bad Gateway" }))

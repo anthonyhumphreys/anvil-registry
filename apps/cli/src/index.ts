@@ -240,16 +240,23 @@ function parsePackageJson(content: string): PackageTarget[] {
 
 async function doctor(dependencies: CliDependencies): Promise<number> {
   const registryUrl = registryBaseUrl(dependencies.env);
-  const [health, ready, policy] = await Promise.all([
+  const [health, readyResponse, policy] = await Promise.all([
     requestJson<{ ok: boolean }>(dependencies, `${registryUrl}/-/health`),
-    requestJson<{ ok: boolean; upstream: string }>(dependencies, `${registryUrl}/-/ready`),
+    requestJsonWithStatus<ReadinessResponse>(dependencies, `${registryUrl}/-/ready`),
     requestJson<{ runtimeMode: string }>(dependencies, `${registryUrl}/-/anvil/policy`)
   ]);
+  const ready = readyResponse.body;
 
   dependencies.stdout.write(`Anvil gateway: ${health.ok && ready.ok ? "ok" : "not ready"}\n`);
   dependencies.stdout.write(`Registry: ${registryUrl}\n`);
   dependencies.stdout.write(`Runtime mode: ${policy.runtimeMode}\n`);
-  dependencies.stdout.write(`Upstream: ${ready.upstream}\n`);
+  dependencies.stdout.write(`Upstream: ${ready.upstream ?? "(unknown)"}\n`);
+  if (ready.checks?.length) {
+    dependencies.stdout.write("Readiness checks:\n");
+    for (const check of ready.checks) {
+      dependencies.stdout.write(`- ${check.component}: ${check.ok ? "ok" : `failed${check.error ? ` (${check.error})` : ""}`}\n`);
+    }
+  }
   return health.ok && ready.ok ? 0 : 1;
 }
 
@@ -823,6 +830,14 @@ async function requestJson<T = unknown>(dependencies: CliDependencies, url: stri
   return body as T;
 }
 
+async function requestJsonWithStatus<T = unknown>(dependencies: CliDependencies, url: string, init?: RequestInit): Promise<{ status: number; ok: boolean; body: T }> {
+  const response = await dependencies.fetch(url, init);
+  const bodyText = await response.text();
+  const body = parseJsonBody(bodyText);
+  if (bodyText && body === undefined) throw new Error(`Anvil request returned invalid JSON (${response.status}).`);
+  return { status: response.status, ok: response.ok, body: body as T };
+}
+
 function parseJsonBody(bodyText: string): unknown | undefined {
   if (!bodyText) return undefined;
   try {
@@ -947,6 +962,16 @@ type AnalysisQueueStats = {
   completed?: number;
   totalPending: number;
   checkedAt: string;
+};
+
+type ReadinessResponse = {
+  ok: boolean;
+  upstream?: string;
+  checks?: Array<{
+    component: string;
+    ok: boolean;
+    error?: string;
+  }>;
 };
 
 function isGatewayTarballUrl(tarballUrl: string, registryUrl: string, packageName: string): boolean {
