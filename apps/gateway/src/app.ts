@@ -8,6 +8,7 @@ import {
   type DownloadStatsClient,
   NpmDownloadsClient,
   NpmRegistryClient,
+  NpmRegistryRouter,
   resolveVersionFromTarballName,
   rewriteMetadataTarballs,
   filterMetadataVersions,
@@ -57,10 +58,7 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
   });
   const registry =
     dependencies.registry ??
-    new NpmRegistryClient({
-      name: "npmjs",
-      baseUrl: config.UPSTREAM_NPM_REGISTRY
-    });
+    new NpmRegistryRouter(config.UPSTREAM_NPM_REGISTRIES);
   const downloadStats = dependencies.downloadStats ?? new NpmDownloadsClient({ baseUrl: config.NPM_DOWNLOADS_API });
 
   const app = Fastify({ logger: { name: "anvil-gateway" } });
@@ -69,8 +67,9 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
   app.get("/-/ready", async (_request, reply) => {
     const checks = await readinessChecks();
     const ok = checks.every((check) => check.ok);
-    if (!ok) return reply.code(503).send({ ok, upstream: config.UPSTREAM_NPM_REGISTRY, checks });
-    return { ok, upstream: config.UPSTREAM_NPM_REGISTRY, checks };
+    const upstreamRegistries = upstreamRegistrySummaries(config);
+    if (!ok) return reply.code(503).send({ ok, upstream: config.UPSTREAM_NPM_REGISTRY, upstreamRegistries, checks });
+    return { ok, upstream: config.UPSTREAM_NPM_REGISTRY, upstreamRegistries, checks };
   });
   app.get("/-/anvil/policy", async () => ({ runtimeMode: config.RUNTIME_MODE, policy: config.policy, policyConfig: await recordEffectivePolicyConfig() }));
   app.get("/-/anvil/queue", async (request, reply) => {
@@ -630,6 +629,10 @@ function isFreshMetadata(updatedAt: string | undefined, ttlSeconds: number) {
   const updatedAtMs = Date.parse(updatedAt);
   if (Number.isNaN(updatedAtMs)) return false;
   return Date.now() - updatedAtMs <= ttlSeconds * 1000;
+}
+
+function upstreamRegistrySummaries(config: AnvilConfig) {
+  return config.UPSTREAM_NPM_REGISTRIES.map(({ name, baseUrl, scopes }) => ({ name, baseUrl, scopes: scopes ?? [] }));
 }
 
 function analysisTargetsFromBody(body: PackageTargetRequest) {

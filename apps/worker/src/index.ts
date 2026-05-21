@@ -1,7 +1,7 @@
 import { loadConfig } from "@anvil/config";
 import { createLogger } from "@anvil/logger";
 import { loadActivePopularPackageIndex } from "@anvil/name-squatting";
-import { NpmDownloadsClient, NpmRegistryClient } from "@anvil/npm-registry";
+import { NpmDownloadsClient, NpmRegistryRouter } from "@anvil/npm-registry";
 import { createObjectStore } from "@anvil/object-store";
 import { createPersistence } from "@anvil/persistence";
 import { createBullMqAnalysisWorker, createJobQueue, createSqsAnalysisWorker, type AnalysisWorkerHandle } from "@anvil/queue";
@@ -13,7 +13,7 @@ const logger = createLogger("anvil-worker");
 export async function runWorkerCli(argv: string[] = process.argv.slice(2)): Promise<number> {
   try {
     const config = loadConfig();
-    const registry = new NpmRegistryClient({ name: "npmjs", baseUrl: config.UPSTREAM_NPM_REGISTRY });
+    const registry = new NpmRegistryRouter(config.UPSTREAM_NPM_REGISTRIES);
     const downloadStats = new NpmDownloadsClient({ baseUrl: config.NPM_DOWNLOADS_API });
     const persistence = createPersistence(config);
     const command = argv[0];
@@ -46,7 +46,7 @@ export async function runWorkerCli(argv: string[] = process.argv.slice(2)): Prom
 
 export async function startWorker(): Promise<AnalysisWorkerHandle | undefined> {
   const config = loadConfig();
-  const registry = new NpmRegistryClient({ name: "npmjs", baseUrl: config.UPSTREAM_NPM_REGISTRY });
+  const registry = new NpmRegistryRouter(config.UPSTREAM_NPM_REGISTRIES);
   const downloadStats = new NpmDownloadsClient({ baseUrl: config.NPM_DOWNLOADS_API });
   const persistence = createPersistence(config);
 

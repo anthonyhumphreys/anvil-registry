@@ -47,6 +47,7 @@ export default $config({
       QUEUE_DRIVER: "sqs",
       ANALYSIS_QUEUE_URL: queue.url,
       UPSTREAM_NPM_REGISTRY: "https://registry.npmjs.org",
+      UPSTREAM_NPM_REGISTRIES_JSON: process.env.UPSTREAM_NPM_REGISTRIES_JSON ?? "",
       NPM_DOWNLOADS_API: "https://api.npmjs.org/downloads",
       ...databaseEnvironment
     };

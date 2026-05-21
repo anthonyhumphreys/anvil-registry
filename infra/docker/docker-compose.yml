@@ -21,6 +21,7 @@ services:
       S3_SECRET_ACCESS_KEY: miniopassword
       AWS_REGION: us-east-1
       UPSTREAM_NPM_REGISTRY: https://registry.npmjs.org
+      UPSTREAM_NPM_REGISTRIES_JSON: ${UPSTREAM_NPM_REGISTRIES_JSON:-}
       NPM_DOWNLOADS_API: https://api.npmjs.org/downloads
       LLM_REVIEW_ENABLED: ${LLM_REVIEW_ENABLED:-false}
       LLM_REVIEW_PROVIDER: ${LLM_REVIEW_PROVIDER:-}
@@ -67,6 +68,7 @@ services:
       S3_SECRET_ACCESS_KEY: miniopassword
       AWS_REGION: us-east-1
       UPSTREAM_NPM_REGISTRY: https://registry.npmjs.org
+      UPSTREAM_NPM_REGISTRIES_JSON: ${UPSTREAM_NPM_REGISTRIES_JSON:-}
       NPM_DOWNLOADS_API: https://api.npmjs.org/downloads
       LLM_REVIEW_ENABLED: ${LLM_REVIEW_ENABLED:-false}
       LLM_REVIEW_PROVIDER: ${LLM_REVIEW_PROVIDER:-}

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { NpmDownloadsClient, encodePackagePath, rewriteMetadataTarballs, toVersionMetadata } from "./index.js";
+import { NpmDownloadsClient, NpmRegistryRouter, encodePackagePath, rewriteMetadataTarballs, toVersionMetadata } from "./index.js";
 
 describe("npm registry helpers", () => {
   afterEach(() => {
@@ -38,6 +38,42 @@ describe("npm registry helpers", () => {
     await expect(client.getWeeklyDownloads("@scope/pkg")).resolves.toBe(42);
 
     expect(fetch).toHaveBeenCalledWith("https://api.npmjs.org/downloads/point/last-week/%40scope%2Fpkg");
+  });
+
+  it("routes scoped package metadata to matching upstream registries", async () => {
+    const fetch = vi.fn(async (url: string) => Response.json({ name: url.includes("npm.pkg.example.test") ? "@internal/pkg" : "left-pad" }));
+    vi.stubGlobal("fetch", fetch);
+    const router = new NpmRegistryRouter([
+      { name: "npmjs", baseUrl: "https://registry.npmjs.org" },
+      { name: "internal", baseUrl: "https://npm.pkg.example.test", scopes: ["@internal"], authToken: "secret" }
+    ]);
+
+    await expect(router.fetchMetadata("@internal/pkg")).resolves.toMatchObject({ name: "@internal/pkg" });
+    await expect(router.fetchMetadata("left-pad")).resolves.toMatchObject({ name: "left-pad" });
+
+    expect(fetch).toHaveBeenNthCalledWith(
+      1,
+      "https://npm.pkg.example.test/%40internal/pkg",
+      expect.objectContaining({ headers: { authorization: "Bearer secret" } })
+    );
+    expect(fetch).toHaveBeenNthCalledWith(2, "https://registry.npmjs.org/left-pad", expect.objectContaining({ headers: undefined }));
+    expect(router.resolveRegistryName("@internal/pkg")).toBe("internal");
+  });
+
+  it("uses registry-matched credentials when fetching tarballs", async () => {
+    const fetch = vi.fn(async () => new Response(new Uint8Array([1, 2, 3])));
+    vi.stubGlobal("fetch", fetch);
+    const router = new NpmRegistryRouter([
+      { name: "npmjs", baseUrl: "https://registry.npmjs.org" },
+      { name: "internal", baseUrl: "https://npm.pkg.example.test/npm/", scopes: ["@internal"], authToken: "secret" }
+    ]);
+
+    await expect(router.fetchTarball("https://npm.pkg.example.test/npm/@internal/pkg/-/pkg-1.0.0.tgz")).resolves.toEqual(new Uint8Array([1, 2, 3]));
+
+    expect(fetch).toHaveBeenCalledWith(
+      "https://npm.pkg.example.test/npm/@internal/pkg/-/pkg-1.0.0.tgz",
+      expect.objectContaining({ headers: { authorization: "Bearer secret" } })
+    );
   });
 
   it("treats missing download stats as unavailable", async () => {

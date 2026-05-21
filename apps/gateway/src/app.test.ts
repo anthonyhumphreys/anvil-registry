@@ -39,6 +39,7 @@ describe("gateway policy enforcement", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({
       ok: true,
+      upstreamRegistries: [{ name: "npmjs", baseUrl: "https://registry.npmjs.org", scopes: [] }],
       checks: [
         { component: "persistence", ok: true },
         { component: "objectStore", ok: true },

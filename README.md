@@ -47,6 +47,17 @@ The defaults use in-memory adapters unless environment variables select Postgres
 
 Gateway metadata responses are cached in persistence and refreshed after `NPM_METADATA_CACHE_TTL_SECONDS` seconds. The default is `300`; set it to `0` to force every metadata request back to the upstream registry during debugging.
 
+By default Anvil proxies npmjs via `UPSTREAM_NPM_REGISTRY`. For scoped/private registries, set `UPSTREAM_NPM_REGISTRIES_JSON` to a JSON array such as:
+
+```json
+[
+  { "name": "npmjs", "baseUrl": "https://registry.npmjs.org" },
+  { "name": "internal", "baseUrl": "https://npm.pkg.github.com", "scopes": ["@my-org"], "authToken": "token" }
+]
+```
+
+Scoped metadata and tarball fetches use the matching upstream and bearer token while public packages continue through the default registry.
+
 ## Docker Compose
 
 Start the local stack:

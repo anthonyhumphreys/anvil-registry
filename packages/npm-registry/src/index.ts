@@ -76,6 +76,42 @@ export class NpmRegistryClient {
   }
 }
 
+export class NpmRegistryRouter {
+  private readonly clients: Array<{ config: UpstreamRegistryConfig; client: NpmRegistryClient }>;
+
+  constructor(configs: UpstreamRegistryConfig[]) {
+    if (configs.length === 0) throw new Error("At least one upstream npm registry is required.");
+    this.clients = configs.map((config) => ({ config, client: new NpmRegistryClient(config) }));
+  }
+
+  async fetchMetadata(packageName: string): Promise<NpmPackageMetadata> {
+    return this.clientForPackage(packageName).fetchMetadata(packageName);
+  }
+
+  async fetchTarball(tarballUrl: string): Promise<Uint8Array> {
+    return this.clientForTarballUrl(tarballUrl).fetchTarball(tarballUrl);
+  }
+
+  resolveRegistryName(packageName: string): string {
+    return this.registryForPackage(packageName).config.name;
+  }
+
+  private clientForPackage(packageName: string): NpmRegistryClient {
+    return this.registryForPackage(packageName).client;
+  }
+
+  private registryForPackage(packageName: string) {
+    const scope = packageName.startsWith("@") ? packageName.split("/")[0] : undefined;
+    const scoped = scope ? this.clients.find(({ config }) => config.scopes?.includes(scope)) : undefined;
+    return scoped ?? this.clients.find(({ config }) => !config.scopes?.length) ?? this.clients[0]!;
+  }
+
+  private clientForTarballUrl(tarballUrl: string): NpmRegistryClient {
+    const matching = this.clients.find(({ config }) => isRegistryUrl(tarballUrl, config.baseUrl));
+    return matching?.client ?? this.clients[0]!.client;
+  }
+}
+
 export class NpmDownloadsClient implements DownloadStatsClient {
   constructor(private readonly config: NpmDownloadsClientConfig) {}
 
@@ -236,4 +272,15 @@ export function tarballProxyUrl(publicBaseUrl: string, packageName: string, upst
 
 function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, "");
+}
+
+function isRegistryUrl(candidate: string, baseUrl: string): boolean {
+  try {
+    const candidateUrl = new URL(candidate);
+    const base = trimTrailingSlash(baseUrl);
+    const baseUrlObject = new URL(`${base}/`);
+    return candidateUrl.origin === baseUrlObject.origin && candidateUrl.pathname.startsWith(baseUrlObject.pathname);
+  } catch {
+    return false;
+  }
 }

@@ -20,6 +20,22 @@ const optionalEnvUrl = z.preprocess((value) => {
   return trimmed.length > 0 ? trimmed : undefined;
 }, z.string().url().optional());
 
+const jsonEnv = z.preprocess((value) => {
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  return JSON.parse(trimmed) as unknown;
+}, z.unknown().optional());
+
+const upstreamRegistrySchema = z
+  .object({
+    name: z.string().trim().min(1),
+    baseUrl: z.string().url(),
+    scopes: z.array(z.string().trim().regex(/^@[^/\s]+$/)).optional(),
+    authToken: optionalEnvString
+  })
+  .strict();
+
 const envSchema = z.object({
   RUNTIME_MODE: runtimeModeSchema.default("development"),
   HOST: z.string().default("0.0.0.0"),
@@ -27,6 +43,7 @@ const envSchema = z.object({
   PUBLIC_BASE_URL: z.string().url().default("http://localhost:4873"),
   ANVIL_API_BASE_URL: optionalEnvUrl,
   UPSTREAM_NPM_REGISTRY: z.string().url().default("https://registry.npmjs.org"),
+  UPSTREAM_NPM_REGISTRIES_JSON: jsonEnv.pipe(z.array(upstreamRegistrySchema).min(1).optional()),
   NPM_DOWNLOADS_API: z.string().url().default("https://api.npmjs.org/downloads"),
   NPM_METADATA_CACHE_TTL_SECONDS: z.coerce.number().int().min(0).default(300),
   CACHE_DIR: z.string().default(".anvil/cache"),
@@ -124,6 +141,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     ...parsed,
     ADMIN_TOKEN: parsed.ANVIL_ADMIN_TOKEN ?? parsed.ADMIN_TOKEN,
     ANVIL_API_BASE_URL: parsed.ANVIL_API_BASE_URL ?? parsed.PUBLIC_BASE_URL,
+    UPSTREAM_NPM_REGISTRIES: parsed.UPSTREAM_NPM_REGISTRIES_JSON ?? [{ name: "npmjs", baseUrl: parsed.UPSTREAM_NPM_REGISTRY }],
     DATABASE_URL: databaseUrl,
     policy: {
       ...defaultPolicyConfig,

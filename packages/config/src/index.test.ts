@@ -62,6 +62,30 @@ describe("config", () => {
     expect(config.NPM_METADATA_CACHE_TTL_SECONDS).toBe(60);
   });
 
+  it("defaults upstream registry routing to npmjs", () => {
+    const config = loadConfig({
+      ...process.env,
+      UPSTREAM_NPM_REGISTRY: "https://registry.example.test"
+    });
+
+    expect(config.UPSTREAM_NPM_REGISTRIES).toEqual([{ name: "npmjs", baseUrl: "https://registry.example.test" }]);
+  });
+
+  it("loads scoped upstream registries from JSON", () => {
+    const config = loadConfig({
+      ...process.env,
+      UPSTREAM_NPM_REGISTRIES_JSON: JSON.stringify([
+        { name: "npmjs", baseUrl: "https://registry.npmjs.org" },
+        { name: "internal", baseUrl: "https://npm.pkg.example.test", scopes: ["@internal"], authToken: "secret-token" }
+      ])
+    });
+
+    expect(config.UPSTREAM_NPM_REGISTRIES).toEqual([
+      { name: "npmjs", baseUrl: "https://registry.npmjs.org" },
+      { name: "internal", baseUrl: "https://npm.pkg.example.test", scopes: ["@internal"], authToken: "secret-token" }
+    ]);
+  });
+
   it("defaults the admin API base URL to the public base URL", () => {
     const config = loadConfig({
       ...process.env,
