@@ -1102,7 +1102,7 @@ Use the client smoke to verify real package-manager install paths through the ga
 pnpm smoke:clients
 ```
 
-This command creates throwaway projects, installs a known package through Anvil with npm, pnpm, and Yarn, keeps lifecycle scripts disabled, and verifies the installed package version.
+This command creates throwaway projects, installs known unscoped and scoped packages through Anvil with npm, pnpm, and Yarn, keeps lifecycle scripts disabled, and verifies the installed package versions.
 
 Use the analysis queue smoke to verify token-gated manual analysis enqueueing, worker consumption, persistence, and Admin report visibility:
 
