@@ -33,6 +33,7 @@ import {
 } from "@anvil/shared";
 
 const metadataPolicyAnalyserVersion = "metadata-policy-2026-05-20.1";
+const installPolicyAnalyserVersion = "install-policy-2026-05-21.1";
 type ReadinessComponent = "persistence" | "objectStore" | "queue";
 
 export type GatewayDependencies = {
@@ -442,10 +443,11 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
       persistence.getAnalysisReport(packageName, version, analysisIdentity),
       config.policy.llmReview.enabled ? persistence.listLlmRiskReviews({ packageName, version, limit: 1, identity: analysisIdentity }) : Promise.resolve([])
     ]);
+    const analysisRequired = shouldRequireAnalysisBeforeInstall(reason, analysisReport);
     const decisionIdentity = {
       tarballIntegrity: versionMetadata?.integrity,
       tarballShasum: versionMetadata?.shasum,
-      analyserVersion: analysisReport?.analyserVersion ?? metadataPolicyAnalyserVersion
+      analyserVersion: analysisReport?.analyserVersion ?? (analysisRequired ? installPolicyAnalyserVersion : metadataPolicyAnalyserVersion)
     };
     const existing = await persistence.getPolicyDecision(packageName, version, config.policy.version, decisionIdentity);
     if (existing) {
@@ -473,6 +475,7 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
       weeklyDownloads,
       similarPackages,
       override: await persistence.getOverride(packageName, version),
+      analysisRequired,
       analysisReport,
       llmRiskReview: latestLlmReview[0]?.review,
       policy: config.policy
@@ -498,6 +501,10 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
     }
 
     return decision;
+  }
+
+  function shouldRequireAnalysisBeforeInstall(reason: "metadata_request" | "tarball_request", analysisReport: unknown) {
+    return reason === "tarball_request" && !analysisReport && config.RUNTIME_MODE !== "development";
   }
 
   async function enqueueAnalysisJobIfNeeded(

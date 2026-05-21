@@ -158,6 +158,36 @@ describe("evaluatePolicy", () => {
     expect(decision.action).toBe("quarantine");
   });
 
+  it("quarantines CI installs that have no static analysis report yet", () => {
+    const decision = evaluatePolicy({
+      packageName: "stable-package",
+      version: "1.0.0",
+      runtimeMode: "ci",
+      analysisRequired: true,
+      policy: defaultPolicyConfig
+    });
+
+    expect(decision.action).toBe("quarantine");
+    expect(decision.reasons).toContainEqual(
+      expect.objectContaining({
+        code: "ANALYSIS_REQUIRED",
+        severity: "medium"
+      })
+    );
+  });
+
+  it("blocks production installs that have no static analysis report yet", () => {
+    const decision = evaluatePolicy({
+      packageName: "stable-package",
+      version: "1.0.0",
+      runtimeMode: "production",
+      analysisRequired: true,
+      policy: defaultPolicyConfig
+    });
+
+    expect(decision.action).toBe("block");
+  });
+
   it("enforces missing provenance for high-download packages during metadata policy", () => {
     const decision = evaluatePolicy({
       packageName: "popular-package",

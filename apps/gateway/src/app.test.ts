@@ -221,7 +221,7 @@ describe("gateway policy enforcement", () => {
     const fetchTarball = vi.fn(async () => new Uint8Array([7, 8, 9]));
     const persistence = new MemoryPersistence();
     const app = buildGateway({
-      config: testConfig("ci"),
+      config: testConfig("development"),
       persistence,
       objectStore,
       queue: new MemoryJobQueue(),
@@ -247,6 +247,51 @@ describe("gateway policy enforcement", () => {
       version: "1.0.0",
       cachedTarballKey: "tarballs/stable-package/1.0.0/sha512-test.tgz"
     });
+
+    await app.close();
+  });
+
+  it("quarantines CI tarball requests until static analysis exists", async () => {
+    const metadata = packageMetadata("stable-package", "2020-01-01T00:00:00.000Z");
+    const queue = new MemoryJobQueue();
+    const persistence = new MemoryPersistence();
+    const fetchTarball = vi.fn();
+    const app = buildGateway({
+      config: testConfig("ci"),
+      persistence,
+      queue,
+      registry: {
+        fetchMetadata: vi.fn(async () => metadata),
+        fetchTarball
+      },
+      downloadStats: noDownloadStats()
+    });
+
+    const response = await app.inject({ method: "GET", url: "/stable-package/-/stable-package-1.0.0.tgz" });
+    const queuedJobs = [];
+    for await (const job of queue.receiveAnalysisJobs()) queuedJobs.push(job);
+
+    expect(response.statusCode).toBe(423);
+    expect(response.json()).toMatchObject({
+      error: "ANVIL_PACKAGE_QUARANTINED",
+      package: "stable-package",
+      version: "1.0.0",
+      decision: "quarantine",
+      reasons: expect.arrayContaining([expect.objectContaining({ code: "ANALYSIS_REQUIRED" })])
+    });
+    expect(fetchTarball).not.toHaveBeenCalled();
+    expect(queuedJobs).toEqual([
+      expect.objectContaining({
+        packageName: "stable-package",
+        version: "1.0.0",
+        reason: "tarball_request",
+        priority: "normal"
+      })
+    ]);
+    expect(await persistence.getPolicyDecision("stable-package", "1.0.0", testConfig("ci").policy.version, {
+      tarballIntegrity: "sha512-test",
+      analyserVersion: "install-policy-2026-05-21.1"
+    })).toMatchObject({ action: "quarantine" });
 
     await app.close();
   });
@@ -602,7 +647,7 @@ describe("gateway policy enforcement", () => {
     expect(tarballResponse.json()).toMatchObject({
       error: "ANVIL_PACKAGE_QUARANTINED",
       decision: "quarantine",
-      reasons: [expect.objectContaining({ code: "PROVENANCE_MISSING" })]
+      reasons: expect.arrayContaining([expect.objectContaining({ code: "PROVENANCE_MISSING" })])
     });
     expect(fetchTarball).not.toHaveBeenCalled();
     expect(queuedJobs[0]).toMatchObject({ packageName: "popular-package", version: "1.0.0", priority: "normal" });

@@ -114,6 +114,15 @@ export function evaluatePolicy(input: PolicyInput): PolicyDecision {
     });
   }
 
+  if (input.analysisRequired && !input.analysisReport) {
+    reasons.push({
+      code: "ANALYSIS_REQUIRED",
+      message: "No static analysis report exists for this tarball identity yet.",
+      severity: input.runtimeMode === "production" ? "high" : "medium",
+      evidence: { runtimeMode: input.runtimeMode }
+    });
+  }
+
   for (const signal of input.analysisReport?.signals ?? []) {
     if (!reasons.some((reason) => reason.code === signal.code && reason.message === signal.message)) reasons.push(signal);
   }
@@ -164,6 +173,7 @@ function decideAction(input: PolicyInput, reasons: PolicyReason[], score: number
   if (reasons.some((reason) => reason.code === "NEW_INSTALL_SCRIPT") && input.policy.blockNewInstallScripts) return "block";
   if (reasons.some((reason) => reason.code === "UNEXPECTED_BINARY_FILE") && input.policy.blockUnexpectedBinaries) return "block";
   if (reasons.some((reason) => reason.code === "UNSAFE_TARBALL_PATH" || reason.code === "UNSAFE_TARBALL_SYMLINK")) return "block";
+  if (reasons.some((reason) => reason.code === "ANALYSIS_REQUIRED")) return input.runtimeMode === "production" ? "block" : input.runtimeMode === "ci" ? "quarantine" : "warn";
   if (reasons.some((reason) => reason.code === "INSTALL_SCRIPT_CHANGED") && input.policy.quarantineChangedInstallScripts) return "quarantine";
   if (reasons.some((reason) => reason.code === "OBFUSCATED_CODE_DETECTED") && input.policy.quarantineObfuscatedCode) return "quarantine";
   if (reasons.some((reason) => reason.code === "LARGE_FILE_SIZE_DELTA")) return input.runtimeMode === "development" ? "warn" : "quarantine";

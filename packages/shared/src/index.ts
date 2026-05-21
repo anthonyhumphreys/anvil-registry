@@ -37,6 +37,7 @@ export type PolicyReasonCode =
   | "PROVENANCE_CHANGED"
   | "PROVENANCE_SUBJECT_MISMATCH"
   | "TRUSTED_PUBLISHING_PRESENT"
+  | "ANALYSIS_REQUIRED"
   | "LLM_RISK_REVIEW_FLAGGED"
   | "APPROVED_OVERRIDE";
 
@@ -311,6 +312,7 @@ export type PolicyInput = {
   versionMetadata?: PackageVersionMetadata;
   weeklyDownloads?: number;
   packageAgeDays?: number;
+  analysisRequired?: boolean;
   analysisReport?: AnalysisReport;
   llmRiskReview?: LlmRiskReview;
   override?: Override;
