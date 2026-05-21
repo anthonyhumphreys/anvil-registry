@@ -99,6 +99,9 @@ jobs:
       - name: Validate SST migration command
         run: pnpm --filter @anvil/infra-sst migrate:run -- --dry-run
 
+      - name: Validate SST deploy preflight
+        run: PUBLIC_BASE_URL=https://npm.anvil-ci.test pnpm sst:preflight
+
       - name: Smoke scoped upstream routing
         run: pnpm smoke:scoped-upstream
 

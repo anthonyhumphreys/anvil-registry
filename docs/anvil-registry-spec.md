@@ -1331,6 +1331,12 @@ Set `PUBLIC_BASE_URL` or `ANVIL_GATEWAY_DOMAIN` before deployment so npm metadat
 
 SST passes deploy-time `LLM_REVIEW_ENABLED`, `LLM_REVIEW_PROVIDER`, `LLM_REVIEW_MODEL`, `LLM_REVIEW_ENDPOINT`, `LLM_REVIEW_RUN_ON_UNKNOWN_PACKAGES`, `LLM_REVIEW_RUN_ON_QUARANTINE`, and `LLM_REVIEW_INCLUDE_PRIVATE_PACKAGES` values into gateway, worker, and admin. The provider credential is the `LlmReviewApiKey` secret and is linked only to the worker, because the gateway enqueues review jobs and should not need the model key.
 
+Run the SST deploy preflight before `sst deploy` to catch missing gateway URLs, domain/certificate mismatches, malformed private upstream config, and partially enabled LLM review without touching AWS:
+
+```bash
+PUBLIC_BASE_URL=https://npm.your-domain.com pnpm sst:preflight
+```
+
 Run the deployed migration task through SST's linked resource shell:
 
 ```bash

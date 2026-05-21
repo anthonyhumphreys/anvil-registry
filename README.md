@@ -174,6 +174,12 @@ Set `PUBLIC_BASE_URL` or `ANVIL_GATEWAY_DOMAIN` for the npm-facing gateway URL b
 Set `ANVIL_GATEWAY_DOMAIN` or `ANVIL_ADMIN_DOMAIN` to attach custom SST load-balancer domains. Route 53 hosted domains use SST's default DNS/certificate handling; for externally managed DNS, also set `ANVIL_GATEWAY_CERT_ARN` or `ANVIL_ADMIN_CERT_ARN` to a validated ACM certificate ARN.
 When `UPSTREAM_NPM_REGISTRIES_JSON` entries use `authTokenSecretName`, SST creates linked secrets for those names and passes them to gateway, worker, and admin; set the secret values before routing installs through private upstreams.
 
+Run the local deploy preflight before `sst deploy` to catch missing gateway URLs, domain/certificate mismatches, malformed private upstream config, and partially enabled LLM review:
+
+```bash
+PUBLIC_BASE_URL=https://npm.your-domain.com pnpm sst:preflight
+```
+
 Run migrations for SST deployments with:
 
 ```bash
