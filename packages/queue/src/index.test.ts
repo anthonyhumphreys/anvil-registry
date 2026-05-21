@@ -65,6 +65,28 @@ describe("queue factory", () => {
     ]);
   });
 
+  it("reports memory queue depth", async () => {
+    const queue = new MemoryJobQueue();
+
+    await queue.enqueueAnalysisJob({
+      packageName: "pkg",
+      version: "1.0.0",
+      reason: "metadata_request",
+      priority: "normal",
+      createdAt: "2026-05-20T00:00:00.000Z"
+    });
+
+    expect(await queue.getStats()).toMatchObject({
+      driver: "memory",
+      waiting: 1,
+      active: 0,
+      delayed: 0,
+      failed: 0,
+      totalPending: 1,
+      checkedAt: expect.any(String)
+    });
+  });
+
   it("rejects malformed analysis jobs before enqueueing them", async () => {
     const queue = new MemoryJobQueue();
     const malformedJob = {
@@ -94,6 +116,31 @@ describe("queue factory", () => {
     expect(client.commands[0]?.constructor.name).toBe("SendMessageCommand");
     expect(client.commands[0]?.input).toMatchObject({ QueueUrl: "https://sqs.example.test/queue" });
     expect(JSON.parse(String(client.commands[0]?.input.MessageBody))).toMatchObject({ packageName: "pkg", version: "1.0.0" });
+  });
+
+  it("maps SQS approximate queue attributes into stats", async () => {
+    const client = new FakeSqsClient();
+    client.attributeResponse = {
+      Attributes: {
+        ApproximateNumberOfMessages: "3",
+        ApproximateNumberOfMessagesNotVisible: "2",
+        ApproximateNumberOfMessagesDelayed: "1"
+      }
+    };
+    const queue = new SqsJobQueue({ queueUrl: "https://sqs.example.test/queue", region: "us-east-1", client });
+
+    expect(await queue.getStats()).toMatchObject({
+      driver: "sqs",
+      waiting: 3,
+      active: 2,
+      delayed: 1,
+      failed: 0,
+      totalPending: 6
+    });
+    expect(client.commands[0]?.input).toMatchObject({
+      QueueUrl: "https://sqs.example.test/queue",
+      AttributeNames: ["ApproximateNumberOfMessages", "ApproximateNumberOfMessagesNotVisible", "ApproximateNumberOfMessagesDelayed"]
+    });
   });
 
   it("consumes SQS messages and deletes them after successful analysis", async () => {
@@ -245,6 +292,7 @@ describe("queue factory", () => {
 class FakeSqsClient implements SqsClientLike {
   readonly commands: Array<{ constructor: { name: string }; input: Record<string, unknown> }> = [];
   onCommand?: (commandName: string) => void;
+  attributeResponse?: unknown;
   private destroyed = false;
 
   constructor(private readonly receiveResponses: unknown[] = []) {}
@@ -255,6 +303,7 @@ class FakeSqsClient implements SqsClientLike {
     this.commands.push(recorded);
     this.onCommand?.(recorded.constructor.name);
     if (recorded.constructor.name === "ReceiveMessageCommand") return this.receiveResponses.shift() ?? {};
+    if (recorded.constructor.name === "GetQueueAttributesCommand") return this.attributeResponse ?? {};
     return {};
   }
 

@@ -10,8 +10,20 @@ import { Queue, type Job, type WorkerOptions } from "bullmq";
 import type { AnvilConfig } from "@anvil/config";
 import { analysisJobSchema, type AnalysisJob } from "@anvil/shared";
 
+export type AnalysisQueueStats = {
+  driver: "memory" | "bullmq" | "sqs";
+  waiting: number;
+  active: number;
+  delayed: number;
+  failed: number;
+  completed?: number;
+  totalPending: number;
+  checkedAt: string;
+};
+
 export interface JobQueue {
   healthCheck?(): Promise<void>;
+  getStats(): Promise<AnalysisQueueStats>;
   enqueueAnalysisJob(job: AnalysisJob): Promise<void>;
   receiveAnalysisJobs(): AsyncIterable<AnalysisJob>;
   acknowledge(jobId: string): Promise<void>;
@@ -22,6 +34,15 @@ export class MemoryJobQueue implements JobQueue {
   private readonly jobs: AnalysisJob[] = [];
 
   async healthCheck(): Promise<void> {}
+
+  async getStats(): Promise<AnalysisQueueStats> {
+    return queueStats("memory", {
+      waiting: this.jobs.length,
+      active: 0,
+      delayed: 0,
+      failed: 0
+    });
+  }
 
   async enqueueAnalysisJob(job: AnalysisJob): Promise<void> {
     this.jobs.push(normalizeAnalysisJob(job, crypto.randomUUID()));
@@ -56,6 +77,21 @@ export class BullMqJobQueue implements JobQueue {
 
   async healthCheck(): Promise<void> {
     await this.queue.getJobCounts("waiting", "active", "delayed", "failed");
+  }
+
+  async getStats(): Promise<AnalysisQueueStats> {
+    const counts = await this.queue.getJobCounts("waiting", "active", "delayed", "failed", "completed", "prioritized", "waiting-children", "paused");
+    const waiting = count(counts.waiting) + count(counts.prioritized) + count(counts["waiting-children"]) + count(counts.paused);
+    const active = count(counts.active);
+    const delayed = count(counts.delayed);
+    const failed = count(counts.failed);
+    return queueStats("bullmq", {
+      waiting,
+      active,
+      delayed,
+      failed,
+      completed: count(counts.completed)
+    });
   }
 
   receiveAnalysisJobs(): AsyncIterable<AnalysisJob> {
@@ -99,6 +135,22 @@ export class SqsJobQueue implements JobQueue {
         AttributeNames: ["QueueArn"]
       })
     );
+  }
+
+  async getStats(): Promise<AnalysisQueueStats> {
+    const response = (await this.client.send(
+      new GetQueueAttributesCommand({
+        QueueUrl: this.queueUrl,
+        AttributeNames: ["ApproximateNumberOfMessages", "ApproximateNumberOfMessagesNotVisible", "ApproximateNumberOfMessagesDelayed"]
+      })
+    )) as SqsAttributesResponse;
+    const attributes = response.Attributes ?? {};
+    return queueStats("sqs", {
+      waiting: numberAttribute(attributes.ApproximateNumberOfMessages),
+      active: numberAttribute(attributes.ApproximateNumberOfMessagesNotVisible),
+      delayed: numberAttribute(attributes.ApproximateNumberOfMessagesDelayed),
+      failed: 0
+    });
   }
 
   receiveAnalysisJobs(): AsyncIterable<AnalysisJob> {
@@ -242,9 +294,35 @@ function normalizeAnalysisJob(job: unknown, fallbackId?: string): AnalysisJob {
   return analysisJobSchema.parse(candidate);
 }
 
+function queueStats(driver: AnalysisQueueStats["driver"], counts: Omit<AnalysisQueueStats, "driver" | "totalPending" | "checkedAt">): AnalysisQueueStats {
+  return {
+    driver,
+    ...counts,
+    totalPending: counts.waiting + counts.active + counts.delayed,
+    checkedAt: new Date().toISOString()
+  };
+}
+
+function count(value: number | undefined): number {
+  return typeof value === "number" ? value : 0;
+}
+
+function numberAttribute(value: string | undefined): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 export type SqsClientLike = {
   send(command: SendMessageCommand | ReceiveMessageCommand | DeleteMessageCommand | ChangeMessageVisibilityCommand | GetQueueAttributesCommand): Promise<unknown>;
   destroy?: () => void;
+};
+
+type SqsAttributesResponse = {
+  Attributes?: {
+    ApproximateNumberOfMessages?: string;
+    ApproximateNumberOfMessagesNotVisible?: string;
+    ApproximateNumberOfMessagesDelayed?: string;
+  };
 };
 
 type SqsReceiveResponse = {

@@ -75,6 +75,46 @@ describe("gateway policy enforcement", () => {
     await app.close();
   });
 
+  it("exposes token-gated analysis queue stats", async () => {
+    const queue = new MemoryJobQueue();
+    await queue.enqueueAnalysisJob({
+      packageName: "pkg",
+      version: "1.0.0",
+      reason: "manual_review",
+      priority: "normal",
+      createdAt: "2026-05-20T00:00:00.000Z"
+    });
+    const app = buildGateway({
+      config: loadConfig({ ...process.env, RUNTIME_MODE: "development", ADMIN_TOKEN: "secret", PERSISTENCE_DRIVER: "memory" }),
+      persistence: new MemoryPersistence(),
+      queue,
+      registry: {
+        fetchMetadata: vi.fn(),
+        fetchTarball: vi.fn()
+      },
+      downloadStats: noDownloadStats()
+    });
+
+    const rejected = await app.inject({ method: "GET", url: "/-/anvil/queue" });
+    const accepted = await app.inject({ method: "GET", url: "/-/anvil/queue", headers: { authorization: "Bearer secret" } });
+
+    expect(rejected.statusCode).toBe(401);
+    expect(accepted.statusCode).toBe(200);
+    expect(accepted.json()).toMatchObject({
+      queue: {
+        driver: "memory",
+        waiting: 1,
+        active: 0,
+        delayed: 0,
+        failed: 0,
+        totalPending: 1,
+        checkedAt: expect.any(String)
+      }
+    });
+
+    await app.close();
+  });
+
   it("filters blocked versions from metadata and removes unusable dist-tags", async () => {
     const metadata = packageMetadata("fresh-package", new Date().toISOString());
     const app = buildGateway({

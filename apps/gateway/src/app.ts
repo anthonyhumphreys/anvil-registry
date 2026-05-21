@@ -72,6 +72,13 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
     return { ok, upstream: config.UPSTREAM_NPM_REGISTRY, checks };
   });
   app.get("/-/anvil/policy", async () => ({ runtimeMode: config.RUNTIME_MODE, policy: config.policy }));
+  app.get("/-/anvil/queue", async (request, reply) => {
+    if (config.ADMIN_TOKEN && request.headers.authorization !== `Bearer ${config.ADMIN_TOKEN}`) {
+      return reply.code(401).send({ error: "ANVIL_ADMIN_TOKEN_REQUIRED" });
+    }
+
+    return { queue: await queue.getStats() };
+  });
 
   app.post<{
     Body: unknown;

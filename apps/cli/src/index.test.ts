@@ -590,6 +590,45 @@ importers:
     expect(writes.join("")).toContain("Jobs queued: 1");
   });
 
+  it("prints analysis queue status with admin token", async () => {
+    const writes: string[] = [];
+    const dependencies = fakeDependencies({
+      fetch: vi.fn(async () =>
+        jsonResponse({
+          queue: {
+            driver: "bullmq",
+            waiting: 3,
+            active: 1,
+            delayed: 2,
+            failed: 0,
+            completed: 8,
+            totalPending: 6,
+            checkedAt: "2026-05-20T00:00:00.000Z"
+          }
+        })
+      ),
+      env: { ANVIL_REGISTRY_URL: "http://anvil.test", ADMIN_TOKEN: "secret" },
+      stdout: {
+        write: (value: string) => {
+          writes.push(value);
+          return true;
+        }
+      }
+    });
+
+    const exitCode = await run(["queue", "status"], dependencies);
+
+    expect(exitCode).toBe(0);
+    expect(dependencies.fetch).toHaveBeenCalledWith(
+      "http://anvil.test/-/anvil/queue",
+      expect.objectContaining({
+        headers: expect.objectContaining({ authorization: "Bearer secret" })
+      })
+    );
+    expect(writes.join("")).toContain("Analysis queue: bullmq");
+    expect(writes.join("")).toContain("- total pending: 6");
+  });
+
   it("smoke tests gateway metadata and tarball proxying", async () => {
     const writes: string[] = [];
     const fetch = vi.fn(async (url: string) => {

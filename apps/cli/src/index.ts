@@ -33,6 +33,7 @@ export async function run(argv: string[], dependencies: CliDependencies = defaul
     if (command === "approve") return await approve(args, dependencies);
     if (command === "revoke") return await revoke(args, dependencies);
     if (command === "llm-review") return await llmReview(args, dependencies);
+    if (command === "queue" && args[0] === "status") return await queueStatus(args.slice(1), dependencies);
     if (command === "popular-index" && args[0] === "show") return await popularIndexShow(args.slice(1), dependencies);
     if (command === "popular-index" && args[0] === "upload") return await popularIndexUpload(args.slice(1), dependencies);
     if (command === "node-base" && args[0] === "reports") return await nodeBaseReports(args.slice(1), dependencies);
@@ -315,6 +316,15 @@ async function llmReview(args: string[], dependencies: CliDependencies): Promise
   return 0;
 }
 
+async function queueStatus(_args: string[], dependencies: CliDependencies): Promise<number> {
+  const registryUrl = registryBaseUrl(dependencies.env);
+  const result = await requestJson<{ queue: AnalysisQueueStats }>(dependencies, `${registryUrl}/-/anvil/queue`, {
+    headers: adminAuthHeader(dependencies.env)
+  });
+  printQueueStatus(result.queue, dependencies);
+  return 0;
+}
+
 async function popularIndexShow(_args: string[], dependencies: CliDependencies): Promise<number> {
   const adminUrl = adminBaseUrl(dependencies.env);
   const index = await requestJson<PopularPackageIndex>(dependencies, `${adminUrl}/api/popular-package-index`);
@@ -482,6 +492,17 @@ function printLlmRiskReviewSummary(reviews: LlmRiskReviewRecord[], dependencies:
   }
 }
 
+function printQueueStatus(queue: AnalysisQueueStats, dependencies: CliDependencies) {
+  dependencies.stdout.write(`Analysis queue: ${queue.driver}\n`);
+  dependencies.stdout.write(`- waiting: ${queue.waiting}\n`);
+  dependencies.stdout.write(`- active: ${queue.active}\n`);
+  dependencies.stdout.write(`- delayed: ${queue.delayed}\n`);
+  dependencies.stdout.write(`- failed: ${queue.failed}\n`);
+  if (queue.completed !== undefined) dependencies.stdout.write(`- completed: ${queue.completed}\n`);
+  dependencies.stdout.write(`- total pending: ${queue.totalPending}\n`);
+  dependencies.stdout.write(`- checked: ${queue.checkedAt}\n`);
+}
+
 function formatNodeBaseReportLine(report: NodeBaseReportRecord) {
   const risk = nodeBaseReportRisk(report);
   const highlights = nodeBaseHighlights(report);
@@ -603,6 +624,17 @@ type LlmRiskReviewRecord = {
   createdAt?: string;
 };
 
+type AnalysisQueueStats = {
+  driver: string;
+  waiting: number;
+  active: number;
+  delayed: number;
+  failed: number;
+  completed?: number;
+  totalPending: number;
+  checkedAt: string;
+};
+
 function isGatewayTarballUrl(tarballUrl: string, registryUrl: string, packageName: string): boolean {
   try {
     const registry = new URL(registryUrl);
@@ -707,6 +739,7 @@ function usage() {
   anvil approve package@version --reason "intentional dependency" [--expires-at 2026-06-20T00:00:00Z]
   anvil revoke package@version [--revoked-by reviewer]
   anvil llm-review package@version [--requested-by reviewer] [--priority high]
+  anvil queue status
   anvil popular-index show
   anvil popular-index upload popular-index.json [--generated-at 2026-05-20T00:00:00Z]
   anvil node-base reports [--type dependency|lifecycle|ioc|network] [--risk risky|high|medium] [--limit 20]
