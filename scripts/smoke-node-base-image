@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 IMAGE_TAG="${ANVIL_NODE_BASE_SMOKE_IMAGE:-anvil-node-base-smoke:local}"
 
-if docker image inspect "$IMAGE_TAG" >/dev/null 2>&1; then
+if [[ -n "${ANVIL_NODE_BASE_SMOKE_IMAGE:-}" ]] && docker image inspect "$IMAGE_TAG" >/dev/null 2>&1; then
   echo "[anvil] Reusing existing Node Base image ($IMAGE_TAG)"
 else
   echo "[anvil] Building Node Base image ($IMAGE_TAG)"
