@@ -1,7 +1,6 @@
 import {
   BookOpen,
   Boxes,
-  CircleCheck,
   ClipboardCheck,
   Code2,
   Database,
@@ -23,7 +22,7 @@ export const navItems = [
   { label: "Product", href: "/#product" },
   { label: "Docs", href: "/docs/introduction" },
   { label: "Architecture", href: "/#architecture" },
-  { label: "Deploy", href: "/#deploy" }
+  { label: "Deploy", href: "/docs/deploy" }
 ];
 
 export const productCards = [
@@ -74,10 +73,30 @@ export const architectureNodes = [
 ];
 
 export const docsHighlights = [
-  { label: "Quickstart", href: "/docs/quickstart", icon: BookOpen },
-  { label: "Policy model", href: "/docs/policy", icon: ClipboardCheck },
-  { label: "Node Base", href: "/docs/node-base", icon: LockKeyhole },
-  { label: "Deploy", href: "/docs/deploy", icon: Workflow }
+  {
+    label: "Quickstart",
+    href: "/docs/quickstart",
+    icon: BookOpen,
+    description: "Run the gateway locally, point npm-compatible clients at it, and verify package traffic stays inside the proxy."
+  },
+  {
+    label: "Policy model",
+    href: "/docs/policy",
+    icon: ClipboardCheck,
+    description: "See how allow, warn, quarantine, block, and audited override decisions are made from deterministic signals."
+  },
+  {
+    label: "Node Base",
+    href: "/docs/node-base",
+    icon: LockKeyhole,
+    description: "Use the hardened Node image for safe installs, observed installs, lifecycle-script reports, and local repo inspection."
+  },
+  {
+    label: "Deploy",
+    href: "/docs/deploy",
+    icon: Workflow,
+    description: "Bring up the local stack with Docker Compose and prepare the registry path for AWS via SST."
+  }
 ];
 
 export const decisionTimeline = [
@@ -85,13 +104,6 @@ export const decisionTimeline = [
   { status: "review", title: "Static analysis queued", detail: "Unknown tarball identity gets a worker job." },
   { status: "block", title: "Policy signal found", detail: "Lifecycle script changed in a patch release." },
   { status: "allow", title: "Audited override", detail: "Reviewer approves with reason and expiry." }
-];
-
-export const deployCards = [
-  { title: "Docker Compose", description: "Local gateway, worker, admin, Postgres, Redis, and MinIO.", command: "docker compose -f infra/docker/docker-compose.yml up --build", icon: Boxes },
-  { title: "Vercel docs site", description: "This standalone Next.js site deploys cleanly from its own folder.", command: "vercel --cwd anvil-site", icon: CircleCheck },
-  { title: "AWS via SST", description: "Fargate services, Postgres, S3, and SQS behind explicit preflight checks.", command: "PUBLIC_BASE_URL=https://npm.example.com pnpm sst:preflight", icon: Workflow },
-  { title: "Node Base image", description: "Publish a hardened devcontainer image for CI and repo inspection.", command: "ghcr.io/<owner>/anvil-node-base:22", icon: LockKeyhole }
 ];
 
 export const launchCopy = [

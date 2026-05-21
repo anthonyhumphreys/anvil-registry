@@ -1,17 +1,10 @@
----
-title: Open source launch notes
-description: How to explain Anvil Registry clearly on social channels without turning it into brochure sludge.
-section: Resources
-order: 6
----
-
-# Open source launch notes
+# Open Source Launch Notes
 
 Anvil Registry should be easy to explain in one sentence:
 
 > Anvil Registry is an open source npm registry gateway, paired with Anvil Node Base, that inspects dependency risk before install traffic reaches developers or CI.
 
-## Short post
+## Short Post
 
 ```text
 I am opening up Anvil Registry: a secure npm registry gateway plus a hardened Node devcontainer base image.
@@ -21,7 +14,7 @@ It proxies npm metadata and tarballs, rewrites tarball URLs through policy, cach
 Basically: less blind npm install, more evidence before the package lands.
 ```
 
-## Discord version
+## Discord Version
 
 ```text
 Anvil Registry is a dependency safety toolkit for Node projects.
@@ -31,7 +24,7 @@ The registry gateway sits in front of npm and checks package metadata, tarballs,
 It is open source and designed to fit normal npm/pnpm/yarn workflows.
 ```
 
-## What not to claim
+## What Not To Claim
 
 - Do not call it a replacement for npm.
 - Do not imply LLM review is the enforcement authority.

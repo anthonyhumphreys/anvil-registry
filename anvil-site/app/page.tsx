@@ -12,7 +12,6 @@ import {
   architectureNodes,
   codeTabs,
   decisionTimeline,
-  deployCards,
   docsHighlights,
   featureGroups,
   launchCopy,
@@ -31,7 +30,6 @@ export default function HomePage() {
         <WorkflowSection />
         <PolicySection />
         <DocsSection />
-        <DeploySection />
       </main>
       <SiteFooter />
     </div>
@@ -257,38 +255,16 @@ function PolicySection() {
 
 function DocsSection() {
   return (
-    <section className="border-b py-16">
+    <section className="py-16">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <SectionHeading title="Markdown docs that ship with the project" description="The standalone site reads docs from markdown files, so launch copy and operator docs can evolve without turning the app into a CMS." />
+        <SectionHeading title="Start with the docs that match the job" description="Each guide is written for a concrete moment: trying the gateway, understanding policy, inspecting unknown repos, or preparing a deployment." />
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {docsHighlights.map((doc) => (
             <Link key={doc.href} href={doc.href} className="rounded-lg border bg-card p-5 shadow-sm transition-colors hover:bg-muted/40">
               <doc.icon className="size-5 text-accent" aria-hidden="true" />
               <h3 className="mt-4 font-semibold">{doc.label}</h3>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">Read the {doc.label.toLowerCase()} guide.</p>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">{doc.description}</p>
             </Link>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function DeploySection() {
-  return (
-    <section id="deploy" className="py-16">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <SectionHeading title="Deploy without ceremony" description="The docs site is standalone for Vercel. The product stack keeps Docker Compose and SST paths explicit." />
-        <div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {deployCards.map((card) => (
-            <div key={card.title} className="rounded-lg border bg-card p-5 shadow-sm">
-              <card.icon className="size-5 text-accent" aria-hidden="true" />
-              <h3 className="mt-4 font-semibold">{card.title}</h3>
-              <p className="mt-2 min-h-16 text-sm leading-6 text-muted-foreground">{card.description}</p>
-              <pre className="mt-4 overflow-x-auto rounded-md bg-muted p-3 font-mono text-xs text-muted-foreground">
-                <code>{card.command}</code>
-              </pre>
-            </div>
           ))}
         </div>
       </div>

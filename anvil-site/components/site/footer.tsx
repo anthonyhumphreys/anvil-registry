@@ -25,9 +25,6 @@ export function SiteFooter() {
           <Link href="/docs/deploy" className="hover:text-foreground">
             Deploy
           </Link>
-          <Link href="/docs/community" className="hover:text-foreground">
-            Launch notes
-          </Link>
         </nav>
       </div>
     </footer>
