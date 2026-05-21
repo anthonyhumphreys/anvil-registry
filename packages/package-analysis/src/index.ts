@@ -312,7 +312,7 @@ export function mergeAnalysisReports(report: AnalysisReport, fileAnalysis: { sig
   const signals = [...report.signals, ...fileAnalysis.signals];
   return {
     ...report,
-    analyserVersion: "static-2026-05-20.2",
+    analyserVersion: "static-2026-05-20.3",
     signals,
     score: signals.reduce((total, signal) => total + (signal.severity === "critical" ? 95 : signal.severity === "high" ? 70 : signal.severity === "medium" ? 35 : signal.severity === "low" ? 10 : 0), 0),
     fileFindings: fileAnalysis.fileFindings
@@ -508,7 +508,7 @@ function detectSuspiciousScriptPatterns(scripts: Record<string, string>): Policy
       severity: "high"
     });
   }
-  if (/(fs\.(readFileSync|readdirSync)|require\(["']fs["']\)|from\s+["']fs["']|os\.homedir|require\(["']os["']\)|from\s+["']os["']|\.npmrc|\.ssh|\.aws|id_rsa|id_ed25519|\.env(?:\.local)?)/i.test(joined)) {
+  if (/(fs\.(readFileSync|readdirSync)|require\(["']fs["']\)|from\s+["']fs["']|os\.homedir|require\(["']os["']\)|from\s+["']os["']|\.npmrc|\.ssh|\.aws|\.git\/config|id_rsa|id_ed25519|\.env(?:\.local)?)/i.test(joined)) {
     findings.push({
       code: "SENSITIVE_FILE_ACCESS_IN_INSTALL_PATH",
       message: "Install script references filesystem or home-directory access patterns often used to inspect credentials.",
@@ -556,7 +556,7 @@ function detectSuspiciousCodePatterns(path: string, text: string): FileFinding[]
       evidence: { installPath: true, pattern: "environment" }
     });
   }
-  if (/(fs\.(readFileSync|readdirSync)|require\(["']fs["']\)|from\s+["']fs["']|os\.homedir|require\(["']os["']\)|from\s+["']os["']|\.npmrc|\.ssh|\.aws|id_rsa|id_ed25519|\.env(?:\.local)?)/i.test(text)) {
+  if (/(fs\.(readFileSync|readdirSync)|require\(["']fs["']\)|from\s+["']fs["']|os\.homedir|require\(["']os["']\)|from\s+["']os["']|\.npmrc|\.ssh|\.aws|\.git\/config|id_rsa|id_ed25519|\.env(?:\.local)?)/i.test(text)) {
     findings.push({
       path,
       code: "SENSITIVE_FILE_ACCESS_IN_INSTALL_PATH",
@@ -668,7 +668,7 @@ function isUnusualPath(path: string): boolean {
 }
 
 function looksCredentialLike(path: string): boolean {
-  return /(^|\/)(\.env|\.npmrc|id_rsa|id_dsa|\.aws\/credentials|credentials|token|secret|private-key)(\.|$|\/)/i.test(path);
+  return /(^|\/)(\.env|\.npmrc|\.git\/config|id_rsa|id_dsa|\.aws\/credentials|credentials|token|secret|private-key)(\.|$|\/)/i.test(path);
 }
 
 function isTextLike(path: string, content: Uint8Array): boolean {
