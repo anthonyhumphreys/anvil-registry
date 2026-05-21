@@ -328,6 +328,7 @@ export function buildAdmin(dependencies: AdminDependencies = {}): FastifyInstanc
           ${summaryTile("Warned", countActions(decisions, "warn"), "muted")}
           ${summaryTile("Allowed", countActions(decisions, "allow"), "ok")}
         </div>
+        <p><a href="/decisions/blocked">View blocked packages</a> · <a href="/decisions/quarantined">View quarantined packages</a></p>
       </section>
       <section>
         <h2>Policy Configuration</h2>
@@ -361,6 +362,27 @@ export function buildAdmin(dependencies: AdminDependencies = {}): FastifyInstanc
       <section>
         <h2>Audit Events</h2>
         ${auditEventTable(auditEvents)}
+      </section>`
+    );
+  });
+
+  app.get("/decisions/:action", async (request, reply) => {
+    const params = request.params as { action: string };
+    const action = decisionActionFromSlug(params.action);
+    if (!action) {
+      return reply.code(404).type("text/html").send(page("Decision List Not Found", "<p>No decision list found.</p>"));
+    }
+    const query = request.query as { limit?: string };
+    const decisions = await persistence.listPolicyDecisions({ actions: [action], limit: parseLimit(query.limit) ?? 100 });
+
+    reply.type("text/html");
+    return page(
+      decisionListTitle(action),
+      `${adminSessionPanel(isAdminRequest(request.headers.authorization, request.headers.cookie, config.ADMIN_TOKEN), false, Boolean(config.ADMIN_TOKEN))}
+      <section>
+        <h2>${escapeHtml(decisionListTitle(action))}</h2>
+        <p><a href="/">Back to dashboard</a></p>
+        ${decisionTable(decisions)}
       </section>`
     );
   });
@@ -654,6 +676,23 @@ function hasReviewEvidence(review: Awaited<ReturnType<typeof loadPackageReview>>
 
 function countActions(decisions: PolicyDecisionRecord[], action: string) {
   return decisions.filter((record) => record.decision.action === action).length;
+}
+
+function decisionActionFromSlug(slug: string): Override["action"] | undefined {
+  const actions: Record<string, Override["action"]> = {
+    allowed: "allow",
+    warned: "warn",
+    quarantined: "quarantine",
+    blocked: "block"
+  };
+  return actions[slug];
+}
+
+function decisionListTitle(action: Override["action"]) {
+  if (action === "allow") return "Allowed Packages";
+  if (action === "warn") return "Warned Packages";
+  if (action === "quarantine") return "Quarantined Packages";
+  return "Blocked Packages";
 }
 
 function decisionTable(decisions: PolicyDecisionRecord[]) {

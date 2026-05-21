@@ -36,8 +36,37 @@ describe("admin app", () => {
     expect(response.body).toContain("dependency");
     expect(response.body).toContain("Policy Configuration");
     expect(response.body).toContain("View effective policy");
+    expect(response.body).toContain("/decisions/blocked");
+    expect(response.body).toContain("/decisions/quarantined");
     expect(response.body).toContain("Popular Package Index");
     expect(response.body).toContain("Audit Events");
+    await app.close();
+  });
+
+  it("renders blocked and quarantined package decision lists", async () => {
+    const persistence = new MemoryPersistence();
+    await seed(persistence);
+    await persistence.putPolicyDecision("quarantine-pkg", "2.0.0", "policy", {
+      action: "quarantine",
+      score: 70,
+      reasons: [{ code: "INSTALL_SCRIPT_CHANGED", message: "Lifecycle script changed.", severity: "medium" }],
+      explanation: "quarantine-pkg@2.0.0 is quarantined."
+    });
+    const app = buildAdmin({ config: loadConfig({ ...process.env, ADMIN_TOKEN: "secret" }), persistence });
+
+    const blocked = await app.inject({ method: "GET", url: "/decisions/blocked", headers: { authorization: "Bearer secret" } });
+    const quarantined = await app.inject({ method: "GET", url: "/decisions/quarantined", headers: { authorization: "Bearer secret" } });
+    const missing = await app.inject({ method: "GET", url: "/decisions/nope", headers: { authorization: "Bearer secret" } });
+
+    expect(blocked.statusCode).toBe(200);
+    expect(blocked.body).toContain("Blocked Packages");
+    expect(blocked.body).toContain("pkg@1.0.0");
+    expect(blocked.body).not.toContain("quarantine-pkg@2.0.0");
+    expect(quarantined.statusCode).toBe(200);
+    expect(quarantined.body).toContain("Quarantined Packages");
+    expect(quarantined.body).toContain("quarantine-pkg@2.0.0");
+    expect(quarantined.body).not.toContain("pkg@1.0.0");
+    expect(missing.statusCode).toBe(404);
     await app.close();
   });
 
