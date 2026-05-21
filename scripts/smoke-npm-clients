@@ -3,6 +3,7 @@ set -euo pipefail
 
 REGISTRY_URL="${ANVIL_REGISTRY_URL:-http://localhost:4873}"
 WORK_DIR="$(mktemp -d)"
+NPM_AUDIT="${ANVIL_CLIENT_SMOKE_NPM_AUDIT:-true}"
 
 trap 'rm -rf "$WORK_DIR"' EXIT
 
@@ -28,6 +29,7 @@ for target in "${PACKAGE_TARGETS[@]}"; do
 done
 
 echo "[anvil] Client smoke packages: ${PACKAGE_TARGETS[*]}"
+echo "[anvil] npm audit smoke: $NPM_AUDIT"
 node - "$REGISTRY_URL" <<'NODE'
 const [registryUrl] = process.argv.slice(2);
 const response = await fetch(`${registryUrl.replace(/\/+$/, "")}/-/ready`);
@@ -38,19 +40,30 @@ NODE
 
 smoke_npm() {
   local dir="$WORK_DIR/npm"
+  local audit_flags=()
   mkdir -p "$dir"
   write_package_json "$dir" "npm-client-smoke"
+  if [[ "$NPM_AUDIT" != "true" ]]; then
+    audit_flags=(--no-audit --package-lock=false)
+  fi
   echo "[anvil] npm install through Anvil"
   (
     cd "$dir"
     NO_UPDATE_NOTIFIER=1 npm_config_update_notifier=false npm_config_cache="$WORK_DIR/npm-cache" npm install \
       --ignore-scripts \
       --registry="$REGISTRY_URL" \
-      --package-lock=false \
-      --no-audit \
       --fund=false \
+      "${audit_flags[@]}" \
       "${PACKAGE_TARGETS[@]}" >/dev/null
     verify_targets
+    if [[ "$NPM_AUDIT" == "true" ]]; then
+      echo "[anvil] npm audit through Anvil"
+      NO_UPDATE_NOTIFIER=1 npm_config_update_notifier=false npm_config_cache="$WORK_DIR/npm-cache" npm audit \
+        --ignore-scripts \
+        --registry="$REGISTRY_URL" \
+        --audit-level=none \
+        --fund=false >/dev/null
+    fi
   )
 }
 

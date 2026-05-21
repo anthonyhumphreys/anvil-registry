@@ -1111,7 +1111,7 @@ Use the client smoke to verify real package-manager install paths through the ga
 pnpm smoke:clients
 ```
 
-This command creates throwaway projects, installs known unscoped and scoped packages through Anvil with npm, pnpm, and Yarn, keeps lifecycle scripts disabled, and verifies the installed package versions.
+This command creates throwaway projects, installs known unscoped and scoped packages through Anvil with npm, pnpm, and Yarn, keeps lifecycle scripts disabled, and verifies the installed package versions. The npm leg keeps audit enabled by default and runs `npm audit` through the gateway so the npm security proxy routes are covered by the real client smoke. Set `ANVIL_CLIENT_SMOKE_NPM_AUDIT=false` only when deliberately testing without upstream audit availability.
 
 Use the scoped upstream smoke to verify scoped/private registry routing without needing real private credentials:
 

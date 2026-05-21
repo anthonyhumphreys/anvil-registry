@@ -142,6 +142,8 @@ pnpm smoke:analysis
 pnpm smoke:node-base-report
 ```
 
+`smoke:clients` installs known unscoped and scoped packages through npm, pnpm, and Yarn. The npm leg leaves audit enabled by default and runs `npm audit` through the gateway; set `ANVIL_CLIENT_SMOKE_NPM_AUDIT=false` when testing in an environment where upstream audit is intentionally unavailable.
+
 `smoke:scoped-upstream` starts a token-gated mock scoped registry and a local gateway, then verifies scoped metadata routing, tarball URL rewriting, upstream bearer auth, and Anvil cache hits without needing real private registry credentials.
 
 Node Base image checks:
