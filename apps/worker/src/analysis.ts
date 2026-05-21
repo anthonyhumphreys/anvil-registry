@@ -133,9 +133,10 @@ async function analysePackageVersion(
     }
   );
 
-  const analysisReportObjectKey = dependencies.objectStore ? analysisReportObjectKeyForReport(report) : undefined;
+  const analysisArtifactKeys = dependencies.objectStore ? analysisArtifactObjectKeysForReport(report) : undefined;
+  const analysisReportObjectKey = analysisArtifactKeys?.report;
   const storedReport: AnalysisReport = analysisReportObjectKey ? { ...report, objectKey: analysisReportObjectKey } : report;
-  await storeAnalysisReportArtifact(storedReport, dependencies.objectStore, analysisReportObjectKey);
+  await storeAnalysisArtifacts(storedReport, dependencies.objectStore, analysisArtifactKeys);
   await dependencies.persistence.putAnalysisReport(storedReport);
   const override = await dependencies.persistence.getOverride(target.packageName, version);
   const preliminaryDecision = evaluatePolicy({
@@ -258,19 +259,48 @@ async function analysePackageVersion(
       analyserVersion: storedReport.analyserVersion,
       policyVersion: dependencies.config.policy.version,
       signalCount: storedReport.signals.length,
-      ...(analysisReportObjectKey ? { analysisReportObjectKey } : {})
+      ...(analysisArtifactKeys
+        ? {
+            analysisReportObjectKey: analysisArtifactKeys.report,
+            analysisManifestDiffObjectKey: analysisArtifactKeys.manifestDiff,
+            analysisFileTreeObjectKey: analysisArtifactKeys.fileTree
+          }
+        : {})
     }
   });
 
   return { report: storedReport, decision, packageName: target.packageName, version };
 }
 
-async function storeAnalysisReportArtifact(report: AnalysisReport, objectStore: ObjectStore | undefined, objectKey: string | undefined) {
-  if (!objectStore || !objectKey) return;
-  await objectStore.put(objectKey, Buffer.from(JSON.stringify(report), "utf8"));
+type AnalysisArtifactObjectKeys = {
+  report: string;
+  manifestDiff: string;
+  fileTree: string;
+};
+
+async function storeAnalysisArtifacts(report: AnalysisReport, objectStore: ObjectStore | undefined, objectKeys: AnalysisArtifactObjectKeys | undefined) {
+  if (!objectStore || !objectKeys) return;
+  await Promise.all([
+    objectStore.put(objectKeys.report, jsonBuffer(report)),
+    objectStore.put(objectKeys.manifestDiff, jsonBuffer(report.manifestDiff ?? null)),
+    objectStore.put(objectKeys.fileTree, jsonBuffer(report.fileFindings ?? []))
+  ]);
 }
 
 export function analysisReportObjectKeyForReport(report: Pick<AnalysisReport, "packageName" | "version" | "policyVersion" | "analyserVersion" | "tarballIntegrity" | "tarballShasum">) {
+  return `${analysisArtifactBaseKeyForReport(report)}/report.json`;
+}
+
+function analysisArtifactObjectKeysForReport(report: Pick<AnalysisReport, "packageName" | "version" | "policyVersion" | "analyserVersion" | "tarballIntegrity" | "tarballShasum">): AnalysisArtifactObjectKeys {
+  const baseKey = analysisArtifactBaseKeyForReport(report);
+  return {
+    report: `${baseKey}/report.json`,
+    manifestDiff: `${baseKey}/manifest-diff.json`,
+    fileTree: `${baseKey}/file-tree.json`
+  };
+}
+
+function analysisArtifactBaseKeyForReport(report: Pick<AnalysisReport, "packageName" | "version" | "policyVersion" | "analyserVersion" | "tarballIntegrity" | "tarballShasum">) {
   const identity = report.tarballIntegrity ?? report.tarballShasum ?? "no-integrity";
   return [
     "analysis",
@@ -278,9 +308,12 @@ export function analysisReportObjectKeyForReport(report: Pick<AnalysisReport, "p
     encodeURIComponent(report.version),
     encodeURIComponent(report.policyVersion),
     encodeURIComponent(report.analyserVersion),
-    encodeURIComponent(identity),
-    "report.json"
+    encodeURIComponent(identity)
   ].join("/");
+}
+
+function jsonBuffer(value: unknown) {
+  return Buffer.from(JSON.stringify(value), "utf8");
 }
 
 async function maybeReviewWithLlm(

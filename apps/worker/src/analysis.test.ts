@@ -80,6 +80,8 @@ describe("worker analysis", () => {
     const result = await analysePackageTarget("pkg@1.0.1", { config, registry, persistence, objectStore });
     const objectKey = analysisReportObjectKeyForReport(result.report);
     const stored = await objectStore.get(objectKey);
+    const manifestDiffKey = objectKey.replace(/report\.json$/, "manifest-diff.json");
+    const fileTreeKey = objectKey.replace(/report\.json$/, "file-tree.json");
 
     expect(objectKey).toBe(`analysis/pkg/1.0.1/${config.policy.version}/${encodeURIComponent(result.report.analyserVersion)}/sha512-new/report.json`);
     expect(result.report.objectKey).toBe(objectKey);
@@ -91,11 +93,21 @@ describe("worker analysis", () => {
       objectKey,
       signals: expect.arrayContaining([expect.objectContaining({ code: "NEW_INSTALL_SCRIPT" })])
     });
+    expect(JSON.parse(Buffer.from((await objectStore.get(manifestDiffKey)) ?? []).toString("utf8"))).toMatchObject({
+      release: expect.objectContaining({ previous: "1.0.0", target: "1.0.1" })
+    });
+    expect(JSON.parse(Buffer.from((await objectStore.get(fileTreeKey)) ?? []).toString("utf8"))).toEqual(
+      expect.arrayContaining([expect.objectContaining({ path: "link-out", code: "UNSAFE_TARBALL_SYMLINK" })])
+    );
     expect(await persistence.listAuditEvents({ targetId: "pkg@1.0.1" })).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           eventType: "analysis.completed",
-          metadata: expect.objectContaining({ analysisReportObjectKey: objectKey })
+          metadata: expect.objectContaining({
+            analysisReportObjectKey: objectKey,
+            analysisManifestDiffObjectKey: manifestDiffKey,
+            analysisFileTreeObjectKey: fileTreeKey
+          })
         })
       ])
     );
