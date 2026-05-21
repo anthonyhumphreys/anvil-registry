@@ -129,6 +129,7 @@ async function analysePackageVersion(
       policy: dependencies.config.policy
     }
   );
+  const evaluatedAt = new Date().toISOString();
 
   await dependencies.persistence.putAnalysisReport(report);
   const override = await dependencies.persistence.getOverride(target.packageName, version);
@@ -136,6 +137,7 @@ async function analysePackageVersion(
     packageName: target.packageName,
     version,
     runtimeMode: dependencies.config.RUNTIME_MODE,
+    evaluatedAt,
     versionMetadata: targetMetadata,
     packageAgeDays,
     weeklyDownloads,
@@ -215,6 +217,7 @@ async function analysePackageVersion(
     packageName: target.packageName,
     version,
     runtimeMode: dependencies.config.RUNTIME_MODE,
+    evaluatedAt,
     versionMetadata: targetMetadata,
     packageAgeDays,
     weeklyDownloads,

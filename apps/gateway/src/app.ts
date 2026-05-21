@@ -469,11 +469,13 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
       reasons: signal.reasons,
       suggestedPackage: signal.suggestedPackage
     }));
+    const evaluatedAt = new Date().toISOString();
 
     const decision = evaluatePolicy({
       packageName,
       version,
       runtimeMode: config.RUNTIME_MODE,
+      evaluatedAt,
       metadata: { name: packageName, distTags: metadata["dist-tags"], publishedAt: metadata.time?.created },
       versionMetadata,
       packageAgeDays: calculatePackageAgeDays(versionMetadata?.publishedAt),
