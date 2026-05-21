@@ -238,13 +238,7 @@ export function createSqsAnalysisWorker(options: {
           await options.handler(job);
           await client.send(new DeleteMessageCommand({ QueueUrl: options.queueUrl, ReceiptHandle: message.ReceiptHandle }));
         } catch {
-          await client.send(
-            new ChangeMessageVisibilityCommand({
-              QueueUrl: options.queueUrl,
-              ReceiptHandle: message.ReceiptHandle,
-              VisibilityTimeout: 0
-            })
-          );
+          await returnSqsMessageForRetry(client, options.queueUrl, message.ReceiptHandle);
         }
       }
     }
@@ -257,6 +251,21 @@ export function createSqsAnalysisWorker(options: {
       client.destroy?.();
     }
   };
+}
+
+async function returnSqsMessageForRetry(client: SqsClientLike, queueUrl: string, receiptHandle: string): Promise<void> {
+  try {
+    await client.send(
+      new ChangeMessageVisibilityCommand({
+        QueueUrl: queueUrl,
+        ReceiptHandle: receiptHandle,
+        VisibilityTimeout: 0
+      })
+    );
+  } catch {
+    // If the visibility reset fails, SQS will still retry after the original timeout.
+    // Keep polling so one AWS hiccup does not retire the worker.
+  }
 }
 
 function sleep(ms: number): Promise<void> {

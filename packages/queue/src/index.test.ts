@@ -335,12 +335,79 @@ describe("queue factory", () => {
       expect.arrayContaining(["ReceiveMessageCommand", "DeleteMessageCommand"])
     );
   });
+
+  it("continues polling SQS when returning a failed message for retry fails", async () => {
+    let sawDeleteMessage!: () => void;
+    const deleteMessageSeen = new Promise<void>((resolve) => {
+      sawDeleteMessage = resolve;
+    });
+    let worker: SqsAnalysisWorker;
+    const client = new FakeSqsClient([
+      {
+        Messages: [
+          {
+            MessageId: "message-1",
+            ReceiptHandle: "receipt-1",
+            Body: JSON.stringify({
+              packageName: "pkg",
+              version: "1.0.0",
+              reason: "metadata_request",
+              priority: "normal",
+              createdAt: "2026-05-20T00:00:00.000Z"
+            })
+          }
+        ]
+      },
+      {
+        Messages: [
+          {
+            MessageId: "message-2",
+            ReceiptHandle: "receipt-2",
+            Body: JSON.stringify({
+              packageName: "safe-pkg",
+              version: "2.0.0",
+              reason: "metadata_request",
+              priority: "normal",
+              createdAt: "2026-05-20T00:00:00.000Z"
+            })
+          }
+        ]
+      }
+    ]);
+    client.failOnce("ChangeMessageVisibilityCommand", new Error("visibility reset failed"));
+    client.onCommand = (commandName) => {
+      if (commandName === "DeleteMessageCommand") {
+        void worker.close();
+        sawDeleteMessage();
+      }
+    };
+    const handler = vi.fn(async (job) => {
+      if (job.packageName === "pkg") throw new Error("analysis failed");
+    });
+
+    worker = createSqsAnalysisWorker({
+      queueUrl: "https://sqs.example.test/queue",
+      region: "us-east-1",
+      waitTimeSeconds: 0,
+      pollErrorDelayMs: 0,
+      client,
+      handler
+    });
+
+    await deleteMessageSeen;
+    expect(handler).toHaveBeenCalledWith(expect.objectContaining({ id: "message-1", packageName: "pkg" }));
+    expect(handler).toHaveBeenCalledWith(expect.objectContaining({ id: "message-2", packageName: "safe-pkg" }));
+    expect(client.commands.map((command) => command.constructor.name)).toEqual(
+      expect.arrayContaining(["ChangeMessageVisibilityCommand", "DeleteMessageCommand"])
+    );
+  });
 });
 
 class FakeSqsClient implements SqsClientLike {
   readonly commands: Array<{ constructor: { name: string }; input: Record<string, unknown> }> = [];
   onCommand?: (commandName: string) => void;
   attributeResponse?: unknown;
+  private readonly commandFailures = new Map<string, Error[]>();
   private destroyed = false;
 
   constructor(private readonly receiveResponses: unknown[] = []) {}
@@ -350,6 +417,9 @@ class FakeSqsClient implements SqsClientLike {
     const recorded = command as unknown as { constructor: { name: string }; input: Record<string, unknown> };
     this.commands.push(recorded);
     this.onCommand?.(recorded.constructor.name);
+    const failures = this.commandFailures.get(recorded.constructor.name);
+    const failure = failures?.shift();
+    if (failure) throw failure;
     if (recorded.constructor.name === "ReceiveMessageCommand") {
       const response = this.receiveResponses.shift();
       if (response instanceof Error) throw response;
@@ -361,5 +431,11 @@ class FakeSqsClient implements SqsClientLike {
 
   destroy(): void {
     this.destroyed = true;
+  }
+
+  failOnce(commandName: string, error: Error): void {
+    const failures = this.commandFailures.get(commandName) ?? [];
+    failures.push(error);
+    this.commandFailures.set(commandName, failures);
   }
 }
