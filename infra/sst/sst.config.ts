@@ -249,6 +249,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function loadBalancerDomain(domain: string | undefined, cert: string | undefined) {
   const name = optionalEnv(domain);
   if (!name) return undefined;
+  if (name.includes("://") || name.includes("/")) throw new Error("ANVIL_GATEWAY_DOMAIN and ANVIL_ADMIN_DOMAIN must be hostnames, not URLs.");
 
   const certArn = optionalEnv(cert);
   return certArn ? { name, dns: false, cert: certArn } : name;
@@ -261,9 +262,21 @@ function loadBalancerDomainName(domain: ReturnType<typeof loadBalancerDomain>) {
 
 function requiredPublicBaseUrl(publicBaseUrl: string | undefined, gatewayDomainName: string | undefined) {
   const explicit = optionalEnv(publicBaseUrl);
-  if (explicit) return explicit;
+  if (explicit) return validatePublicBaseUrl(explicit);
   if (gatewayDomainName) return `https://${gatewayDomainName}`;
   throw new Error("Set PUBLIC_BASE_URL or ANVIL_GATEWAY_DOMAIN so npm tarball URLs rewrite to the deployed gateway.");
+}
+
+function validatePublicBaseUrl(value: string) {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error("PUBLIC_BASE_URL must be a valid https URL.");
+  }
+  if (url.protocol !== "https:") throw new Error("PUBLIC_BASE_URL must use https:// for SST deployments.");
+  if (url.username || url.password) throw new Error("PUBLIC_BASE_URL must not include credentials.");
+  return value;
 }
 
 function optionalEnv(value: string | undefined) {

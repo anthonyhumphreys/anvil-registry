@@ -211,6 +211,20 @@ describe("SST infrastructure shape", () => {
 
     await expect(config.run()).rejects.toThrow("Set PUBLIC_BASE_URL or ANVIL_GATEWAY_DOMAIN");
   });
+
+  it("rejects invalid deployed gateway URL settings before creating services", async () => {
+    const { createAnvilSstConfig } = await import("./sst.config.js");
+
+    await expect((createAnvilSstConfig(fakeRuntime([], { PUBLIC_BASE_URL: "http://npm.example.test" })) as { run(): Promise<Record<string, unknown>> }).run()).rejects.toThrow(
+      "PUBLIC_BASE_URL must use https://"
+    );
+    await expect((createAnvilSstConfig(fakeRuntime([], { PUBLIC_BASE_URL: "https://token@npm.example.test" })) as { run(): Promise<Record<string, unknown>> }).run()).rejects.toThrow(
+      "PUBLIC_BASE_URL must not include credentials"
+    );
+    await expect((createAnvilSstConfig(fakeRuntime([], { ANVIL_GATEWAY_DOMAIN: "https://npm.example.test" })) as { run(): Promise<Record<string, unknown>> }).run()).rejects.toThrow(
+      "must be hostnames, not URLs"
+    );
+  });
 });
 
 function fakeRuntime(resources: RecordedResource[], env: Record<string, string>): AnvilSstRuntime {
