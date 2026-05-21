@@ -43,6 +43,15 @@ describe("config", () => {
     expect(config.ANVIL_API_BASE_URL).toBe("http://gateway:4873");
   });
 
+  it("defaults the admin API base URL to the public base URL", () => {
+    const config = loadConfig({
+      ...process.env,
+      PUBLIC_BASE_URL: "https://npm.example.test"
+    });
+
+    expect(config.ANVIL_API_BASE_URL).toBe("https://npm.example.test");
+  });
+
   it("loads the optional popular package index path", () => {
     const config = loadConfig({
       ...process.env,
