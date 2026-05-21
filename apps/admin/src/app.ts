@@ -79,6 +79,17 @@ export function buildAdmin(dependencies: AdminDependencies = {}): FastifyInstanc
     return { report };
   });
 
+  app.get("/api/reports/:packageName/:version/artifact", async (request, reply) => {
+    const params = request.params as { packageName: string; version: string };
+    const report = await persistence.getAnalysisReport(params.packageName, params.version, analysisReportIdentityFromRequest(request.url, request.query));
+    if (!report) return reply.code(404).send({ error: "ANVIL_REPORT_NOT_FOUND" });
+    if (!report.objectKey) return reply.code(404).send({ error: "ANVIL_REPORT_ARTIFACT_NOT_STORED" });
+    const artifact = await objectStore.get(report.objectKey);
+    if (!artifact) return reply.code(404).send({ error: "ANVIL_REPORT_ARTIFACT_NOT_FOUND", objectKey: report.objectKey });
+    reply.type("application/json");
+    return reply.send(Buffer.from(artifact));
+  });
+
   app.get("/api/packages/:packageName/:version/reports/compare", async (request, reply) => {
     const params = request.params as { packageName: string; version: string };
     const reports = await persistence.listAnalysisReports({ packageName: params.packageName, version: params.version, limit: 200 });
@@ -522,7 +533,7 @@ export function buildAdmin(dependencies: AdminDependencies = {}): FastifyInstanc
           <dt>Policy</dt><dd>${escapeHtml(report.policyVersion)}</dd>
           <dt>Tarball Integrity</dt><dd>${escapeHtml(report.tarballIntegrity ?? "")}</dd>
           <dt>Tarball Shasum</dt><dd>${escapeHtml(report.tarballShasum ?? "")}</dd>
-          <dt>Object Store Key</dt><dd>${analysisReportObjectKeyDetails(report)}</dd>
+          <dt>Object Store Key</dt><dd>${analysisReportObjectKeyDetails(report, analysisReportArtifactUrl(report))}</dd>
           <dt>Score</dt><dd>${report.score}</dd>
         </dl>
         <h3>Signals</h3>
@@ -727,7 +738,7 @@ function reportTable(reports: AnalysisReportRecord[]) {
           <td>${record.report.signals.length}</td>
           <td>${record.report.score}</td>
           <td>${analysisReportIdentityDetails(record)}</td>
-          <td>${analysisReportObjectKeyDetails(record.report)}</td>
+          <td>${analysisReportObjectKeyDetails(record.report, analysisReportArtifactUrl(record))}</td>
           <td>${escapeHtml(formatDate(record.createdAt))}</td>
         </tr>`
       )
@@ -735,8 +746,10 @@ function reportTable(reports: AnalysisReportRecord[]) {
   </table>`;
 }
 
-function analysisReportObjectKeyDetails(report: { objectKey?: string }) {
-  return report.objectKey ? `<code>${escapeHtml(report.objectKey)}</code>` : `<span class="empty">not stored</span>`;
+function analysisReportObjectKeyDetails(report: { objectKey?: string }, artifactUrl?: string) {
+  if (!report.objectKey) return `<span class="empty">not stored</span>`;
+  const key = `<code>${escapeHtml(report.objectKey)}</code>`;
+  return artifactUrl ? `<a href="${escapeHtml(artifactUrl)}">${key}</a>` : key;
 }
 
 function popularPackageIndexSummary(index: PopularPackageIndex) {
@@ -1681,6 +1694,15 @@ function analysisReportUrl(record: AnalysisReportRecord) {
   if (record.analyserVersion) params.set("analyser", record.analyserVersion);
   const query = params.toString();
   return `/reports/${encodeURIComponent(record.packageName)}/${encodeURIComponent(record.version)}${query ? `?${query}` : ""}`;
+}
+
+function analysisReportArtifactUrl(record: Pick<AnalysisReportRecord, "packageName" | "version" | "tarballIntegrity" | "tarballShasum" | "analyserVersion"> | AnalysisReportRecord["report"]) {
+  const params = new URLSearchParams();
+  if (record.tarballIntegrity) params.set("integrity", record.tarballIntegrity);
+  if (record.tarballShasum) params.set("shasum", record.tarballShasum);
+  if (record.analyserVersion) params.set("analyser", record.analyserVersion);
+  const query = params.toString();
+  return `/api/reports/${encodeURIComponent(record.packageName)}/${encodeURIComponent(record.version)}/artifact${query ? `?${query}` : ""}`;
 }
 
 function compareLatestAnalysisReportsUrl(reports: AnalysisReportRecord[]) {

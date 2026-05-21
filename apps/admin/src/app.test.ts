@@ -741,6 +741,8 @@ describe("admin app", () => {
 
   it("selects identity-specific analysis reports", async () => {
     const persistence = new MemoryPersistence();
+    const objectStore = new TestObjectStore();
+    const objectKey = "analysis/pkg/1.0.0/policy/static-v2/sha512-new/report.json";
     await persistence.putAnalysisReport({
       packageName: "pkg",
       version: "1.0.0",
@@ -760,7 +762,7 @@ describe("admin app", () => {
       policyVersion: "policy",
       tarballIntegrity: "sha512-new",
       tarballShasum: "newsum",
-      objectKey: "analysis/pkg/1.0.0/policy/static-v2/sha512-new/report.json",
+      objectKey,
       score: 30,
       signals: [{ code: "INSTALL_SCRIPT_CHANGED", message: "New tarball changed install script.", severity: "medium" }],
       manifestDiff: {
@@ -770,9 +772,22 @@ describe("admin app", () => {
       dependencyDiff: { added: { debug: "^4.3.0" }, optional: { added: { fsevents: "^2.3.3" }, removed: {}, changed: {} } },
       createdAt: "2021-01-01T00:00:00.000Z"
     });
-    const app = buildAdmin({ persistence });
+    await objectStore.put(
+      objectKey,
+      new TextEncoder().encode(
+        JSON.stringify({
+          packageName: "pkg",
+          version: "1.0.0",
+          objectKey,
+          artifact: true
+        })
+      )
+    );
+    const app = buildAdmin({ persistence, objectStore });
 
     const api = await app.inject({ method: "GET", url: "/api/reports/pkg/1.0.0?integrity=sha512-old&analyser=static-v1" });
+    const artifact = await app.inject({ method: "GET", url: "/api/reports/pkg/1.0.0/artifact?integrity=sha512-new&shasum=newsum&analyser=static-v2" });
+    const missingArtifact = await app.inject({ method: "GET", url: "/api/reports/pkg/1.0.0/artifact?integrity=sha512-old&analyser=static-v1" });
     const compareApi = await app.inject({ method: "GET", url: "/api/packages/pkg/1.0.0/reports/compare?leftIntegrity=sha512-old&leftAnalyser=static-v1&rightIntegrity=sha512-new&rightAnalyser=static-v2" });
     const page = await app.inject({ method: "GET", url: "/reports/pkg/1.0.0?integrity=sha512-new&shasum=newsum&analyser=static-v2" });
     const comparePage = await app.inject({ method: "GET", url: "/packages/pkg/1.0.0/reports/compare?leftIntegrity=sha512-old&leftAnalyser=static-v1&rightIntegrity=sha512-new&rightAnalyser=static-v2" });
@@ -780,6 +795,11 @@ describe("admin app", () => {
 
     expect(api.statusCode).toBe(200);
     expect(api.json().report).toMatchObject({ tarballIntegrity: "sha512-old", analyserVersion: "static-v1" });
+    expect(artifact.statusCode).toBe(200);
+    expect(artifact.headers["content-type"]).toContain("application/json");
+    expect(artifact.json()).toMatchObject({ packageName: "pkg", version: "1.0.0", objectKey, artifact: true });
+    expect(missingArtifact.statusCode).toBe(404);
+    expect(missingArtifact.json()).toMatchObject({ error: "ANVIL_REPORT_ARTIFACT_NOT_STORED" });
     expect(compareApi.statusCode).toBe(200);
     expect(compareApi.json().comparison).toMatchObject({ scoreDelta: -65 });
     expect(compareApi.json().comparison.signals.added[0]).toMatchObject({ code: "INSTALL_SCRIPT_CHANGED" });
@@ -787,6 +807,7 @@ describe("admin app", () => {
     expect(page.statusCode).toBe(200);
     expect(page.body).toContain("sha512-new");
     expect(page.body).toContain("analysis/pkg/1.0.0/policy/static-v2/sha512-new/report.json");
+    expect(page.body).toContain("/api/reports/pkg/1.0.0/artifact?integrity=sha512-new&amp;shasum=newsum&amp;analyser=static-v2");
     expect(page.body).toContain("New tarball changed install script.");
     expect(comparePage.statusCode).toBe(200);
     expect(comparePage.body).toContain("Comparison Summary");
@@ -805,6 +826,7 @@ describe("admin app", () => {
     expect(comparePage.body).toContain("mode: 0o755");
     expect(review.body).toContain("Compare latest reports");
     expect(review.body).toContain("analysis/pkg/1.0.0/policy/static-v2/sha512-new/report.json");
+    expect(review.body).toContain("/api/reports/pkg/1.0.0/artifact?integrity=sha512-new&amp;shasum=newsum&amp;analyser=static-v2");
     expect(review.body).toContain("/reports/pkg/1.0.0?integrity=sha512-new&amp;shasum=newsum&amp;analyser=static-v2");
     await app.close();
   });
