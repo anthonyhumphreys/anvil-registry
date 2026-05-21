@@ -8,6 +8,7 @@ on:
       - "apps/cli/**"
       - "apps/gateway/**"
       - "devcontainer-base/**"
+      - "docs/anvil-node-base-spec.md"
       - "infra/docker/**"
       - "package.json"
       - "packages/**"
@@ -29,6 +30,7 @@ on:
       - "apps/cli/**"
       - "apps/gateway/**"
       - "devcontainer-base/**"
+      - "docs/anvil-node-base-spec.md"
       - "infra/docker/**"
       - "package.json"
       - "packages/**"
@@ -70,6 +72,9 @@ jobs:
         run: |
           corepack enable
           pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Test Node Base scripts
+        run: pnpm test:node-base
 
       - name: Build smoke image
         uses: docker/build-push-action@v6
