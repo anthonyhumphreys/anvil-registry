@@ -21,6 +21,10 @@ test "$(npm config get save-exact)" = "true"
 test -d /workspaces/.anvil/reports
 test -w /workspaces/.anvil/reports
 
+for command in jq rg lsof strace python3; do
+  command -v "$command" >/dev/null
+done
+
 for command in \
   anvil-npm-ci-safe \
   anvil-npm-ci-observed \
