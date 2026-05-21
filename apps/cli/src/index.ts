@@ -732,14 +732,24 @@ function printNodeBaseReport(report: NodeBaseReportRecord, dependencies: CliDepe
 async function requestJson<T = unknown>(dependencies: CliDependencies, url: string, init?: RequestInit): Promise<T> {
   const response = await dependencies.fetch(url, init);
   const bodyText = await response.text();
-  const body = bodyText ? JSON.parse(bodyText) : undefined;
+  const body = parseJsonBody(bodyText);
 
   if (!response.ok) {
-    const detail = body && typeof body === "object" && "error" in body ? String(body.error) : response.statusText;
+    const detail = body && typeof body === "object" && "error" in body ? String(body.error) : bodyText || response.statusText;
     throw new Error(`Anvil request failed (${response.status}): ${detail}`);
   }
 
+  if (bodyText && body === undefined) throw new Error(`Anvil request returned invalid JSON (${response.status}).`);
   return body as T;
+}
+
+function parseJsonBody(bodyText: string): unknown | undefined {
+  if (!bodyText) return undefined;
+  try {
+    return JSON.parse(bodyText);
+  } catch {
+    return undefined;
+  }
 }
 
 async function requestBytes(dependencies: CliDependencies, url: string): Promise<Uint8Array> {

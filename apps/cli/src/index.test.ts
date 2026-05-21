@@ -173,6 +173,17 @@ importers:
     await expect(run(["--", "doctor"], dependencies)).resolves.toBe(0);
   });
 
+  it("reports non-JSON failed responses with their HTTP status", async () => {
+    const dependencies = fakeDependencies({
+      fetch: vi.fn(async () => new Response("upstream unavailable", { status: 502, statusText: "Bad Gateway" }))
+    });
+
+    const exitCode = await run(["doctor"], dependencies);
+
+    expect(exitCode).toBe(1);
+    expect(dependencies.stderr.write).toHaveBeenCalledWith(expect.stringContaining("Anvil request failed (502): upstream unavailable"));
+  });
+
   it("scans lockfiles and fails for blocked packages", async () => {
     const dependencies = fakeDependencies({
       readFile: vi.fn(async () =>
