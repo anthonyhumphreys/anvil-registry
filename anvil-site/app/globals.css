@@ -1,0 +1,115 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 190 14% 9%;
+    --card: 0 0% 100%;
+    --card-foreground: 190 14% 9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 190 14% 9%;
+    --primary: 190 14% 9%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 190 8% 95%;
+    --secondary-foreground: 190 14% 9%;
+    --muted: 190 8% 95%;
+    --muted-foreground: 190 7% 38%;
+    --accent: 31 91% 54%;
+    --accent-foreground: 190 14% 9%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 190 12% 88%;
+    --input: 190 12% 88%;
+    --ring: 31 91% 54%;
+    --radius: 0.5rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+@layer components {
+  .code-window {
+    background:
+      radial-gradient(circle at 18% 10%, rgba(244, 142, 33, 0.14), transparent 30%),
+      linear-gradient(135deg, #111719 0%, #050708 100%);
+  }
+
+  .doc-markdown {
+    @apply text-[15px] leading-7 text-foreground;
+  }
+
+  .doc-markdown h1 {
+    @apply mb-4 text-4xl font-semibold leading-tight tracking-normal;
+  }
+
+  .doc-markdown h2 {
+    @apply mt-12 border-t pt-8 text-2xl font-semibold tracking-normal;
+  }
+
+  .doc-markdown h3 {
+    @apply mt-8 text-lg font-semibold tracking-normal;
+  }
+
+  .doc-markdown p {
+    @apply mt-4 text-muted-foreground;
+  }
+
+  .doc-markdown ul,
+  .doc-markdown ol {
+    @apply mt-4 flex flex-col gap-2 pl-5 text-muted-foreground;
+  }
+
+  .doc-markdown ul {
+    @apply list-disc;
+  }
+
+  .doc-markdown ol {
+    @apply list-decimal;
+  }
+
+  .doc-markdown a {
+    @apply font-medium text-foreground underline underline-offset-4;
+  }
+
+  .doc-markdown code {
+    @apply rounded-md border bg-muted px-1.5 py-0.5 font-mono text-[13px] text-foreground;
+  }
+
+  .doc-markdown pre {
+    @apply mt-5 overflow-x-auto rounded-lg border bg-[#081011] p-5 text-sm text-white shadow-anvil;
+  }
+
+  .doc-markdown pre code {
+    @apply border-0 bg-transparent p-0 text-white;
+  }
+
+  .doc-markdown blockquote {
+    @apply mt-5 border-l-2 border-accent pl-4 text-muted-foreground;
+  }
+
+  .doc-markdown table {
+    @apply mt-6 w-full border-collapse overflow-hidden rounded-lg border text-sm;
+  }
+
+  .doc-markdown th,
+  .doc-markdown td {
+    @apply border p-3 text-left align-top;
+  }
+
+  .doc-markdown th {
+    @apply bg-muted font-semibold text-foreground;
+  }
+}
