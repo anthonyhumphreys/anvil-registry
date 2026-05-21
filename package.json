@@ -18,6 +18,7 @@
     "smoke:node-base-image-observed": "./scripts/smoke-node-base-image-observed",
     "smoke:node-base-image-report": "./scripts/smoke-node-base-image-report",
     "smoke:node-base-report": "./scripts/smoke-node-base-report",
+    "smoke:scoped-upstream": "tsx scripts/smoke-scoped-upstream.ts",
     "sst:migrate": "pnpm --dir infra/sst sst shell -- pnpm --filter @anvil/infra-sst migrate:run",
     "test:node-base": "./devcontainer-base/scripts/test-node-base-scripts",
     "test": "turbo run test",

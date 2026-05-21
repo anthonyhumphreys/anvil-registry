@@ -134,9 +134,12 @@ After the local stack is running:
 ```bash
 pnpm smoke:local
 pnpm smoke:clients
+pnpm smoke:scoped-upstream
 pnpm smoke:analysis
 pnpm smoke:node-base-report
 ```
+
+`smoke:scoped-upstream` starts a token-gated mock scoped registry and a local gateway, then verifies scoped metadata routing, tarball URL rewriting, upstream bearer auth, and Anvil cache hits without needing real private registry credentials.
 
 Node Base image checks:
 
