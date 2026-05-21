@@ -15,6 +15,7 @@ on:
       - "scripts/smoke-analysis-queue"
       - "scripts/smoke-llm-review"
       - "scripts/smoke-npm-clients"
+      - "scripts/smoke-scoped-upstream.ts"
       - "turbo.json"
       - "tsconfig.base.json"
   push:
@@ -33,6 +34,7 @@ on:
       - "scripts/smoke-analysis-queue"
       - "scripts/smoke-llm-review"
       - "scripts/smoke-npm-clients"
+      - "scripts/smoke-scoped-upstream.ts"
       - "turbo.json"
       - "tsconfig.base.json"
   workflow_dispatch:
@@ -76,3 +78,6 @@ jobs:
 
       - name: Validate SST migration command
         run: pnpm --filter @anvil/infra-sst migrate:run -- --dry-run
+
+      - name: Smoke scoped upstream routing
+        run: pnpm smoke:scoped-upstream

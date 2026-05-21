@@ -1105,6 +1105,14 @@ pnpm smoke:clients
 
 This command creates throwaway projects, installs known unscoped and scoped packages through Anvil with npm, pnpm, and Yarn, keeps lifecycle scripts disabled, and verifies the installed package versions.
 
+Use the scoped upstream smoke to verify scoped/private registry routing without needing real private credentials:
+
+```bash
+pnpm smoke:scoped-upstream
+```
+
+This command starts a token-gated mock scoped registry and a local gateway, then verifies scoped metadata routing, tarball URL rewriting, upstream bearer auth, cache hits, and token-safe readiness output.
+
 Use the analysis queue smoke to verify token-gated manual analysis enqueueing, worker consumption, persistence, and Admin report visibility:
 
 ```bash
