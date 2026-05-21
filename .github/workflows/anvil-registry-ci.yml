@@ -1,0 +1,78 @@
+name: Anvil Registry CI
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/anvil-registry-ci.yml"
+      - "apps/**"
+      - "docs/anvil-registry-spec.md"
+      - "infra/docker/**"
+      - "infra/sst/**"
+      - "package.json"
+      - "packages/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "scripts/smoke-analysis-queue"
+      - "scripts/smoke-llm-review"
+      - "scripts/smoke-npm-clients"
+      - "turbo.json"
+      - "tsconfig.base.json"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/anvil-registry-ci.yml"
+      - "apps/**"
+      - "docs/anvil-registry-spec.md"
+      - "infra/docker/**"
+      - "infra/sst/**"
+      - "package.json"
+      - "packages/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "scripts/smoke-analysis-queue"
+      - "scripts/smoke-llm-review"
+      - "scripts/smoke-npm-clients"
+      - "turbo.json"
+      - "tsconfig.base.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate registry workspace
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Validate Docker Compose config
+        run: docker compose -f infra/docker/docker-compose.yml config
+
+      - name: Validate SST migration command
+        run: pnpm --filter @anvil/infra-sst migrate:run -- --dry-run
