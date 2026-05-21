@@ -187,6 +187,29 @@ ANVIL_STRICT=true ANVIL_STRICT_LIFECYCLE_MODE=risk ANVIL_STRICT_RISK_LEVEL=high 
 }
 test "$?" = "20"
 
+mkdir -p "$WORK_DIR/submit" "$WORK_DIR/failing-curl-bin"
+cat > "$WORK_DIR/submit/report.json" <<'JSON'
+{
+  "summary": {
+    "high": 0,
+    "medium": 0
+  }
+}
+JSON
+cat > "$WORK_DIR/failing-curl-bin/curl" <<'SH'
+#!/usr/bin/env bash
+exit 22
+SH
+chmod +x "$WORK_DIR/failing-curl-bin/curl"
+set +e
+ANVIL_REGISTRY_URL="http://registry.example.test" \
+PATH="$WORK_DIR/failing-curl-bin:$PATH" \
+  anvil-submit-report "$WORK_DIR/submit/report.json" network >/tmp/anvil-submit-report.out 2>/tmp/anvil-submit-report.err
+SUBMIT_STATUS=$?
+set -e
+test "$SUBMIT_STATUS" = "22"
+test ! -e "$WORK_DIR/submit/.anvil-submit-payload.json"
+
 mkdir -p "$WORK_DIR/bin"
 cat > "$WORK_DIR/bin/strace" <<'SH'
 #!/usr/bin/env bash

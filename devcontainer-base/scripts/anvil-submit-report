@@ -22,6 +22,14 @@ if [[ ! -f "$REPORT_PATH" ]]; then
   exit 66
 fi
 
+PAYLOAD_PATH=""
+cleanup_payload() {
+  if [[ -n "$PAYLOAD_PATH" ]]; then
+    rm -f "$PAYLOAD_PATH"
+  fi
+}
+trap cleanup_payload EXIT
+
 PAYLOAD_PATH="$(node - "$REPORT_PATH" "$REPORT_TYPE" "$REGISTRY_URL" "$PROJECT_NAME" "$SOURCE" <<'NODE'
 const fs = require("fs");
 const path = require("path");
@@ -63,17 +71,15 @@ console.log(payloadPath);
 NODE
 )"
 ENDPOINT="$(jq -r '.endpoint' "$PAYLOAD_PATH")"
-AUTH_ARGS=()
+CURL_ARGS=(-fsS -X POST -H "Content-Type: application/json")
 if [[ -n "${ANVIL_ADMIN_TOKEN:-}" ]]; then
-  AUTH_ARGS=(-H "Authorization: Bearer ${ANVIL_ADMIN_TOKEN}")
+  CURL_ARGS+=(-H "Authorization: Bearer ${ANVIL_ADMIN_TOKEN}")
 fi
+CURL_ARGS+=(--data-binary "$(jq -c '.payload' "$PAYLOAD_PATH")" "$ENDPOINT")
 
-curl -fsS \
-  -X POST \
-  -H "Content-Type: application/json" \
-  "${AUTH_ARGS[@]}" \
-  --data-binary "$(jq -c '.payload' "$PAYLOAD_PATH")" \
-  "$ENDPOINT" >/dev/null
+curl "${CURL_ARGS[@]}" >/dev/null
 
 rm -f "$PAYLOAD_PATH"
+PAYLOAD_PATH=""
+trap - EXIT
 echo "[anvil] Submitted $REPORT_TYPE report to $ENDPOINT"
