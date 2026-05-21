@@ -3,12 +3,13 @@ import { gunzipSync } from "node:zlib";
 import type { AnalysisReport, PackageVersionMetadata, PolicyReason } from "@anvil/shared";
 
 const lifecycleScripts = new Set(["preinstall", "install", "postinstall", "prepare", "prepublish", "prepublishOnly"]);
+type DependencyGroup = "runtime" | "dev" | "optional" | "peer";
 
 export function analyseManifestChange(
   target: PackageVersionMetadata,
   previous?: PackageVersionMetadata | PackageVersionMetadata[],
   options: { analyserVersion: string; policyVersion: string } = {
-    analyserVersion: "manifest-2026-05-20.1",
+    analyserVersion: "manifest-2026-05-21.1",
     policyVersion: "unknown"
   }
 ): AnalysisReport {
@@ -43,6 +44,10 @@ export function analyseManifestChange(
   }
 
   const dependencyDiff = diffManifestDependencies(target, primaryPrevious);
+  if (primaryPrevious) {
+    signals.push(...detectDependencyChangeSignals(dependencyDiff, previousVersions, release.type));
+  }
+
   if (primaryPrevious && isPatchVersionBump(primaryPrevious.version, target.version) && Object.keys(dependencyDiff.added).length > 0) {
     signals.push({
       code: "NEW_DEPENDENCY_IN_PATCH_VERSION",
@@ -58,22 +63,6 @@ export function analyseManifestChange(
       message: "Patch version added optional dependencies.",
       severity: "medium",
       evidence: { added: dependencyDiff.optional.added, impact: "install-time-or-runtime", expectedForRelease: false, releaseType: release.type, ...baseline, history: dependencyHistory(dependencyDiff.optional.added, previousVersions, "optionalDependencies") }
-    });
-  }
-
-  if (primaryPrevious && Object.keys(dependencyDiff.peer.added).length + Object.keys(dependencyDiff.peer.removed).length + Object.keys(dependencyDiff.peer.changed).length > 0) {
-    signals.push({
-      code: "PEER_DEPENDENCY_CHANGED",
-      message: "Peer dependency contract changed.",
-      severity: "low",
-      evidence: {
-        ...dependencyDiff.peer,
-        impact: "runtime-contract",
-        expectedForRelease: release.type === "major",
-        releaseType: release.type,
-        ...baseline,
-        history: dependencyHistory(changedDependencyTargets(dependencyDiff.peer), previousVersions, "peerDependencies")
-      }
     });
   }
 
@@ -312,7 +301,7 @@ export function mergeAnalysisReports(report: AnalysisReport, fileAnalysis: { sig
   const signals = [...report.signals, ...fileAnalysis.signals];
   return {
     ...report,
-    analyserVersion: "static-2026-05-20.3",
+    analyserVersion: "static-2026-05-21.1",
     signals,
     score: signals.reduce((total, signal) => total + (signal.severity === "critical" ? 95 : signal.severity === "high" ? 70 : signal.severity === "medium" ? 35 : signal.severity === "low" ? 10 : 0), 0),
     fileFindings: fileAnalysis.fileFindings
@@ -350,6 +339,72 @@ function diffManifestDependencies(target: PackageVersionMetadata, previous?: Pac
     optional: diffDependencies(target.optionalDependencies, previous?.optionalDependencies),
     peer: diffDependencies(target.peerDependencies, previous?.peerDependencies)
   };
+}
+
+type DependencyDiff = ReturnType<typeof diffManifestDependencies>;
+
+function detectDependencyChangeSignals(dependencyDiff: DependencyDiff, previousVersions: PackageVersionMetadata[], releaseType: string): PolicyReason[] {
+  const signals: PolicyReason[] = [];
+  for (const group of ["runtime", "dev", "optional", "peer"] as const) {
+    const diff = dependencyDiff[group];
+    const changed = changedDependencyTargets(diff);
+    if (Object.keys(changed).length === 0) continue;
+    signals.push({
+      code: dependencyChangeCode(group),
+      message: dependencyChangeMessage(group),
+      severity: dependencyChangeSeverity(group, diff),
+      evidence: {
+        ...diff,
+        impact: dependencyChangeImpact(group),
+        expectedForRelease: dependencyChangeExpectedForRelease(group, releaseType),
+        releaseType,
+        ...baselineContext(previousVersions),
+        history: dependencyHistory(changed, previousVersions, dependencyHistoryField(group))
+      }
+    });
+  }
+  return signals;
+}
+
+function dependencyChangeCode(group: DependencyGroup): PolicyReason["code"] {
+  if (group === "runtime") return "RUNTIME_DEPENDENCY_CHANGED";
+  if (group === "dev") return "DEV_DEPENDENCY_CHANGED";
+  if (group === "optional") return "OPTIONAL_DEPENDENCY_CHANGED";
+  return "PEER_DEPENDENCY_CHANGED";
+}
+
+function dependencyChangeMessage(group: DependencyGroup) {
+  if (group === "runtime") return "Runtime dependency set changed.";
+  if (group === "dev") return "Development dependency set changed.";
+  if (group === "optional") return "Optional dependency set changed.";
+  return "Peer dependency contract changed.";
+}
+
+function dependencyChangeSeverity(group: DependencyGroup, diff: { added: Record<string, string>; removed: Record<string, string>; changed: Record<string, { previous: string; target: string }> }): PolicyReason["severity"] {
+  if (group === "dev") return "low";
+  if (group === "peer") return "low";
+  if (Object.keys(diff.added).length > 0 || Object.keys(diff.changed).length > 0) return "medium";
+  return "low";
+}
+
+function dependencyChangeImpact(group: DependencyGroup) {
+  if (group === "runtime") return "runtime";
+  if (group === "dev") return "development-or-build-time";
+  if (group === "optional") return "install-time-or-runtime";
+  return "runtime-contract";
+}
+
+function dependencyChangeExpectedForRelease(group: DependencyGroup, releaseType: string) {
+  if (group === "peer") return releaseType === "major";
+  if (group === "dev") return true;
+  return releaseType !== "patch";
+}
+
+function dependencyHistoryField(group: DependencyGroup): "dependencies" | "devDependencies" | "optionalDependencies" | "peerDependencies" {
+  if (group === "runtime") return "dependencies";
+  if (group === "dev") return "devDependencies";
+  if (group === "optional") return "optionalDependencies";
+  return "peerDependencies";
 }
 
 function detectManifestMetadataChanges(target: PackageVersionMetadata, previous: PackageVersionMetadata, previousVersions: PackageVersionMetadata[], releaseType: string): PolicyReason[] {
@@ -418,7 +473,7 @@ function lifecycleScriptHistory(scriptName: string, previousVersions: PackageVer
 function dependencyHistory(
   dependencies: Record<string, unknown>,
   previousVersions: PackageVersionMetadata[],
-  field: "dependencies" | "optionalDependencies" | "peerDependencies"
+  field: "dependencies" | "devDependencies" | "optionalDependencies" | "peerDependencies"
 ) {
   return Object.fromEntries(
     Object.keys(dependencies).map((name) => [

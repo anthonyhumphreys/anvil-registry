@@ -19,6 +19,7 @@ describe("analyseManifestChange", () => {
     );
 
     expect(report.signals.map((signal) => signal.code)).toContain("NEW_INSTALL_SCRIPT");
+    expect(report.signals.map((signal) => signal.code)).toContain("RUNTIME_DEPENDENCY_CHANGED");
     expect(report.signals.map((signal) => signal.code)).toContain("NEW_DEPENDENCY_IN_PATCH_VERSION");
     expect(report.manifestDiff?.release).toMatchObject({ previous: "1.0.0", target: "1.0.1", type: "patch" });
     expect(report.signals.find((signal) => signal.code === "NEW_INSTALL_SCRIPT")?.evidence).toMatchObject({
@@ -38,7 +39,8 @@ describe("analyseManifestChange", () => {
       {
         name: "pkg",
         version: "1.0.1",
-        dependencies: { react: "^18.0.0" },
+        dependencies: { react: "^18.0.0", "runtime-added": "^1.0.0" },
+        devDependencies: { vitest: "^3.0.0" },
         optionalDependencies: { fsevents: "^2.0.0" },
         peerDependencies: { react: "^19.0.0" },
         bin: { pkg: "./cli.js" },
@@ -50,7 +52,8 @@ describe("analyseManifestChange", () => {
       {
         name: "pkg",
         version: "1.0.0",
-        dependencies: { react: "^18.0.0" },
+        dependencies: { react: "^17.0.0", removed: "^1.0.0" },
+        devDependencies: { vitest: "^2.0.0" },
         peerDependencies: { react: "^18.0.0" },
         repository: { type: "git", url: "https://example.test/old.git" },
         license: "Apache-2.0",
@@ -59,14 +62,46 @@ describe("analyseManifestChange", () => {
     );
 
     const codes = report.signals.map((signal) => signal.code);
+    expect(codes).toContain("RUNTIME_DEPENDENCY_CHANGED");
+    expect(codes).toContain("DEV_DEPENDENCY_CHANGED");
+    expect(codes).toContain("OPTIONAL_DEPENDENCY_CHANGED");
     expect(codes).toContain("OPTIONAL_DEPENDENCY_ADDED");
     expect(codes).toContain("PEER_DEPENDENCY_CHANGED");
     expect(codes).toContain("BIN_FIELD_CHANGED");
     expect(codes).toContain("REPOSITORY_CHANGED");
     expect(codes).toContain("MANIFEST_FIELD_CHANGED");
     expect(report.dependencyDiff).toMatchObject({
+      runtime: {
+        added: { "runtime-added": "^1.0.0" },
+        removed: { removed: "^1.0.0" },
+        changed: { react: { previous: "^17.0.0", target: "^18.0.0" } }
+      },
+      dev: { changed: { vitest: { previous: "^2.0.0", target: "^3.0.0" } } },
       optional: { added: { fsevents: "^2.0.0" } },
       peer: { changed: { react: { previous: "^18.0.0", target: "^19.0.0" } } }
+    });
+    expect(report.signals.find((signal) => signal.code === "RUNTIME_DEPENDENCY_CHANGED")?.evidence).toMatchObject({
+      added: { "runtime-added": "^1.0.0" },
+      removed: { removed: "^1.0.0" },
+      changed: { react: { previous: "^17.0.0", target: "^18.0.0" } },
+      impact: "runtime",
+      expectedForRelease: false,
+      releaseType: "patch",
+      history: {
+        "runtime-added": [{ version: "1.0.0" }],
+        react: [{ version: "1.0.0", spec: "^17.0.0" }],
+        removed: [{ version: "1.0.0", spec: "^1.0.0" }]
+      }
+    });
+    expect(report.signals.find((signal) => signal.code === "DEV_DEPENDENCY_CHANGED")?.evidence).toMatchObject({
+      changed: { vitest: { previous: "^2.0.0", target: "^3.0.0" } },
+      impact: "development-or-build-time",
+      expectedForRelease: true
+    });
+    expect(report.signals.find((signal) => signal.code === "OPTIONAL_DEPENDENCY_CHANGED")?.evidence).toMatchObject({
+      added: { fsevents: "^2.0.0" },
+      impact: "install-time-or-runtime",
+      expectedForRelease: false
     });
     expect(report.manifestDiff?.metadata).toMatchObject({
       license: { previous: "Apache-2.0", target: "MIT", changed: true },
