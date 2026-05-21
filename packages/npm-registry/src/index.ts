@@ -37,6 +37,7 @@ export type UpstreamRegistryConfig = {
   baseUrl: string;
   scopes?: string[];
   authToken?: string;
+  authTokenSecretName?: string;
 };
 
 export type NpmDownloadsClientConfig = {

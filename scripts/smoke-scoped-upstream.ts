@@ -36,9 +36,10 @@ try {
     PUBLIC_BASE_URL: gatewayBaseUrl,
     CACHE_DIR: cacheDir,
     UPSTREAM_NPM_REGISTRY: "https://registry.npmjs.org",
+    SCOPED_SMOKE_NPM_TOKEN: token,
     UPSTREAM_NPM_REGISTRIES_JSON: JSON.stringify([
       { name: "npmjs", baseUrl: "https://registry.npmjs.org" },
-      { name: "private-smoke", baseUrl: upstreamBaseUrl, scopes: ["@private"], authToken: token }
+      { name: "private-smoke", baseUrl: upstreamBaseUrl, scopes: ["@private"], authTokenSecretName: "SCOPED_SMOKE_NPM_TOKEN" }
     ]),
     NPM_METADATA_CACHE_TTL_SECONDS: "300",
     POLICY_MINIMUM_PACKAGE_AGE_DAYS: "7",

@@ -36,7 +36,8 @@ const upstreamRegistrySchema = z
     name: z.string().trim().min(1),
     baseUrl: z.string().url(),
     scopes: z.array(z.string().trim().regex(/^@[^/\s]+$/)).optional(),
-    authToken: optionalEnvString
+    authToken: optionalEnvString,
+    authTokenSecretName: optionalEnvString
   })
   .strict();
 
@@ -145,7 +146,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     ...parsed,
     ADMIN_TOKEN: parsed.ANVIL_ADMIN_TOKEN ?? parsed.ADMIN_TOKEN,
     ANVIL_API_BASE_URL: parsed.ANVIL_API_BASE_URL ?? parsed.PUBLIC_BASE_URL,
-    UPSTREAM_NPM_REGISTRIES: parsed.UPSTREAM_NPM_REGISTRIES_JSON ?? [{ name: "npmjs", baseUrl: parsed.UPSTREAM_NPM_REGISTRY }],
+    UPSTREAM_NPM_REGISTRIES: resolveUpstreamRegistries(parsed.UPSTREAM_NPM_REGISTRIES_JSON ?? [{ name: "npmjs", baseUrl: parsed.UPSTREAM_NPM_REGISTRY }], env),
     DATABASE_URL: databaseUrl,
     policy: {
       ...defaultPolicyConfig,
@@ -182,6 +183,28 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
       }
     }
   };
+}
+
+type ParsedUpstreamRegistryConfig = z.infer<typeof upstreamRegistrySchema>;
+
+function resolveUpstreamRegistries(registries: ParsedUpstreamRegistryConfig[], env: NodeJS.ProcessEnv) {
+  return registries.map((registry) => {
+    const authToken = registry.authToken ?? tokenFromSecretName(registry.authTokenSecretName, env);
+    return {
+      name: registry.name,
+      baseUrl: registry.baseUrl,
+      ...(registry.scopes ? { scopes: registry.scopes } : {}),
+      ...(authToken ? { authToken } : {}),
+      ...(registry.authTokenSecretName ? { authTokenSecretName: registry.authTokenSecretName } : {})
+    };
+  });
+}
+
+function tokenFromSecretName(secretName: string | undefined, env: NodeJS.ProcessEnv) {
+  if (!secretName) return undefined;
+  const value = env[secretName]?.trim();
+  if (!value) throw new Error(`Upstream registry auth token secret '${secretName}' is not set.`);
+  return value;
 }
 
 export function resolveDatabaseUrl(env: {

@@ -87,6 +87,40 @@ describe("config", () => {
     ]);
   });
 
+  it("resolves scoped upstream registry tokens from named environment secrets", () => {
+    const config = loadConfig({
+      ...process.env,
+      INTERNAL_NPM_TOKEN: "secret-from-env",
+      UPSTREAM_NPM_REGISTRIES_JSON: JSON.stringify([
+        { name: "npmjs", baseUrl: "https://registry.npmjs.org" },
+        { name: "internal", baseUrl: "https://npm.pkg.example.test", scopes: ["@internal"], authTokenSecretName: "INTERNAL_NPM_TOKEN" }
+      ])
+    });
+
+    expect(config.UPSTREAM_NPM_REGISTRIES).toEqual([
+      { name: "npmjs", baseUrl: "https://registry.npmjs.org" },
+      {
+        name: "internal",
+        baseUrl: "https://npm.pkg.example.test",
+        scopes: ["@internal"],
+        authToken: "secret-from-env",
+        authTokenSecretName: "INTERNAL_NPM_TOKEN"
+      }
+    ]);
+  });
+
+  it("fails when a configured upstream registry token secret is missing", () => {
+    expect(() =>
+      loadConfig({
+        ...process.env,
+        UPSTREAM_NPM_REGISTRIES_JSON: JSON.stringify([
+          { name: "npmjs", baseUrl: "https://registry.npmjs.org" },
+          { name: "internal", baseUrl: "https://npm.pkg.example.test", scopes: ["@internal"], authTokenSecretName: "MISSING_INTERNAL_NPM_TOKEN" }
+        ])
+      })
+    ).toThrow("Upstream registry auth token secret 'MISSING_INTERNAL_NPM_TOKEN' is not set.");
+  });
+
   it("reports malformed upstream registry JSON as a config validation error", () => {
     expect(() =>
       loadConfig({

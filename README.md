@@ -54,11 +54,11 @@ By default Anvil proxies npmjs via `UPSTREAM_NPM_REGISTRY`. For scoped/private r
 ```json
 [
   { "name": "npmjs", "baseUrl": "https://registry.npmjs.org" },
-  { "name": "internal", "baseUrl": "https://npm.pkg.github.com", "scopes": ["@my-org"], "authToken": "token" }
+  { "name": "internal", "baseUrl": "https://npm.pkg.github.com", "scopes": ["@my-org"], "authTokenSecretName": "GITHUB_NPM_TOKEN" }
 ]
 ```
 
-Scoped metadata and tarball fetches use the matching upstream and bearer token while public packages continue through the default registry.
+Scoped metadata and tarball fetches use the matching upstream and bearer token while public packages continue through the default registry. For local-only testing, `authToken` may be provided inline; deployed config should prefer `authTokenSecretName`, which resolves the token from the named environment secret.
 
 ## Docker Compose
 

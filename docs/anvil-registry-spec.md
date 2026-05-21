@@ -540,6 +540,7 @@ registries:
     baseUrl: https://npm.pkg.github.com
     scopes:
       - "@my-org"
+    authTokenSecretName: GITHUB_NPM_TOKEN
 ```
 
 ---
