@@ -814,6 +814,70 @@ describe("gateway policy enforcement", () => {
     await app.close();
   });
 
+  it("does not apply stale LLM review evidence from a different analyser version", async () => {
+    const persistence = new MemoryPersistence();
+    await persistence.putAnalysisReport({
+      packageName: "stable-package",
+      version: "1.0.0",
+      tarballIntegrity: "sha512-test",
+      analyserVersion: "static-analysis-v2",
+      policyVersion: testConfig("ci").policy.version,
+      score: 0,
+      signals: [],
+      createdAt: "2026-05-21T12:00:00.000Z"
+    });
+    await persistence.putLlmRiskReview({
+      packageName: "stable-package",
+      version: "1.0.0",
+      tarballIntegrity: "sha512-test",
+      analyserVersion: "static-analysis-v1",
+      provider: "test-provider",
+      model: "risk-reviewer",
+      review: {
+        riskLevel: "critical",
+        confidence: "high",
+        summary: "This belongs to an older analysis engine.",
+        suspectedRiskTypes: ["install_script_abuse"],
+        evidence: [{ signal: "OLD_ANALYSER", explanation: "Old analyser evidence.", source: "metadata" }],
+        recommendedAction: "block"
+      }
+    });
+    const app = buildGateway({
+      config: loadConfig({
+        ...process.env,
+        RUNTIME_MODE: "ci",
+        PUBLIC_BASE_URL: "http://anvil.test",
+        PERSISTENCE_DRIVER: "memory",
+        LLM_REVIEW_ENABLED: "true"
+      }),
+      persistence,
+      queue: new MemoryJobQueue(),
+      registry: {
+        fetchMetadata: vi.fn(async () => packageMetadata("stable-package", "2020-01-01T00:00:00.000Z")),
+        fetchTarball: vi.fn()
+      },
+      downloadStats: noDownloadStats()
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/-/anvil/explain",
+      payload: { packageName: "stable-package", version: "1.0.0" }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      decision: {
+        action: "allow",
+        reasons: expect.not.arrayContaining([expect.objectContaining({ code: "LLM_RISK_REVIEW_FLAGGED" })])
+      },
+      analysisReport: expect.objectContaining({ analyserVersion: "static-analysis-v2" }),
+      llmRiskReviews: []
+    });
+
+    await app.close();
+  });
+
   it("rejects malformed explain requests without touching upstream metadata", async () => {
     const fetchMetadata = vi.fn();
     const app = buildGateway({

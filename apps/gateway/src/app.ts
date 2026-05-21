@@ -439,10 +439,15 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
       tarballIntegrity: versionMetadata?.integrity,
       tarballShasum: versionMetadata?.shasum
     };
-    const [analysisReport, latestLlmReview] = await Promise.all([
-      persistence.getAnalysisReport(packageName, version, analysisIdentity),
-      config.policy.llmReview.enabled ? persistence.listLlmRiskReviews({ packageName, version, limit: 1, identity: analysisIdentity }) : Promise.resolve([])
-    ]);
+    const analysisReport = await persistence.getAnalysisReport(packageName, version, analysisIdentity);
+    const latestLlmReview = config.policy.llmReview.enabled
+      ? await persistence.listLlmRiskReviews({
+          packageName,
+          version,
+          limit: 1,
+          identity: { ...analysisIdentity, analyserVersion: analysisReport?.analyserVersion }
+        })
+      : [];
     const analysisRequired = shouldRequireAnalysisBeforeInstall(reason, analysisReport);
     const decisionIdentity = {
       tarballIntegrity: versionMetadata?.integrity,
