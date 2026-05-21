@@ -198,7 +198,14 @@ function decideAction(input: PolicyInput, reasons: PolicyReason[], score: number
 function explainDecision(packageName: string, version: string, action: PolicyDecision["action"], reasons: PolicyReason[]) {
   if (action === "allow") return `${packageName}@${version} is allowed by deterministic policy.`;
   const reasonText = reasons.map((reason) => reason.message).join(" ");
-  return `${packageName}@${version} is ${action}ed by deterministic policy. ${reasonText}`;
+  return `${packageName}@${version} is ${pastTenseAction(action)} by deterministic policy. ${reasonText}`;
+}
+
+function pastTenseAction(action: PolicyDecision["action"]) {
+  if (action === "block") return "blocked";
+  if (action === "warn") return "warned";
+  if (action === "quarantine") return "quarantined";
+  return "allowed";
 }
 
 function nextTimeSensitiveDecisionExpiry(input: PolicyInput, reasons: PolicyReason[]): string | undefined {

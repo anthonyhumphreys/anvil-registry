@@ -181,6 +181,7 @@ describe("evaluatePolicy", () => {
     });
 
     expect(decision.action).toBe("quarantine");
+    expect(decision.explanation).toContain("chunky-patch@1.0.1 is quarantined by deterministic policy.");
   });
 
   it("quarantines missing provenance signals outside development", () => {
