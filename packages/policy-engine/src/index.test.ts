@@ -4,16 +4,34 @@ import { evaluatePolicy } from "./index.js";
 
 describe("evaluatePolicy", () => {
   it("blocks very new packages", () => {
+    const publishedAt = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
     const decision = evaluatePolicy({
       packageName: "leftpadder",
       version: "1.0.0",
       runtimeMode: "ci",
       packageAgeDays: 0.5,
+      versionMetadata: { name: "leftpadder", version: "1.0.0", publishedAt },
       policy: defaultPolicyConfig
     });
 
     expect(decision.action).toBe("block");
     expect(decision.reasons.map((reason) => reason.code)).toContain("PACKAGE_TOO_NEW");
+    expect(decision.expiresAt).toBe(new Date(Date.parse(publishedAt) + 24 * 60 * 60 * 1000).toISOString());
+  });
+
+  it("expires young package decisions at the minimum age boundary", () => {
+    const publishedAt = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+    const decision = evaluatePolicy({
+      packageName: "young-package",
+      version: "1.0.0",
+      runtimeMode: "ci",
+      packageAgeDays: 2,
+      versionMetadata: { name: "young-package", version: "1.0.0", publishedAt },
+      policy: defaultPolicyConfig
+    });
+
+    expect(decision.action).toBe("quarantine");
+    expect(decision.expiresAt).toBe(new Date(Date.parse(publishedAt) + defaultPolicyConfig.minimumPackageAgeDays * 24 * 60 * 60 * 1000).toISOString());
   });
 
   it("blocks low-download similar packages", () => {

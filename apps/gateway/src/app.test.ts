@@ -586,7 +586,7 @@ describe("gateway policy enforcement", () => {
     expect(await persistence.getPolicyDecision("fresh-package", "1.0.0", testConfig("ci").policy.version, {
       tarballIntegrity: "sha512-test",
       analyserVersion: "metadata-policy-2026-05-20.1"
-    })).toMatchObject({ action: "block" });
+    })).toMatchObject({ action: "quarantine", expiresAt: expect.any(String) });
 
     await app.close();
   });

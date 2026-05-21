@@ -192,7 +192,9 @@ export class MemoryPersistence implements AnvilPersistence {
   }
 
   async getPolicyDecision(packageName: string, version: string, policyVersion: string, identity: PolicyDecisionIdentity = {}): Promise<PolicyDecision | undefined> {
-    return this.decisions.get(decisionKey(packageName, version, policyVersion, identity))?.decision;
+    const record = this.decisions.get(decisionKey(packageName, version, policyVersion, identity));
+    if (!record || isExpiredDecision(record.decision)) return undefined;
+    return record.decision;
   }
 
   async putPolicyDecision(packageName: string, version: string, policyVersion: string, decision: PolicyDecision, identity: PolicyDecisionIdentity = {}): Promise<void> {
@@ -399,6 +401,10 @@ function identityMatches(
     (identity.tarballShasum === undefined || record.tarballShasum === identity.tarballShasum) &&
     (identity.analyserVersion === undefined || record.analyserVersion === identity.analyserVersion)
   );
+}
+
+function isExpiredDecision(decision: PolicyDecision) {
+  return Boolean(decision.expiresAt && Date.parse(decision.expiresAt) <= Date.now());
 }
 
 function packageVersionKey(packageName: string, version: string) {

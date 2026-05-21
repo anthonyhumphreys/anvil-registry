@@ -138,12 +138,14 @@ export function evaluatePolicy(input: PolicyInput): PolicyDecision {
 
   const score = scorePolicyReasons(input, reasons);
   const action = decideAction(input, reasons, score);
+  const expiresAt = nextTimeSensitiveDecisionExpiry(input, reasons);
 
   return {
     action,
     score,
     reasons,
-    explanation: explainDecision(input.packageName, input.version, action, reasons)
+    explanation: explainDecision(input.packageName, input.version, action, reasons),
+    ...(expiresAt ? { expiresAt } : {})
   };
 }
 
@@ -166,6 +168,9 @@ function decideAction(input: PolicyInput, reasons: PolicyReason[], score: number
   if (reasons.some((reason) => reason.severity === "critical" && reason.code !== "LLM_RISK_REVIEW_FLAGGED")) return "block";
   if (reasons.some((reason) => reason.code === "PACKAGE_TOO_NEW" && input.packageAgeDays !== undefined && input.packageAgeDays < 1)) {
     return "block";
+  }
+  if (reasons.some((reason) => reason.code === "PACKAGE_TOO_NEW")) {
+    return input.runtimeMode === "development" ? "warn" : "quarantine";
   }
   if (reasons.some((reason) => reason.code === "LOW_WEEKLY_DOWNLOADS") && reasons.some((reason) => reason.code === "SIMILAR_TO_POPULAR_PACKAGE")) {
     return input.policy.blockSimilarLowDownloadPackages ? "block" : "quarantine";
@@ -194,4 +199,15 @@ function explainDecision(packageName: string, version: string, action: PolicyDec
   if (action === "allow") return `${packageName}@${version} is allowed by deterministic policy.`;
   const reasonText = reasons.map((reason) => reason.message).join(" ");
   return `${packageName}@${version} is ${action}ed by deterministic policy. ${reasonText}`;
+}
+
+function nextTimeSensitiveDecisionExpiry(input: PolicyInput, reasons: PolicyReason[]): string | undefined {
+  if (!reasons.some((reason) => reason.code === "PACKAGE_TOO_NEW")) return undefined;
+  if (typeof input.packageAgeDays !== "number") return undefined;
+
+  const nextBoundaryDays = input.packageAgeDays < 1 ? 1 : input.policy.minimumPackageAgeDays;
+  const publishedAt = input.versionMetadata?.publishedAt ? Date.parse(input.versionMetadata.publishedAt) : NaN;
+  const expiry = Number.isNaN(publishedAt) ? Date.now() + Math.max(0, nextBoundaryDays - input.packageAgeDays) * 24 * 60 * 60 * 1000 : publishedAt + nextBoundaryDays * 24 * 60 * 60 * 1000;
+
+  return expiry > Date.now() ? new Date(expiry).toISOString() : undefined;
 }

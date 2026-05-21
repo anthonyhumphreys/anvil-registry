@@ -139,6 +139,7 @@ export class PostgresPersistence implements AnvilPersistence {
           eq(schema.policyDecisions.packageName, packageName),
           eq(schema.policyDecisions.version, version),
           eq(schema.policyDecisions.policyVersion, policyVersion),
+          or(isNull(schema.policyDecisions.expiresAt), sql`${schema.policyDecisions.expiresAt} > now()`),
           ...identityConditions
         )
       )

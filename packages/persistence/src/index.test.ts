@@ -82,6 +82,20 @@ describe("MemoryPersistence", () => {
     expect(await persistence.getPolicyDecision("other", "1.0.0", "policy")).toBeDefined();
   });
 
+  it("does not return expired policy decisions for enforcement lookups", async () => {
+    const persistence = new MemoryPersistence();
+    await persistence.putPolicyDecision("pkg", "1.0.0", "policy", {
+      action: "quarantine",
+      score: 70,
+      reasons: [{ code: "PACKAGE_TOO_NEW", message: "Package is too new.", severity: "high" }],
+      explanation: "cached young-package decision",
+      expiresAt: "2000-01-01T00:00:00.000Z"
+    });
+
+    expect(await persistence.getPolicyDecision("pkg", "1.0.0", "policy")).toBeUndefined();
+    expect(await persistence.listPolicyDecisions({ packageName: "pkg", version: "1.0.0" })).toHaveLength(1);
+  });
+
   it("only returns policy decisions for the matching immutable identity", async () => {
     const persistence = new MemoryPersistence();
     await persistence.putPolicyDecision(
