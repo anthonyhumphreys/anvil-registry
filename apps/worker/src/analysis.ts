@@ -81,20 +81,17 @@ async function analysePackageVersion(
     analyserVersion: "manifest-2026-05-20.1",
     policyVersion: dependencies.config.policy.version
   });
-  const staticReport = targetMetadata.tarballUrl
-    ? mergeAnalysisReports(
-        manifestReport,
-        analyseFileTree(
-          parseNpmTarball(await dependencies.registry.fetchTarball(targetMetadata.tarballUrl)),
-          await Promise.all(
-            previousVersions
-              .map((baselineVersion) => toVersionMetadata(metadata, baselineVersion)?.tarballUrl)
-              .filter((tarballUrl): tarballUrl is string => Boolean(tarballUrl))
-              .map(async (tarballUrl) => parseNpmTarball(await dependencies.registry.fetchTarball(tarballUrl)))
-          ),
-          { lifecycleScripts: targetMetadata.scripts }
-        )
+  const targetFileTree = targetMetadata.tarballUrl ? parseNpmTarball(await dependencies.registry.fetchTarball(targetMetadata.tarballUrl)) : [];
+  const baselineFileTrees = targetMetadata.tarballUrl
+    ? await Promise.all(
+        previousVersions
+          .map((baselineVersion) => toVersionMetadata(metadata, baselineVersion)?.tarballUrl)
+          .filter((tarballUrl): tarballUrl is string => Boolean(tarballUrl))
+          .map(async (tarballUrl) => parseNpmTarball(await dependencies.registry.fetchTarball(tarballUrl)))
       )
+    : [];
+  const staticReport = targetMetadata.tarballUrl
+    ? mergeAnalysisReports(manifestReport, analyseFileTree(targetFileTree, baselineFileTrees, { lifecycleScripts: targetMetadata.scripts }))
     : manifestReport;
   const weeklyDownloads = await dependencies.downloadStats?.getWeeklyDownloads(target.packageName);
   await dependencies.persistence.putPackageVersion({
@@ -136,7 +133,7 @@ async function analysePackageVersion(
   const analysisArtifactKeys = dependencies.objectStore ? analysisArtifactObjectKeysForReport(report) : undefined;
   const analysisReportObjectKey = analysisArtifactKeys?.report;
   const storedReport: AnalysisReport = analysisReportObjectKey ? { ...report, objectKey: analysisReportObjectKey } : report;
-  await storeAnalysisArtifacts(storedReport, dependencies.objectStore, analysisArtifactKeys);
+  await storeAnalysisArtifacts(storedReport, targetFileTree, dependencies.objectStore, analysisArtifactKeys);
   await dependencies.persistence.putAnalysisReport(storedReport);
   const override = await dependencies.persistence.getOverride(target.packageName, version);
   const preliminaryDecision = evaluatePolicy({
@@ -278,13 +275,28 @@ type AnalysisArtifactObjectKeys = {
   fileTree: string;
 };
 
-async function storeAnalysisArtifacts(report: AnalysisReport, objectStore: ObjectStore | undefined, objectKeys: AnalysisArtifactObjectKeys | undefined) {
+async function storeAnalysisArtifacts(report: AnalysisReport, fileTree: ReturnType<typeof parseNpmTarball>, objectStore: ObjectStore | undefined, objectKeys: AnalysisArtifactObjectKeys | undefined) {
   if (!objectStore || !objectKeys) return;
   await Promise.all([
     objectStore.put(objectKeys.report, jsonBuffer(report)),
     objectStore.put(objectKeys.manifestDiff, jsonBuffer(report.manifestDiff ?? null)),
-    objectStore.put(objectKeys.fileTree, jsonBuffer(report.fileFindings ?? []))
+    objectStore.put(objectKeys.fileTree, jsonBuffer(analysisFileTreeArtifact(fileTree)))
   ]);
+}
+
+function analysisFileTreeArtifact(fileTree: ReturnType<typeof parseNpmTarball>) {
+  return fileTree.map((file) => ({
+    path: file.path,
+    rawPath: file.rawPath,
+    size: file.size,
+    mode: fileMode(file.mode),
+    type: file.type,
+    ...(file.linkTarget ? { linkTarget: file.linkTarget } : {})
+  }));
+}
+
+function fileMode(mode: number) {
+  return `0o${mode.toString(8)}`;
 }
 
 export function analysisReportObjectKeyForReport(report: Pick<AnalysisReport, "packageName" | "version" | "policyVersion" | "analyserVersion" | "tarballIntegrity" | "tarballShasum">) {

@@ -97,7 +97,11 @@ describe("worker analysis", () => {
       release: expect.objectContaining({ previous: "1.0.0", target: "1.0.1" })
     });
     expect(JSON.parse(Buffer.from((await objectStore.get(fileTreeKey)) ?? []).toString("utf8"))).toEqual(
-      expect.arrayContaining([expect.objectContaining({ path: "link-out", code: "UNSAFE_TARBALL_SYMLINK" })])
+      expect.arrayContaining([
+        expect.objectContaining({ path: "package.json", type: "file", mode: "0o644" }),
+        expect.objectContaining({ path: "install.js", type: "file", size: expect.any(Number) }),
+        expect.objectContaining({ path: "link-out", type: "symlink", linkTarget: "../../outside" })
+      ])
     );
     expect(await persistence.listAuditEvents({ targetId: "pkg@1.0.1" })).toEqual(
       expect.arrayContaining([
