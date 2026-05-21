@@ -101,3 +101,7 @@ jobs:
 
       - name: Smoke scoped upstream routing
         run: pnpm smoke:scoped-upstream
+
+      - name: Stop local registry stack
+        if: always()
+        run: docker compose -f infra/docker/docker-compose.yml down --volumes --remove-orphans
