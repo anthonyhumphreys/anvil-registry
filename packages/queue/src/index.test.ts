@@ -287,6 +287,54 @@ describe("queue factory", () => {
     });
     expect(client.commands.map((command) => command.constructor.name)).not.toContain("DeleteMessageCommand");
   });
+
+  it("continues polling SQS after transient receive failures", async () => {
+    let sawDeleteMessage!: () => void;
+    const deleteMessageSeen = new Promise<void>((resolve) => {
+      sawDeleteMessage = resolve;
+    });
+    let worker: SqsAnalysisWorker;
+    const client = new FakeSqsClient([
+      new Error("receive throttled"),
+      {
+        Messages: [
+          {
+            MessageId: "message-1",
+            ReceiptHandle: "receipt-1",
+            Body: JSON.stringify({
+              packageName: "pkg",
+              version: "1.0.0",
+              reason: "metadata_request",
+              priority: "normal",
+              createdAt: "2026-05-20T00:00:00.000Z"
+            })
+          }
+        ]
+      }
+    ]);
+    client.onCommand = (commandName) => {
+      if (commandName === "DeleteMessageCommand") {
+        void worker.close();
+        sawDeleteMessage();
+      }
+    };
+    const handler = vi.fn(async () => {});
+
+    worker = createSqsAnalysisWorker({
+      queueUrl: "https://sqs.example.test/queue",
+      region: "us-east-1",
+      waitTimeSeconds: 0,
+      pollErrorDelayMs: 0,
+      client,
+      handler
+    });
+
+    await deleteMessageSeen;
+    expect(handler).toHaveBeenCalledWith(expect.objectContaining({ id: "message-1", packageName: "pkg", version: "1.0.0" }));
+    expect(client.commands.map((command) => command.constructor.name)).toEqual(
+      expect.arrayContaining(["ReceiveMessageCommand", "DeleteMessageCommand"])
+    );
+  });
 });
 
 class FakeSqsClient implements SqsClientLike {
@@ -302,7 +350,11 @@ class FakeSqsClient implements SqsClientLike {
     const recorded = command as unknown as { constructor: { name: string }; input: Record<string, unknown> };
     this.commands.push(recorded);
     this.onCommand?.(recorded.constructor.name);
-    if (recorded.constructor.name === "ReceiveMessageCommand") return this.receiveResponses.shift() ?? {};
+    if (recorded.constructor.name === "ReceiveMessageCommand") {
+      const response = this.receiveResponses.shift();
+      if (response instanceof Error) throw response;
+      return response ?? {};
+    }
     if (recorded.constructor.name === "GetQueueAttributesCommand") return this.attributeResponse ?? {};
     return {};
   }

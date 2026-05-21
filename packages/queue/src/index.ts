@@ -205,21 +205,30 @@ export function createSqsAnalysisWorker(options: {
   handler: (job: AnalysisJob) => Promise<void>;
   waitTimeSeconds?: number;
   visibilityTimeoutSeconds?: number;
+  pollErrorDelayMs?: number;
   client?: SqsClientLike;
 }): SqsAnalysisWorker {
   const client = options.client ?? new SQSClient({ region: options.region });
+  const pollErrorDelayMs = options.pollErrorDelayMs ?? 1000;
   let running = true;
 
   const loop = (async () => {
     while (running) {
-      const response = (await client.send(
-        new ReceiveMessageCommand({
-          QueueUrl: options.queueUrl,
-          MaxNumberOfMessages: 1,
-          WaitTimeSeconds: options.waitTimeSeconds ?? 20,
-          VisibilityTimeout: options.visibilityTimeoutSeconds ?? 300
-        })
-      )) as SqsReceiveResponse;
+      let response: SqsReceiveResponse;
+      try {
+        response = (await client.send(
+          new ReceiveMessageCommand({
+            QueueUrl: options.queueUrl,
+            MaxNumberOfMessages: 1,
+            WaitTimeSeconds: options.waitTimeSeconds ?? 20,
+            VisibilityTimeout: options.visibilityTimeoutSeconds ?? 300
+          })
+        )) as SqsReceiveResponse;
+      } catch {
+        if (!running) break;
+        if (pollErrorDelayMs > 0) await sleep(pollErrorDelayMs);
+        continue;
+      }
 
       for (const message of response.Messages ?? []) {
         if (!message.Body || !message.ReceiptHandle) continue;
@@ -248,6 +257,10 @@ export function createSqsAnalysisWorker(options: {
       client.destroy?.();
     }
   };
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export function createJobQueue(config: AnvilConfig): JobQueue {
