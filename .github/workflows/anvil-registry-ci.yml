@@ -44,6 +44,14 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: anvil-registry-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: true
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
+
 jobs:
   validate:
     name: Validate registry workspace
@@ -53,15 +61,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Enable Corepack
+        run: corepack enable
+
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Show tool versions
+        run: |
+          node --version
+          pnpm --version
+          docker version
+          docker compose version
 
       - name: Install dependencies
-        run: |
-          corepack enable
-          pnpm install --frozen-lockfile --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Lint
         run: pnpm lint
@@ -104,6 +122,21 @@ jobs:
 
       - name: Smoke scoped upstream routing
         run: pnpm smoke:scoped-upstream
+
+      - name: Capture Docker Compose logs
+        if: failure()
+        run: |
+          mkdir -p .ci-artifacts
+          docker compose -f infra/docker/docker-compose.yml ps > .ci-artifacts/docker-compose-ps.txt || true
+          docker compose -f infra/docker/docker-compose.yml logs --no-color > .ci-artifacts/docker-compose.log || true
+
+      - name: Upload failure logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: anvil-registry-ci-logs
+          path: .ci-artifacts
+          if-no-files-found: ignore
 
       - name: Stop local registry stack
         if: always()
