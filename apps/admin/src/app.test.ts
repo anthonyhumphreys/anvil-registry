@@ -607,6 +607,12 @@ describe("admin app", () => {
       url: "/api/packages/pkg/1.0.0/llm-review",
       headers: { cookie }
     });
+    const scoped = await app.inject({
+      method: "POST",
+      url: "/api/packages/%40scope%2Fpkg/2.0.0/llm-review",
+      headers: { "content-type": "application/x-www-form-urlencoded", cookie },
+      payload: "requestedBy=reviewer&priority=high"
+    });
     const invalid = await app.inject({
       method: "POST",
       url: "/api/packages/pkg/1.0.0/llm-review",
@@ -618,6 +624,7 @@ describe("admin app", () => {
     expect(page.body).toContain("Request LLM Review");
     expect(response.statusCode).toBe(202);
     expect(defaulted.statusCode).toBe(202);
+    expect(scoped.statusCode).toBe(202);
     expect(invalid.statusCode).toBe(400);
     expect(invalid.json()).toMatchObject({ error: "ANVIL_LLM_REVIEW_REQUEST_INVALID" });
     expect(response.json()).toMatchObject({ queued: 1 });
@@ -635,6 +642,13 @@ describe("admin app", () => {
       "http://gateway.test/-/anvil/llm-review",
       expect.objectContaining({
         body: JSON.stringify({ packageName: "pkg", version: "1.0.0", requestedBy: "admin-ui", priority: "high" })
+      })
+    );
+    expect(fetchGateway).toHaveBeenNthCalledWith(
+      3,
+      "http://gateway.test/-/anvil/llm-review",
+      expect.objectContaining({
+        body: JSON.stringify({ packageName: "@scope/pkg", version: "2.0.0", requestedBy: "reviewer", priority: "high" })
       })
     );
     await app.close();
