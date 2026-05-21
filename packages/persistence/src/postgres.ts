@@ -773,7 +773,7 @@ function nodeBaseRiskCountSql(summaryKey: string, compatibilityKey: string): SQL
 
 function nodeBaseSummaryNumberSql(summaryKey: string): SQL<number> {
   const value = sql`${schema.nodeBaseReports.summaryJson}->>${summaryKey}`;
-  return sql<number>`case when ${value} ~ '^\\d+$' then (${value})::int else 0 end`;
+  return sql<number>`case when ${value} ~ '^[0-9]+$' then (${value})::int else 0 end`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
