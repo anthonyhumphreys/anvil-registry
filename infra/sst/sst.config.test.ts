@@ -17,6 +17,40 @@ type RecordedResource = {
 describe("SST infrastructure shape", () => {
   it("defines the registry deployment resources and service wiring", async () => {
     const resources: RecordedResource[] = [];
+    const upstreamRegistriesJson = JSON.stringify([
+      { name: "npmjs", baseUrl: "https://registry.npmjs.org" },
+      { name: "internal", baseUrl: "https://npm.pkg.github.com", scopes: ["@internal"], authTokenSecretName: "GITHUB_NPM_TOKEN" }
+    ]);
+    const databaseEnvironment = {
+      PERSISTENCE_DRIVER: "postgres",
+      DATABASE_HOST: "database.local",
+      DATABASE_PORT: "5432",
+      DATABASE_NAME: "anvil",
+      DATABASE_USER: "anvil",
+      DATABASE_PASSWORD: "secret:DatabasePassword"
+    };
+    const serviceRuntimeEnvironment = {
+      RUNTIME_MODE: "production",
+      OBJECT_STORE_DRIVER: "s3",
+      S3_BUCKET: "PackageCache",
+      POPULAR_PACKAGE_INDEX_OBJECT_KEY: "popular-index/npm/latest.json",
+      QUEUE_DRIVER: "sqs",
+      ANALYSIS_QUEUE_URL: "https://sqs.example.test/AnalysisQueue",
+      UPSTREAM_NPM_REGISTRY: "https://registry.npmjs.org",
+      UPSTREAM_NPM_REGISTRIES_JSON: upstreamRegistriesJson,
+      NPM_DOWNLOADS_API: "https://api.npmjs.org/downloads",
+      GITHUB_NPM_TOKEN: "secret:GITHUB_NPM_TOKEN",
+      ...databaseEnvironment
+    };
+    const llmReviewEnvironment = {
+      LLM_REVIEW_ENABLED: "true",
+      LLM_REVIEW_PROVIDER: "http",
+      LLM_REVIEW_MODEL: "risk-reviewer",
+      LLM_REVIEW_ENDPOINT: "https://llm.example.test/review",
+      LLM_REVIEW_RUN_ON_UNKNOWN_PACKAGES: "true",
+      LLM_REVIEW_RUN_ON_QUARANTINE: "false",
+      LLM_REVIEW_INCLUDE_PRIVATE_PACKAGES: "false"
+    };
     const runtime = fakeRuntime(resources, {
       PUBLIC_BASE_URL: "https://npm.example.test",
       ANVIL_API_BASE_URL: "https://admin.example.test",
@@ -25,10 +59,7 @@ describe("SST infrastructure shape", () => {
       LLM_REVIEW_MODEL: "risk-reviewer",
       LLM_REVIEW_ENDPOINT: "https://llm.example.test/review",
       LLM_REVIEW_RUN_ON_UNKNOWN_PACKAGES: "true",
-      UPSTREAM_NPM_REGISTRIES_JSON: JSON.stringify([
-        { name: "npmjs", baseUrl: "https://registry.npmjs.org" },
-        { name: "internal", baseUrl: "https://npm.pkg.github.com", scopes: ["@internal"], authTokenSecretName: "GITHUB_NPM_TOKEN" }
-      ])
+      UPSTREAM_NPM_REGISTRIES_JSON: upstreamRegistriesJson
     });
 
     vi.stubGlobal("$config", runtime.config);
@@ -61,7 +92,11 @@ describe("SST infrastructure shape", () => {
     const migration = resource(resources, "Task", "DatabaseMigration");
     expect(migration?.args).toMatchObject({
       image: { context: "../..", dockerfile: "packages/persistence/Dockerfile" },
-      environment: expect.objectContaining({ PERSISTENCE_DRIVER: "postgres", DATABASE_READY_ATTEMPTS: "60" }),
+      environment: expect.objectContaining({
+        ...databaseEnvironment,
+        DATABASE_READY_ATTEMPTS: "60",
+        DATABASE_READY_DELAY_MS: "1000"
+      }),
       link: [expect.objectContaining({ type: "Postgres", name: "Database" })]
     });
 
@@ -74,14 +109,10 @@ describe("SST infrastructure shape", () => {
       },
       health: expect.objectContaining({ command: expect.arrayContaining(["CMD-SHELL"]) }),
       environment: expect.objectContaining({
-        RUNTIME_MODE: "production",
-        OBJECT_STORE_DRIVER: "s3",
-        QUEUE_DRIVER: "sqs",
-        ANALYSIS_QUEUE_URL: "https://sqs.example.test/AnalysisQueue",
+        ...serviceRuntimeEnvironment,
+        ...llmReviewEnvironment,
         PUBLIC_BASE_URL: "https://npm.example.test",
-        ADMIN_TOKEN: "secret:AdminToken",
-        GITHUB_NPM_TOKEN: "secret:GITHUB_NPM_TOKEN",
-        LLM_REVIEW_ENABLED: "true"
+        ADMIN_TOKEN: "secret:AdminToken"
       }),
       link: expect.arrayContaining([
         expect.objectContaining({ type: "Bucket", name: "PackageCache" }),
@@ -98,9 +129,10 @@ describe("SST infrastructure shape", () => {
       image: { context: "../..", dockerfile: "apps/admin/Dockerfile" },
       loadBalancer: { health: { "3000/http": expect.objectContaining({ path: "/-/health" }) } },
       environment: expect.objectContaining({
+        ...serviceRuntimeEnvironment,
+        ...llmReviewEnvironment,
         ANVIL_API_BASE_URL: "https://admin.example.test",
-        ADMIN_TOKEN: "secret:AdminToken",
-        GITHUB_NPM_TOKEN: "secret:GITHUB_NPM_TOKEN"
+        ADMIN_TOKEN: "secret:AdminToken"
       }),
       link: expect.arrayContaining([
         expect.objectContaining({ type: "Bucket", name: "PackageCache" }),
@@ -115,8 +147,8 @@ describe("SST infrastructure shape", () => {
       image: { context: "../..", dockerfile: "apps/worker/Dockerfile" },
       health: expect.objectContaining({ command: ["CMD", "node", "apps/worker/dist/index.js", "--health-check"] }),
       environment: expect.objectContaining({
-        QUEUE_DRIVER: "sqs",
-        ANALYSIS_QUEUE_URL: "https://sqs.example.test/AnalysisQueue",
+        ...serviceRuntimeEnvironment,
+        ...llmReviewEnvironment,
         LLM_REVIEW_API_KEY: "secret:LlmReviewApiKey"
       }),
       link: expect.arrayContaining([
