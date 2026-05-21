@@ -285,9 +285,10 @@ export function buildAdmin(dependencies: AdminDependencies = {}): FastifyInstanc
         priority
       })
     });
-    const body = await response.json().catch(() => undefined);
+    const bodyText = await response.text();
+    const body = parseJsonBody(bodyText);
     if (!response.ok) {
-      return reply.code(response.status).send(body ?? { error: "ANVIL_LLM_REVIEW_REQUEST_FAILED" });
+      return reply.code(response.status).send(body ?? { error: "ANVIL_LLM_REVIEW_REQUEST_FAILED", detail: bodyText || response.statusText });
     }
 
     return reply.code(202).send(body);
@@ -1775,6 +1776,15 @@ function isAdminRequest(authorization: string | undefined, cookieHeader: string 
 
 function validationIssues(error: { issues: Array<{ path: Array<string | number>; message: string }> }) {
   return error.issues.map((issue) => ({ path: issue.path.join("."), message: issue.message }));
+}
+
+function parseJsonBody(bodyText: string): unknown | undefined {
+  if (!bodyText) return undefined;
+  try {
+    return JSON.parse(bodyText);
+  } catch {
+    return undefined;
+  }
 }
 
 function parseCookies(cookieHeader: string | undefined) {

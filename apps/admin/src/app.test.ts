@@ -600,6 +600,31 @@ describe("admin app", () => {
     await disabledApp.close();
   });
 
+  it("preserves plain-text gateway errors from LLM review requests", async () => {
+    const fetchGateway = vi.fn(async () => new Response("gateway unavailable", { status: 502, statusText: "Bad Gateway" }));
+    const app = buildAdmin({
+      config: loadConfig({
+        ...process.env,
+        ADMIN_TOKEN: "secret",
+        ANVIL_API_BASE_URL: "http://gateway.test",
+        LLM_REVIEW_ENABLED: "true",
+        LLM_REVIEW_ENDPOINT: "https://llm.example.test/review"
+      }),
+      fetch: fetchGateway as unknown as typeof globalThis.fetch
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/packages/pkg/1.0.0/llm-review",
+      headers: { authorization: "Bearer secret" },
+      payload: { requestedBy: "reviewer" }
+    });
+
+    expect(response.statusCode).toBe(502);
+    expect(response.json()).toMatchObject({ error: "ANVIL_LLM_REVIEW_REQUEST_FAILED", detail: "gateway unavailable" });
+    await app.close();
+  });
+
   it("revokes overrides, clears cached decisions, and writes audit events", async () => {
     const persistence = new MemoryPersistence();
     await persistence.putOverride({ packageName: "pkg", version: "1.0.0", action: "allow", reason: "temporary", approvedBy: "test" });
