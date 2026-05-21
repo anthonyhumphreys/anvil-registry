@@ -59,6 +59,8 @@ export default $config({
       LLM_REVIEW_RUN_ON_QUARANTINE: process.env.LLM_REVIEW_RUN_ON_QUARANTINE ?? "false",
       LLM_REVIEW_INCLUDE_PRIVATE_PACKAGES: process.env.LLM_REVIEW_INCLUDE_PRIVATE_PACKAGES ?? "false"
     };
+    const publicBaseUrl = process.env.PUBLIC_BASE_URL ?? "https://npm.anvil.example.com";
+    const adminApiBaseUrl = process.env.ANVIL_API_BASE_URL ?? publicBaseUrl;
 
     new sst.aws.Task("DatabaseMigration", {
       cluster,
@@ -103,7 +105,7 @@ export default $config({
       environment: {
         ...commonServiceEnvironment,
         ...llmReviewEnvironment,
-        PUBLIC_BASE_URL: "https://npm.anvil.example.com",
+        PUBLIC_BASE_URL: publicBaseUrl,
         ADMIN_TOKEN: adminToken.value
       },
       link: [bucket, queue, database, adminToken]
@@ -138,7 +140,7 @@ export default $config({
       environment: {
         ...commonServiceEnvironment,
         ...llmReviewEnvironment,
-        ANVIL_API_BASE_URL: "https://npm.anvil.example.com",
+        ANVIL_API_BASE_URL: adminApiBaseUrl,
         ADMIN_TOKEN: adminToken.value
       },
       link: [bucket, database, adminToken]

@@ -136,6 +136,8 @@ See `devcontainer-base/README.md` for helper commands and image publishing detai
 
 Docker Compose is the local path. SST is the AWS path and defines gateway, worker, admin, migration, S3, SQS, RDS, secrets, and CloudWatch resources under `infra/sst`.
 
+Set `PUBLIC_BASE_URL` for the npm-facing gateway URL before deploying so tarball rewrites point at the real HTTPS endpoint or custom domain. Set `ANVIL_API_BASE_URL` only when the admin service should call a different gateway URL; otherwise it inherits `PUBLIC_BASE_URL`.
+
 Run migrations for SST deployments with:
 
 ```bash
