@@ -104,7 +104,8 @@ async function analysePackageVersion(
     shasum: targetMetadata.shasum,
     weeklyDownloads
   });
-  const packageAgeDays = calculatePackageAgeDays(targetMetadata.publishedAt);
+  const evaluatedAt = new Date().toISOString();
+  const packageAgeDays = calculatePackageAgeDays(targetMetadata.publishedAt, new Date(evaluatedAt));
   const popularPackageIndex = dependencies.popularPackageIndex ?? loadPopularPackageIndex(dependencies.config.POPULAR_PACKAGE_INDEX_PATH);
   const similarPackages = detectNameSquatting(target.packageName, popularPackageIndex).map((signal) => ({
     name: signal.candidate,
@@ -129,7 +130,6 @@ async function analysePackageVersion(
       policy: dependencies.config.policy
     }
   );
-  const evaluatedAt = new Date().toISOString();
 
   await dependencies.persistence.putAnalysisReport(report);
   const override = await dependencies.persistence.getOverride(target.packageName, version);

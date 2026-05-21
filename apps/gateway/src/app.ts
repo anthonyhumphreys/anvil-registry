@@ -470,6 +470,7 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
       suggestedPackage: signal.suggestedPackage
     }));
     const evaluatedAt = new Date().toISOString();
+    const packageAgeDays = calculatePackageAgeDays(versionMetadata?.publishedAt, new Date(evaluatedAt));
 
     const decision = evaluatePolicy({
       packageName,
@@ -478,7 +479,7 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
       evaluatedAt,
       metadata: { name: packageName, distTags: metadata["dist-tags"], publishedAt: metadata.time?.created },
       versionMetadata,
-      packageAgeDays: calculatePackageAgeDays(versionMetadata?.publishedAt),
+      packageAgeDays,
       weeklyDownloads,
       similarPackages,
       override: await persistence.getOverride(packageName, version),
