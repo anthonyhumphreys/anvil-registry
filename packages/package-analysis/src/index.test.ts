@@ -34,6 +34,37 @@ describe("analyseManifestChange", () => {
     });
   });
 
+  it("detects changed install scripts", () => {
+    const report = analyseManifestChange(
+      {
+        name: "pkg",
+        version: "1.0.1",
+        scripts: { postinstall: "node postinstall.js --new" }
+      },
+      {
+        name: "pkg",
+        version: "1.0.0",
+        scripts: { postinstall: "node postinstall.js" }
+      }
+    );
+
+    expect(report.signals).toContainEqual(
+      expect.objectContaining({
+        code: "INSTALL_SCRIPT_CHANGED",
+        message: "Lifecycle script 'postinstall' changed.",
+        severity: "medium",
+        evidence: expect.objectContaining({
+          scriptName: "postinstall",
+          impact: "install-time",
+          expectedForRelease: false,
+          releaseType: "patch",
+          history: [{ version: "1.0.0", script: "node postinstall.js" }]
+        })
+      })
+    );
+    expect(report.signals.map((signal) => signal.code)).not.toContain("NEW_INSTALL_SCRIPT");
+  });
+
   it("diffs broader manifest metadata and dependency groups", () => {
     const report = analyseManifestChange(
       {
