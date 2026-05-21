@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { NpmDownloadsClient, NpmRegistryRouter, encodePackagePath, rewriteMetadataTarballs, toVersionMetadata } from "./index.js";
+import { NpmDownloadsClient, NpmRegistryRouter, encodePackagePath, resolveMetadataVersion, rewriteMetadataTarballs, toVersionMetadata } from "./index.js";
 
 describe("npm registry helpers", () => {
   afterEach(() => {
@@ -28,6 +28,22 @@ describe("npm registry helpers", () => {
     );
 
     expect(rewritten.versions?.["1.0.0"]?.dist?.tarball).toBe("https://anvil.example/@scope/pkg/-/pkg-1.0.0.tgz");
+  });
+
+  it("resolves exact versions and arbitrary dist-tags from metadata", () => {
+    const metadata = {
+      name: "pkg",
+      "dist-tags": { latest: "1.0.0", beta: "2.0.0-beta.1" },
+      versions: {
+        "1.0.0": { name: "pkg", version: "1.0.0" },
+        "2.0.0-beta.1": { name: "pkg", version: "2.0.0-beta.1" }
+      }
+    };
+
+    expect(resolveMetadataVersion(metadata, "1.0.0")).toBe("1.0.0");
+    expect(resolveMetadataVersion(metadata, "latest")).toBe("1.0.0");
+    expect(resolveMetadataVersion(metadata, "beta")).toBe("2.0.0-beta.1");
+    expect(resolveMetadataVersion(metadata, "missing")).toBeUndefined();
   });
 
   it("fetches weekly download counts from the npm downloads API", async () => {

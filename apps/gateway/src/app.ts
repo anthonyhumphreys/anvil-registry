@@ -11,6 +11,7 @@ import {
   NpmRegistryClient,
   NpmRegistryRouter,
   resolveVersionFromTarballName,
+  resolveMetadataVersion,
   rewriteMetadataTarballs,
   filterMetadataVersions,
   toVersionMetadata,
@@ -425,7 +426,7 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
 
   async function explainVersion(packageName: string, requestedVersion: string) {
     const metadata = await fetchMetadata(packageName);
-    const version = requestedVersion === "latest" ? metadata["dist-tags"]?.latest : requestedVersion;
+    const version = resolveMetadataVersion(metadata, requestedVersion);
     if (!version || !metadata.versions?.[version]) return undefined;
     const weeklyDownloads = await safeWeeklyDownloads(packageName);
     await persistPackageVersions(metadata, weeklyDownloads);

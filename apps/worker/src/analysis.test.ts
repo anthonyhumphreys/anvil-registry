@@ -161,6 +161,30 @@ describe("worker analysis", () => {
     expect(await persistence.listAuditEvents({ targetId: "pkg@latest" })).toHaveLength(0);
   });
 
+  it("persists arbitrary dist-tag jobs against the resolved package version", async () => {
+    const persistence = new MemoryPersistence();
+    const config = loadConfig({ ...process.env, RUNTIME_MODE: "ci" });
+    const registry = {
+      fetchMetadata: vi.fn(async () => ({ ...metadata(), "dist-tags": { latest: "1.0.0", beta: "1.0.1" } })),
+      fetchTarball: vi.fn(async (url: string) => tarballs[url])
+    };
+
+    const result = await analyseAnalysisJob(
+      {
+        packageName: "pkg",
+        version: "beta",
+        reason: "manual_review",
+        priority: "normal",
+        createdAt: new Date().toISOString()
+      },
+      { config, registry, persistence }
+    );
+
+    expect(result.version).toBe("1.0.1");
+    expect(await persistence.getAnalysisReport("pkg", "1.0.1")).toBeDefined();
+    expect(await persistence.getAnalysisReport("pkg", "beta")).toBeUndefined();
+  });
+
   it("preserves very-new package blocking and decision expiry in worker decisions", async () => {
     const persistence = new MemoryPersistence();
     const config = loadConfig({ ...process.env, RUNTIME_MODE: "ci" });

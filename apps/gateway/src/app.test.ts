@@ -996,6 +996,42 @@ describe("gateway policy enforcement", () => {
     await app.close();
   });
 
+  it("resolves explain requests for arbitrary dist-tags", async () => {
+    const persistence = new MemoryPersistence();
+    const report = {
+      packageName: "stable-package",
+      version: "1.0.0",
+      analyserVersion: "static-analysis-test",
+      policyVersion: testConfig("ci").policy.version,
+      tarballIntegrity: "sha512-test",
+      score: 0,
+      signals: [],
+      createdAt: "2026-05-20T12:00:00.000Z"
+    } satisfies AnalysisReport;
+    await persistence.putAnalysisReport(report);
+    const app = buildGateway({
+      config: loadConfig({ ...process.env, RUNTIME_MODE: "ci", PUBLIC_BASE_URL: "http://anvil.test", PERSISTENCE_DRIVER: "memory" }),
+      persistence,
+      queue: new MemoryJobQueue(),
+      registry: {
+        fetchMetadata: vi.fn(async () => ({ ...packageMetadata("stable-package", "2020-01-01T00:00:00.000Z"), "dist-tags": { latest: "1.0.0", beta: "1.0.0" } })),
+        fetchTarball: vi.fn()
+      },
+      downloadStats: noDownloadStats()
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/-/anvil/explain",
+      payload: { packageName: "stable-package", version: "beta" }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ packageName: "stable-package", version: "1.0.0", analysisReport: expect.objectContaining({ analyserVersion: "static-analysis-test" }) });
+
+    await app.close();
+  });
+
   it("does not apply stale LLM review evidence from a different tarball identity", async () => {
     const persistence = new MemoryPersistence();
     await persistence.putLlmRiskReview({

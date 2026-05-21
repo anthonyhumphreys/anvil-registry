@@ -254,6 +254,11 @@ export function rewriteDistTags(distTags: Record<string, string>, allowedVersion
   return rewritten;
 }
 
+export function resolveMetadataVersion(metadata: NpmPackageMetadata, requestedVersion: string): string | undefined {
+  if (metadata.versions?.[requestedVersion]) return requestedVersion;
+  return metadata["dist-tags"]?.[requestedVersion];
+}
+
 export function resolveVersionFromTarballName(metadata: NpmPackageMetadata, tarballName: string): string | undefined {
   const normalized = tarballName.split("/").pop();
   return Object.entries(metadata.versions ?? {}).find(([, versionMetadata]) => {

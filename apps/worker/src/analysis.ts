@@ -3,7 +3,7 @@ import type { AnvilConfig } from "@anvil/config";
 import { createLlmRiskReviewProvider, type LlmRiskReviewProvider } from "@anvil/llm-risk-review";
 import { detectNameSquatting, loadPopularPackageIndex, type PopularPackageIndex } from "@anvil/name-squatting";
 import type { NpmRegistryClient } from "@anvil/npm-registry";
-import { calculatePackageAgeDays, toVersionMetadata } from "@anvil/npm-registry";
+import { calculatePackageAgeDays, resolveMetadataVersion, toVersionMetadata } from "@anvil/npm-registry";
 import type { ObjectStore } from "@anvil/object-store";
 import { analyseFileTree, analyseManifestChange, mergeAnalysisReports, parseNpmTarball } from "@anvil/package-analysis";
 import type { AnvilPersistence } from "@anvil/persistence";
@@ -58,7 +58,7 @@ async function analysePackageVersion(
   options: { forceLlmReview?: boolean; requestedBy?: string; requestReason?: AnalysisJobReason; priority?: AnalysisJobPriority } = {}
 ) {
   const metadata = await dependencies.registry.fetchMetadata(target.packageName);
-  const version = target.version === "latest" ? metadata["dist-tags"]?.latest : target.version;
+  const version = resolveMetadataVersion(metadata, target.version);
   if (!version) throw new Error(`Cannot resolve version for ${target.packageName}@${target.version}`);
 
   const versions = Object.keys(metadata.versions ?? {}).filter((candidate) => semver.valid(candidate));
