@@ -1118,6 +1118,12 @@ pnpm smoke:llm-review
 
 This starts the Compose stack with the `llm-review` profile, uses the local mock LLM review endpoint, queues a forced review through `POST /-/anvil/llm-review`, and verifies that the worker persists a review visible through Admin.
 
+Use the Node Base image smoke to verify that the devcontainer image builds, defaults to the non-root `node` user, keeps safer npm config enabled, exposes the expected helper commands, and has a writable report directory:
+
+```bash
+pnpm smoke:node-base-image
+```
+
 ---
 
 ## 12. AWS Deployment with SST

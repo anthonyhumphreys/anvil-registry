@@ -17,6 +17,17 @@ Hardened Node 22 devcontainer base image for safer dependency installs.
 
 Reports are written to `${ANVIL_REPORT_DIR:-.anvil/reports}`. Observed mode writes `ioc-report.json` and `ioc-report.md` with high/medium IOC findings, captured process executions, outbound connection targets, and sensitive file accesses. Dependency report mode writes `dependency-report.json`, `dependency-report.md`, and `lifecycle-scripts.json`. Network monitor mode writes `network-strace.log`, `network-report.json`, and `network-report.md`.
 
+## Validation
+
+From the repo root:
+
+```bash
+pnpm test:node-base
+pnpm smoke:node-base-image
+```
+
+`test:node-base` exercises the helper scripts against synthetic package trees and install logs. `smoke:node-base-image` builds the devcontainer image and verifies the runtime defaults that matter most: non-root user, safe npm config, helper command installation, and writable report directory.
+
 ## Network Policy
 
 `anvil-scan-install-logs`, `anvil-npm-ci-observed`, and `anvil-network-monitor` apply a small configurable network policy on top of raw IOC matching:
