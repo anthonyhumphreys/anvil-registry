@@ -17,7 +17,7 @@ const highPatterns = [
   { code: "CURL_PIPE_SHELL", regex: /\b(curl|wget)\b[^|;&]+[|]\s*(bash|sh)\b/i },
   { code: "SECRET_ENV_ACCESS", regex: /\b(NPM_TOKEN|NODE_AUTH_TOKEN|GITHUB_TOKEN|AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|AZURE_CLIENT_SECRET|OPENAI_API_KEY|ANTHROPIC_API_KEY|DATABASE_URL)\b/ },
   { code: "SSH_KEY_ACCESS", regex: /(\.ssh|id_rsa|id_ed25519|known_hosts)/i },
-  { code: "CREDENTIAL_FILE_ACCESS", regex: /(\.npmrc|\.aws|\.config\/gcloud|\.azure|\.env(?:\.local)?|\.git-credentials)/i },
+  { code: "CREDENTIAL_FILE_ACCESS", regex: /(\.npmrc|\.aws|\.config\/gcloud|\.azure|\.env(?:\.local)?|\.git\/config|\.git-credentials)/i },
   { code: "BASE64_EXEC", regex: /(base64\s+-d|Buffer\.from\([^)]*base64|atob\()/i }
 ];
 const mediumPatterns = [
@@ -341,7 +341,7 @@ function lineNumberForIndex(text, index) {
 
 function summarizeFilesystem(text) {
   const sensitiveAccesses = [];
-  const sensitivePathPattern = /"([^"]*(?:\.npmrc|\.ssh|id_rsa|id_ed25519|known_hosts|\.aws|\.config\/gcloud|\.azure|\.env(?:\.local)?|\.git-credentials)[^"]*)"/i;
+  const sensitivePathPattern = /"([^"]*(?:\.npmrc|\.ssh|id_rsa|id_ed25519|known_hosts|\.aws|\.config\/gcloud|\.azure|\.env(?:\.local)?|\.git\/config|\.git-credentials)[^"]*)"/i;
   const syscallPattern = /^(?:(\d+)\s+)?(openat|open|access|statx?|lstat|newfstatat)\(/;
 
   for (const [index, line] of text.split(/\r?\n/).entries()) {

