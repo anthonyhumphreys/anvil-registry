@@ -1275,7 +1275,7 @@ export default $config({
       },
       environment: {
         RUNTIME_MODE: "production",
-        PUBLIC_BASE_URL: "https://npm.anvil.example.com",
+        PUBLIC_BASE_URL: process.env.PUBLIC_BASE_URL,
         OBJECT_STORE_DRIVER: "s3",
         S3_BUCKET: bucket.name,
         QUEUE_DRIVER: "sqs",
