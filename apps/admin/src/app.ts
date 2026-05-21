@@ -83,9 +83,12 @@ export function buildAdmin(dependencies: AdminDependencies = {}): FastifyInstanc
     const params = request.params as { packageName: string; version: string };
     const report = await persistence.getAnalysisReport(params.packageName, params.version, analysisReportIdentityFromRequest(request.url, request.query));
     if (!report) return reply.code(404).send({ error: "ANVIL_REPORT_NOT_FOUND" });
-    if (!report.objectKey) return reply.code(404).send({ error: "ANVIL_REPORT_ARTIFACT_NOT_STORED" });
-    const artifact = await objectStore.get(report.objectKey);
-    if (!artifact) return reply.code(404).send({ error: "ANVIL_REPORT_ARTIFACT_NOT_FOUND", objectKey: report.objectKey });
+    const kind = analysisArtifactKindFromRequest(request.url, request.query);
+    if (!kind) return reply.code(400).send({ error: "ANVIL_REPORT_ARTIFACT_KIND_INVALID" });
+    const objectKey = analysisReportArtifactObjectKey(report, kind);
+    if (!objectKey) return reply.code(404).send({ error: "ANVIL_REPORT_ARTIFACT_NOT_STORED" });
+    const artifact = await objectStore.get(objectKey);
+    if (!artifact) return reply.code(404).send({ error: "ANVIL_REPORT_ARTIFACT_NOT_FOUND", objectKey });
     reply.type("application/json");
     return reply.send(Buffer.from(artifact));
   });
@@ -787,8 +790,12 @@ function reportTable(reports: AnalysisReportRecord[]) {
 
 function analysisReportObjectKeyDetails(report: { objectKey?: string }, artifactUrl?: string) {
   if (!report.objectKey) return `<span class="empty">not stored</span>`;
-  const key = `<code>${escapeHtml(report.objectKey)}</code>`;
-  return artifactUrl ? `<a href="${escapeHtml(artifactUrl)}">${key}</a>` : key;
+  return analysisReportArtifactLinks(report, artifactUrl)
+    .map(({ label, objectKey, href }) => {
+      const key = `<code>${escapeHtml(objectKey)}</code>`;
+      return href ? `<span>${escapeHtml(label)}: <a href="${escapeHtml(href)}">${key}</a></span>` : `<span>${escapeHtml(label)}: ${key}</span>`;
+    })
+    .join("<br>");
 }
 
 function popularPackageIndexSummary(index: PopularPackageIndex) {
@@ -1670,6 +1677,50 @@ function analysisReportIdentityFromRequest(url: string, query: unknown) {
     tarballShasum: queryStringValue(values.shasum) ?? rawParams.get("shasum") ?? undefined,
     analyserVersion: queryStringValue(values.analyser) ?? rawParams.get("analyser") ?? undefined
   };
+}
+
+const analysisArtifactKinds = ["report", "manifest-diff", "file-tree"] as const;
+type AnalysisArtifactKind = (typeof analysisArtifactKinds)[number];
+
+function analysisArtifactKindFromRequest(url: string, query: unknown): AnalysisArtifactKind | undefined {
+  const rawParams = new URLSearchParams(url.split("?")[1] ?? "");
+  const values = isRecord(query) ? query : {};
+  const kind = queryStringValue(values.kind) ?? rawParams.get("kind") ?? "report";
+  return isAnalysisArtifactKind(kind) ? kind : undefined;
+}
+
+function isAnalysisArtifactKind(value: string): value is AnalysisArtifactKind {
+  return analysisArtifactKinds.includes(value as AnalysisArtifactKind);
+}
+
+function analysisReportArtifactObjectKey(report: { objectKey?: string }, kind: AnalysisArtifactKind) {
+  if (!report.objectKey) return undefined;
+  if (kind === "report") return report.objectKey;
+  const match = /^(.*\/)report\.json$/.exec(report.objectKey);
+  if (!match) return undefined;
+  return `${match[1]}${kind}.json`;
+}
+
+function analysisReportArtifactLinks(report: { objectKey?: string }, artifactUrl?: string) {
+  return analysisArtifactKinds
+    .flatMap((kind) => {
+      const objectKey = analysisReportArtifactObjectKey(report, kind);
+      if (!objectKey) return [];
+      const href = artifactUrl ? analysisReportArtifactUrlWithKind(artifactUrl, kind) : undefined;
+      return [{ label: analysisArtifactLabel(kind), objectKey, href }];
+    });
+}
+
+function analysisArtifactLabel(kind: AnalysisArtifactKind) {
+  if (kind === "manifest-diff") return "manifest diff";
+  if (kind === "file-tree") return "file tree";
+  return "report";
+}
+
+function analysisReportArtifactUrlWithKind(url: string, kind: AnalysisArtifactKind) {
+  if (kind === "report") return url;
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}kind=${kind}`;
 }
 
 function prefixedAnalysisReportIdentityFromRequest(prefix: "left" | "right", url: string, query: unknown) {

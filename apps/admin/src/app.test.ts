@@ -839,10 +839,21 @@ describe("admin app", () => {
         })
       )
     );
+    await objectStore.put(
+      "analysis/pkg/1.0.0/policy/static-v2/sha512-new/manifest-diff.json",
+      new TextEncoder().encode(JSON.stringify({ lifecycleScripts: { target: { install: "node new.js" } } }))
+    );
+    await objectStore.put(
+      "analysis/pkg/1.0.0/policy/static-v2/sha512-new/file-tree.json",
+      new TextEncoder().encode(JSON.stringify([{ path: "install.js", executable: false }]))
+    );
     const app = buildAdmin({ persistence, objectStore });
 
     const api = await app.inject({ method: "GET", url: "/api/reports/pkg/1.0.0?integrity=sha512-old&analyser=static-v1" });
     const artifact = await app.inject({ method: "GET", url: "/api/reports/pkg/1.0.0/artifact?integrity=sha512-new&shasum=newsum&analyser=static-v2" });
+    const manifestArtifact = await app.inject({ method: "GET", url: "/api/reports/pkg/1.0.0/artifact?integrity=sha512-new&shasum=newsum&analyser=static-v2&kind=manifest-diff" });
+    const fileTreeArtifact = await app.inject({ method: "GET", url: "/api/reports/pkg/1.0.0/artifact?integrity=sha512-new&shasum=newsum&analyser=static-v2&kind=file-tree" });
+    const invalidArtifact = await app.inject({ method: "GET", url: "/api/reports/pkg/1.0.0/artifact?integrity=sha512-new&analyser=static-v2&kind=anything" });
     const missingArtifact = await app.inject({ method: "GET", url: "/api/reports/pkg/1.0.0/artifact?integrity=sha512-old&analyser=static-v1" });
     const compareApi = await app.inject({ method: "GET", url: "/api/packages/pkg/1.0.0/reports/compare?leftIntegrity=sha512-old&leftAnalyser=static-v1&rightIntegrity=sha512-new&rightAnalyser=static-v2" });
     const page = await app.inject({ method: "GET", url: "/reports/pkg/1.0.0?integrity=sha512-new&shasum=newsum&analyser=static-v2" });
@@ -854,6 +865,12 @@ describe("admin app", () => {
     expect(artifact.statusCode).toBe(200);
     expect(artifact.headers["content-type"]).toContain("application/json");
     expect(artifact.json()).toMatchObject({ packageName: "pkg", version: "1.0.0", objectKey, artifact: true });
+    expect(manifestArtifact.statusCode).toBe(200);
+    expect(manifestArtifact.json()).toMatchObject({ lifecycleScripts: { target: { install: "node new.js" } } });
+    expect(fileTreeArtifact.statusCode).toBe(200);
+    expect(fileTreeArtifact.json()).toEqual([{ path: "install.js", executable: false }]);
+    expect(invalidArtifact.statusCode).toBe(400);
+    expect(invalidArtifact.json()).toMatchObject({ error: "ANVIL_REPORT_ARTIFACT_KIND_INVALID" });
     expect(missingArtifact.statusCode).toBe(404);
     expect(missingArtifact.json()).toMatchObject({ error: "ANVIL_REPORT_ARTIFACT_NOT_STORED" });
     expect(compareApi.statusCode).toBe(200);
@@ -864,6 +881,10 @@ describe("admin app", () => {
     expect(page.body).toContain("sha512-new");
     expect(page.body).toContain("analysis/pkg/1.0.0/policy/static-v2/sha512-new/report.json");
     expect(page.body).toContain("/api/reports/pkg/1.0.0/artifact?integrity=sha512-new&amp;shasum=newsum&amp;analyser=static-v2");
+    expect(page.body).toContain("analysis/pkg/1.0.0/policy/static-v2/sha512-new/manifest-diff.json");
+    expect(page.body).toContain("analysis/pkg/1.0.0/policy/static-v2/sha512-new/file-tree.json");
+    expect(page.body).toContain("/api/reports/pkg/1.0.0/artifact?integrity=sha512-new&amp;shasum=newsum&amp;analyser=static-v2&amp;kind=manifest-diff");
+    expect(page.body).toContain("/api/reports/pkg/1.0.0/artifact?integrity=sha512-new&amp;shasum=newsum&amp;analyser=static-v2&amp;kind=file-tree");
     expect(page.body).toContain("New tarball changed install script.");
     expect(comparePage.statusCode).toBe(200);
     expect(comparePage.body).toContain("Comparison Summary");
@@ -882,7 +903,11 @@ describe("admin app", () => {
     expect(comparePage.body).toContain("mode: 0o755");
     expect(review.body).toContain("Compare latest reports");
     expect(review.body).toContain("analysis/pkg/1.0.0/policy/static-v2/sha512-new/report.json");
+    expect(review.body).toContain("analysis/pkg/1.0.0/policy/static-v2/sha512-new/manifest-diff.json");
+    expect(review.body).toContain("analysis/pkg/1.0.0/policy/static-v2/sha512-new/file-tree.json");
     expect(review.body).toContain("/api/reports/pkg/1.0.0/artifact?integrity=sha512-new&amp;shasum=newsum&amp;analyser=static-v2");
+    expect(review.body).toContain("/api/reports/pkg/1.0.0/artifact?integrity=sha512-new&amp;shasum=newsum&amp;analyser=static-v2&amp;kind=manifest-diff");
+    expect(review.body).toContain("/api/reports/pkg/1.0.0/artifact?integrity=sha512-new&amp;shasum=newsum&amp;analyser=static-v2&amp;kind=file-tree");
     expect(review.body).toContain("/reports/pkg/1.0.0?integrity=sha512-new&amp;shasum=newsum&amp;analyser=static-v2");
     await app.close();
   });
