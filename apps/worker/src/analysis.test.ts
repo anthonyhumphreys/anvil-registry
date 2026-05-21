@@ -6,7 +6,7 @@ import type { NpmPackageMetadata } from "@anvil/npm-registry";
 import { MemoryPersistence } from "@anvil/persistence";
 import { MetadataProvenanceVerifier } from "@anvil/provenance";
 import type { LlmRiskReview } from "@anvil/shared";
-import { analyseAnalysisJob, analysePackageTarget, parsePackageTarget } from "./analysis.js";
+import { analyseAnalysisJob, analysePackageTarget, analysisReportObjectKey, parsePackageTarget } from "./analysis.js";
 
 describe("worker analysis", () => {
   it("parses scoped package targets", () => {
@@ -69,6 +69,34 @@ describe("worker analysis", () => {
         })
       })
     ]));
+  });
+
+  it("stores analysis report artifacts in object storage when provided", async () => {
+    const persistence = new MemoryPersistence();
+    const objectStore = new TestObjectStore();
+    const config = loadConfig({ ...process.env, RUNTIME_MODE: "ci" });
+    const registry = { fetchMetadata: vi.fn(async () => metadata()), fetchTarball: vi.fn(async (url: string) => tarballs[url]) };
+
+    const result = await analysePackageTarget("pkg@1.0.1", { config, registry, persistence, objectStore });
+    const objectKey = analysisReportObjectKey(result.report);
+    const stored = await objectStore.get(objectKey);
+
+    expect(objectKey).toBe(`analysis/pkg/1.0.1/${config.policy.version}/${encodeURIComponent(result.report.analyserVersion)}/sha512-new.json`);
+    expect(stored).toBeDefined();
+    expect(JSON.parse(Buffer.from(stored ?? []).toString("utf8"))).toMatchObject({
+      packageName: "pkg",
+      version: "1.0.1",
+      tarballIntegrity: "sha512-new",
+      signals: expect.arrayContaining([expect.objectContaining({ code: "NEW_INSTALL_SCRIPT" })])
+    });
+    expect(await persistence.listAuditEvents({ targetId: "pkg@1.0.1" })).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          eventType: "analysis.completed",
+          metadata: expect.objectContaining({ analysisReportObjectKey: objectKey })
+        })
+      ])
+    );
   });
 
   it("analyses queued jobs", async () => {
@@ -507,6 +535,18 @@ describe("worker analysis", () => {
     expect(await persistence.listLlmRiskReviews({ packageName: "@scope/private-pkg", version: "1.0.0" })).toHaveLength(1);
   });
 });
+
+class TestObjectStore {
+  private readonly objects = new Map<string, Uint8Array>();
+
+  async get(key: string): Promise<Uint8Array | undefined> {
+    return this.objects.get(key);
+  }
+
+  async put(key: string, body: Uint8Array): Promise<void> {
+    this.objects.set(key, body);
+  }
+}
 
 const tarballs: Record<string, Uint8Array> = {
   "https://registry.example/pkg/-/pkg-1.0.0.tgz": makeTarball([

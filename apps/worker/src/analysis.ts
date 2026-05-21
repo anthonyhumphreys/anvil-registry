@@ -4,6 +4,7 @@ import { createLlmRiskReviewProvider, type LlmRiskReviewProvider } from "@anvil/
 import { detectNameSquatting, loadPopularPackageIndex, type PopularPackageIndex } from "@anvil/name-squatting";
 import type { NpmRegistryClient } from "@anvil/npm-registry";
 import { calculatePackageAgeDays, toVersionMetadata } from "@anvil/npm-registry";
+import type { ObjectStore } from "@anvil/object-store";
 import { analyseFileTree, analyseManifestChange, mergeAnalysisReports, parseNpmTarball } from "@anvil/package-analysis";
 import type { AnvilPersistence } from "@anvil/persistence";
 import { evaluatePolicy } from "@anvil/policy-engine";
@@ -27,6 +28,7 @@ export type WorkerAnalysisDependencies = {
   downloadStats?: {
     getWeeklyDownloads(packageName: string): Promise<number | undefined>;
   };
+  objectStore?: ObjectStore;
   provenanceVerifier?: ProvenanceVerifier;
   llmRiskReviewProvider?: LlmRiskReviewProvider;
   popularPackageIndex?: PopularPackageIndex;
@@ -132,6 +134,7 @@ async function analysePackageVersion(
   );
 
   await dependencies.persistence.putAnalysisReport(report);
+  const analysisReportObjectKey = await storeAnalysisReportArtifact(report, dependencies.objectStore);
   const override = await dependencies.persistence.getOverride(target.packageName, version);
   const preliminaryDecision = evaluatePolicy({
     packageName: target.packageName,
@@ -252,11 +255,31 @@ async function analysePackageVersion(
       score: decision.score,
       analyserVersion: report.analyserVersion,
       policyVersion: dependencies.config.policy.version,
-      signalCount: report.signals.length
+      signalCount: report.signals.length,
+      ...(analysisReportObjectKey ? { analysisReportObjectKey } : {})
     }
   });
 
   return { report, decision, packageName: target.packageName, version };
+}
+
+async function storeAnalysisReportArtifact(report: AnalysisReport, objectStore: ObjectStore | undefined) {
+  if (!objectStore) return undefined;
+  const objectKey = analysisReportObjectKey(report);
+  await objectStore.put(objectKey, Buffer.from(JSON.stringify(report), "utf8"));
+  return objectKey;
+}
+
+export function analysisReportObjectKey(report: Pick<AnalysisReport, "packageName" | "version" | "policyVersion" | "analyserVersion" | "tarballIntegrity" | "tarballShasum">) {
+  const identity = report.tarballIntegrity ?? report.tarballShasum ?? "no-integrity";
+  return [
+    "analysis",
+    encodeURIComponent(report.packageName),
+    encodeURIComponent(report.version),
+    encodeURIComponent(report.policyVersion),
+    encodeURIComponent(report.analyserVersion),
+    `${encodeURIComponent(identity)}.json`
+  ].join("/");
 }
 
 async function maybeReviewWithLlm(
