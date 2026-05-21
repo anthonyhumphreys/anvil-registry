@@ -1,191 +1,214 @@
-export default $config({
-  app(input?: { stage?: string }) {
-    return {
-      name: "anvil-registry",
-      removal: input?.stage === "production" ? "retain" : "remove",
-      home: "aws"
-    };
-  },
+export type AnvilSstRuntime = {
+  config: typeof $config;
+  interpolate: typeof $interpolate;
+  sst: typeof sst;
+  env: Pick<NodeJS.ProcessEnv, string>;
+};
 
-  async run() {
-    const vpc = new sst.aws.Vpc("Vpc");
-    const cluster = new sst.aws.Cluster("Cluster", { vpc });
-    const bucket = new sst.aws.Bucket("PackageCache");
-    const queue = new sst.aws.Queue("AnalysisQueue", {
-      dlq: {
-        retry: 3
-      }
-    });
-    const upstreamNpmRegistriesJson = process.env.UPSTREAM_NPM_REGISTRIES_JSON ?? "";
-    const upstreamRegistryAuthSecrets = upstreamRegistryAuthSecretNames(upstreamNpmRegistriesJson).map((secretName) => ({
-      secretName,
-      secret: new sst.Secret(secretName)
-    }));
-    const upstreamRegistryAuthEnvironment = Object.fromEntries(upstreamRegistryAuthSecrets.map(({ secretName, secret }) => [secretName, secret.value]));
-    const upstreamRegistryAuthSecretLinks = upstreamRegistryAuthSecrets.map(({ secret }) => secret);
-    const adminToken = new sst.Secret("AdminToken");
-    const llmReviewApiKey = new sst.Secret("LlmReviewApiKey", "");
-    const database = new sst.aws.Postgres("Database", {
-      vpc,
-      database: "anvil",
-      username: "anvil",
-      dev: {
-        host: "localhost",
-        port: 5432,
+export function createAnvilSstConfig(
+  runtime: AnvilSstRuntime = {
+    config: $config,
+    interpolate: $interpolate,
+    sst,
+    env: process.env
+  }
+) {
+  const defineConfig = runtime.config;
+  const interpolate = runtime.interpolate;
+  const sstRuntime = runtime.sst;
+  const env = runtime.env;
+
+  return defineConfig({
+    app(input?: { stage?: string }) {
+      return {
+        name: "anvil-registry",
+        removal: input?.stage === "production" ? "retain" : "remove",
+        home: "aws"
+      };
+    },
+
+    async run() {
+      const vpc = new sstRuntime.aws.Vpc("Vpc");
+      const cluster = new sstRuntime.aws.Cluster("Cluster", { vpc });
+      const bucket = new sstRuntime.aws.Bucket("PackageCache");
+      const queue = new sstRuntime.aws.Queue("AnalysisQueue", {
+        dlq: {
+          retry: 3
+        }
+      });
+      const upstreamNpmRegistriesJson = env.UPSTREAM_NPM_REGISTRIES_JSON ?? "";
+      const upstreamRegistryAuthSecrets = upstreamRegistryAuthSecretNames(upstreamNpmRegistriesJson).map((secretName) => ({
+        secretName,
+        secret: new sstRuntime.Secret(secretName)
+      }));
+      const upstreamRegistryAuthEnvironment = Object.fromEntries(upstreamRegistryAuthSecrets.map(({ secretName, secret }) => [secretName, secret.value]));
+      const upstreamRegistryAuthSecretLinks = upstreamRegistryAuthSecrets.map(({ secret }) => secret);
+      const adminToken = new sstRuntime.Secret("AdminToken");
+      const llmReviewApiKey = new sstRuntime.Secret("LlmReviewApiKey", "");
+      const database = new sstRuntime.aws.Postgres("Database", {
+        vpc,
         database: "anvil",
         username: "anvil",
-        password: "anvil"
-      }
-    });
-
-    const databaseEnvironment = {
-      PERSISTENCE_DRIVER: "postgres",
-      DATABASE_HOST: database.host,
-      DATABASE_PORT: $interpolate`${database.port}`,
-      DATABASE_NAME: database.database,
-      DATABASE_USER: database.username,
-      DATABASE_PASSWORD: database.password
-    };
-    const commonServiceEnvironment = {
-      RUNTIME_MODE: "production",
-      OBJECT_STORE_DRIVER: "s3",
-      S3_BUCKET: bucket.name,
-      POPULAR_PACKAGE_INDEX_OBJECT_KEY: "popular-index/npm/latest.json",
-      QUEUE_DRIVER: "sqs",
-      ANALYSIS_QUEUE_URL: queue.url,
-      UPSTREAM_NPM_REGISTRY: "https://registry.npmjs.org",
-      UPSTREAM_NPM_REGISTRIES_JSON: upstreamNpmRegistriesJson,
-      NPM_DOWNLOADS_API: "https://api.npmjs.org/downloads",
-      ...upstreamRegistryAuthEnvironment,
-      ...databaseEnvironment
-    };
-    const llmReviewEnvironment = {
-      LLM_REVIEW_ENABLED: process.env.LLM_REVIEW_ENABLED ?? "false",
-      LLM_REVIEW_PROVIDER: process.env.LLM_REVIEW_PROVIDER ?? "",
-      LLM_REVIEW_MODEL: process.env.LLM_REVIEW_MODEL ?? "",
-      LLM_REVIEW_ENDPOINT: process.env.LLM_REVIEW_ENDPOINT ?? "",
-      LLM_REVIEW_RUN_ON_UNKNOWN_PACKAGES: process.env.LLM_REVIEW_RUN_ON_UNKNOWN_PACKAGES ?? "false",
-      LLM_REVIEW_RUN_ON_QUARANTINE: process.env.LLM_REVIEW_RUN_ON_QUARANTINE ?? "false",
-      LLM_REVIEW_INCLUDE_PRIVATE_PACKAGES: process.env.LLM_REVIEW_INCLUDE_PRIVATE_PACKAGES ?? "false"
-    };
-    const publicBaseUrl = process.env.PUBLIC_BASE_URL ?? "https://npm.anvil.example.com";
-    const adminApiBaseUrl = process.env.ANVIL_API_BASE_URL ?? publicBaseUrl;
-
-    new sst.aws.Task("DatabaseMigration", {
-      cluster,
-      image: {
-        context: "../..",
-        dockerfile: "packages/persistence/Dockerfile"
-      },
-      environment: {
-        ...databaseEnvironment,
-        DATABASE_READY_ATTEMPTS: "60",
-        DATABASE_READY_DELAY_MS: "1000"
-      },
-      link: [database]
-    });
-
-    const gateway = new sst.aws.Service("Gateway", {
-      cluster,
-      image: {
-        context: "../..",
-        dockerfile: "apps/gateway/Dockerfile"
-      },
-      loadBalancer: {
-        rules: [{ listen: "443/https", forward: "4873/http" }],
-        health: {
-          "4873/http": {
-            path: "/-/ready",
-            successCodes: "200",
-            interval: "30 seconds",
-            timeout: "5 seconds",
-            healthyThreshold: 2,
-            unhealthyThreshold: 2
-          }
+        dev: {
+          host: "localhost",
+          port: 5432,
+          database: "anvil",
+          username: "anvil",
+          password: "anvil"
         }
-      },
-      health: {
-        command: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4873/-/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""],
-        startPeriod: "30 seconds",
-        interval: "30 seconds",
-        timeout: "5 seconds",
-        retries: 3
-      },
-      environment: {
-        ...commonServiceEnvironment,
-        ...llmReviewEnvironment,
-        PUBLIC_BASE_URL: publicBaseUrl,
-        ADMIN_TOKEN: adminToken.value
-      },
-      link: [bucket, queue, database, adminToken, ...upstreamRegistryAuthSecretLinks]
-    });
+      });
 
-    const admin = new sst.aws.Service("Admin", {
-      cluster,
-      image: {
-        context: "../..",
-        dockerfile: "apps/admin/Dockerfile"
-      },
-      loadBalancer: {
-        rules: [{ listen: "443/https", forward: "3000/http" }],
-        health: {
-          "3000/http": {
-            path: "/-/health",
-            successCodes: "200",
-            interval: "30 seconds",
-            timeout: "5 seconds",
-            healthyThreshold: 2,
-            unhealthyThreshold: 2
+      const databaseEnvironment = {
+        PERSISTENCE_DRIVER: "postgres",
+        DATABASE_HOST: database.host,
+        DATABASE_PORT: interpolate`${database.port}`,
+        DATABASE_NAME: database.database,
+        DATABASE_USER: database.username,
+        DATABASE_PASSWORD: database.password
+      };
+      const commonServiceEnvironment = {
+        RUNTIME_MODE: "production",
+        OBJECT_STORE_DRIVER: "s3",
+        S3_BUCKET: bucket.name,
+        POPULAR_PACKAGE_INDEX_OBJECT_KEY: "popular-index/npm/latest.json",
+        QUEUE_DRIVER: "sqs",
+        ANALYSIS_QUEUE_URL: queue.url,
+        UPSTREAM_NPM_REGISTRY: "https://registry.npmjs.org",
+        UPSTREAM_NPM_REGISTRIES_JSON: upstreamNpmRegistriesJson,
+        NPM_DOWNLOADS_API: "https://api.npmjs.org/downloads",
+        ...upstreamRegistryAuthEnvironment,
+        ...databaseEnvironment
+      };
+      const llmReviewEnvironment = {
+        LLM_REVIEW_ENABLED: env.LLM_REVIEW_ENABLED ?? "false",
+        LLM_REVIEW_PROVIDER: env.LLM_REVIEW_PROVIDER ?? "",
+        LLM_REVIEW_MODEL: env.LLM_REVIEW_MODEL ?? "",
+        LLM_REVIEW_ENDPOINT: env.LLM_REVIEW_ENDPOINT ?? "",
+        LLM_REVIEW_RUN_ON_UNKNOWN_PACKAGES: env.LLM_REVIEW_RUN_ON_UNKNOWN_PACKAGES ?? "false",
+        LLM_REVIEW_RUN_ON_QUARANTINE: env.LLM_REVIEW_RUN_ON_QUARANTINE ?? "false",
+        LLM_REVIEW_INCLUDE_PRIVATE_PACKAGES: env.LLM_REVIEW_INCLUDE_PRIVATE_PACKAGES ?? "false"
+      };
+      const publicBaseUrl = env.PUBLIC_BASE_URL ?? "https://npm.anvil.example.com";
+      const adminApiBaseUrl = env.ANVIL_API_BASE_URL ?? publicBaseUrl;
+
+      new sstRuntime.aws.Task("DatabaseMigration", {
+        cluster,
+        image: {
+          context: "../..",
+          dockerfile: "packages/persistence/Dockerfile"
+        },
+        environment: {
+          ...databaseEnvironment,
+          DATABASE_READY_ATTEMPTS: "60",
+          DATABASE_READY_DELAY_MS: "1000"
+        },
+        link: [database]
+      });
+
+      const gateway = new sstRuntime.aws.Service("Gateway", {
+        cluster,
+        image: {
+          context: "../..",
+          dockerfile: "apps/gateway/Dockerfile"
+        },
+        loadBalancer: {
+          rules: [{ listen: "443/https", forward: "4873/http" }],
+          health: {
+            "4873/http": {
+              path: "/-/ready",
+              successCodes: "200",
+              interval: "30 seconds",
+              timeout: "5 seconds",
+              healthyThreshold: 2,
+              unhealthyThreshold: 2
+            }
           }
-        }
-      },
-      health: {
-        command: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/-/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""],
-        startPeriod: "30 seconds",
-        interval: "30 seconds",
-        timeout: "5 seconds",
-        retries: 3
-      },
-      environment: {
-        ...commonServiceEnvironment,
-        ...llmReviewEnvironment,
-        ANVIL_API_BASE_URL: adminApiBaseUrl,
-        ADMIN_TOKEN: adminToken.value
-      },
-      link: [bucket, database, adminToken, ...upstreamRegistryAuthSecretLinks]
-    });
+        },
+        health: {
+          command: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4873/-/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""],
+          startPeriod: "30 seconds",
+          interval: "30 seconds",
+          timeout: "5 seconds",
+          retries: 3
+        },
+        environment: {
+          ...commonServiceEnvironment,
+          ...llmReviewEnvironment,
+          PUBLIC_BASE_URL: publicBaseUrl,
+          ADMIN_TOKEN: adminToken.value
+        },
+        link: [bucket, queue, database, adminToken, ...upstreamRegistryAuthSecretLinks]
+      });
 
-    new sst.aws.Service("Worker", {
-      cluster,
-      image: {
-        context: "../..",
-        dockerfile: "apps/worker/Dockerfile"
-      },
-      health: {
-        command: ["CMD", "node", "apps/worker/dist/index.js", "--health-check"],
-        startPeriod: "30 seconds",
-        interval: "30 seconds",
-        timeout: "10 seconds",
-        retries: 3
-      },
-      environment: {
-        ...commonServiceEnvironment,
-        ...llmReviewEnvironment,
-        LLM_REVIEW_API_KEY: llmReviewApiKey.value
-      },
-      link: [bucket, queue, database, llmReviewApiKey, ...upstreamRegistryAuthSecretLinks]
-    });
+      const admin = new sstRuntime.aws.Service("Admin", {
+        cluster,
+        image: {
+          context: "../..",
+          dockerfile: "apps/admin/Dockerfile"
+        },
+        loadBalancer: {
+          rules: [{ listen: "443/https", forward: "3000/http" }],
+          health: {
+            "3000/http": {
+              path: "/-/health",
+              successCodes: "200",
+              interval: "30 seconds",
+              timeout: "5 seconds",
+              healthyThreshold: 2,
+              unhealthyThreshold: 2
+            }
+          }
+        },
+        health: {
+          command: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/-/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""],
+          startPeriod: "30 seconds",
+          interval: "30 seconds",
+          timeout: "5 seconds",
+          retries: 3
+        },
+        environment: {
+          ...commonServiceEnvironment,
+          ...llmReviewEnvironment,
+          ANVIL_API_BASE_URL: adminApiBaseUrl,
+          ADMIN_TOKEN: adminToken.value
+        },
+        link: [bucket, database, adminToken, ...upstreamRegistryAuthSecretLinks]
+      });
 
-    return {
-      gatewayUrl: gateway.url,
-      adminUrl: admin.url,
-      migrationTask: "DatabaseMigration",
-      databaseHost: database.host
-    };
-  }
-});
+      new sstRuntime.aws.Service("Worker", {
+        cluster,
+        image: {
+          context: "../..",
+          dockerfile: "apps/worker/Dockerfile"
+        },
+        health: {
+          command: ["CMD", "node", "apps/worker/dist/index.js", "--health-check"],
+          startPeriod: "30 seconds",
+          interval: "30 seconds",
+          timeout: "10 seconds",
+          retries: 3
+        },
+        environment: {
+          ...commonServiceEnvironment,
+          ...llmReviewEnvironment,
+          LLM_REVIEW_API_KEY: llmReviewApiKey.value
+        },
+        link: [bucket, queue, database, llmReviewApiKey, ...upstreamRegistryAuthSecretLinks]
+      });
 
-function upstreamRegistryAuthSecretNames(json: string) {
+      return {
+        gatewayUrl: gateway.url,
+        adminUrl: admin.url,
+        migrationTask: "DatabaseMigration",
+        databaseHost: database.host
+      };
+    }
+  });
+}
+
+export default createAnvilSstConfig();
+
+export function upstreamRegistryAuthSecretNames(json: string) {
   const trimmed = json.trim();
   if (!trimmed) return [];
 
