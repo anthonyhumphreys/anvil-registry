@@ -210,6 +210,39 @@ set -e
 test "$SUBMIT_STATUS" = "22"
 test ! -e "$WORK_DIR/submit/.anvil-submit-payload.json"
 
+mkdir -p "$WORK_DIR/record-curl-bin"
+cat > "$WORK_DIR/record-curl-bin/curl" <<'SH'
+#!/usr/bin/env bash
+touch "$ANVIL_CURL_CALLED"
+exit 90
+SH
+chmod +x "$WORK_DIR/record-curl-bin/curl"
+
+set +e
+ANVIL_REGISTRY_URL="http://registry.example.test" \
+ANVIL_CURL_CALLED="$WORK_DIR/curl-called-bad-type" \
+PATH="$WORK_DIR/record-curl-bin:$PATH" \
+  anvil-submit-report "$WORK_DIR/submit/report.json" "Bad Type" >/tmp/anvil-submit-report-bad-type.out 2>/tmp/anvil-submit-report-bad-type.err
+BAD_TYPE_STATUS=$?
+set -e
+test "$BAD_TYPE_STATUS" = "64"
+test ! -e "$WORK_DIR/submit/.anvil-submit-payload.json"
+test ! -e "$WORK_DIR/curl-called-bad-type"
+
+cat > "$WORK_DIR/submit/array-report.json" <<'JSON'
+[]
+JSON
+set +e
+ANVIL_REGISTRY_URL="http://registry.example.test" \
+ANVIL_CURL_CALLED="$WORK_DIR/curl-called-array-report" \
+PATH="$WORK_DIR/record-curl-bin:$PATH" \
+  anvil-submit-report "$WORK_DIR/submit/array-report.json" network >/tmp/anvil-submit-report-array.out 2>/tmp/anvil-submit-report-array.err
+ARRAY_REPORT_STATUS=$?
+set -e
+test "$ARRAY_REPORT_STATUS" = "65"
+test ! -e "$WORK_DIR/submit/.anvil-submit-payload.json"
+test ! -e "$WORK_DIR/curl-called-array-report"
+
 mkdir -p "$WORK_DIR/bin"
 cat > "$WORK_DIR/bin/strace" <<'SH'
 #!/usr/bin/env bash

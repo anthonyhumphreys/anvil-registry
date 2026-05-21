@@ -56,11 +56,37 @@ try {
   process.exit(65);
 }
 
+function isRecord(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function validateBoundedString(name, value, maxLength) {
+  const normalized = String(value ?? "").trim();
+  if (normalized.length < 1 || normalized.length > maxLength) {
+    console.error(`[anvil] ${name} must be between 1 and ${maxLength} characters.`);
+    process.exit(64);
+  }
+  return normalized;
+}
+
+const normalizedSource = validateBoundedString("ANVIL_REPORT_SOURCE", source, 100);
+const normalizedProjectName = validateBoundedString("ANVIL_PROJECT_NAME", projectName, 200);
+const normalizedReportType = validateBoundedString("report type", reportType, 40);
+if (!/^[a-z][a-z0-9_-]*$/.test(normalizedReportType)) {
+  console.error("[anvil] Report type must start with a lowercase letter and contain only lowercase letters, numbers, underscores, or hyphens.");
+  process.exit(64);
+}
+
+if (!isRecord(report)) {
+  console.error("[anvil] Report JSON must be an object.");
+  process.exit(65);
+}
+
 const summary = report.summary && typeof report.summary === "object" && !Array.isArray(report.summary) ? report.summary : undefined;
 const payload = {
-  source,
-  projectName,
-  reportType,
+  source: normalizedSource,
+  projectName: normalizedProjectName,
+  reportType: normalizedReportType,
   summary,
   report
 };
