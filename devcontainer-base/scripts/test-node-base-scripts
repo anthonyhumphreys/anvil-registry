@@ -243,6 +243,35 @@ test "$ARRAY_REPORT_STATUS" = "65"
 test ! -e "$WORK_DIR/submit/.anvil-submit-payload.json"
 test ! -e "$WORK_DIR/curl-called-array-report"
 
+mkdir -p "$WORK_DIR/npmrc"
+cat > "$WORK_DIR/npmrc/.npmrc" <<'NPMRC'
+# Existing project config
+registry=https://registry.npmjs.org
+ignore-scripts=false
+@scope:registry=https://registry.example.test
+always-auth=true
+NPMRC
+ANVIL_NPMRC_PATH="$WORK_DIR/npmrc/.npmrc" anvil-use-registry "http://registry.example.test/base/" >/tmp/anvil-use-registry.out
+grep -q '^# Existing project config$' "$WORK_DIR/npmrc/.npmrc"
+grep -q '^@scope:registry=https://registry.example.test$' "$WORK_DIR/npmrc/.npmrc"
+grep -q '^always-auth=true$' "$WORK_DIR/npmrc/.npmrc"
+grep -q '^# Managed by Anvil Node Base$' "$WORK_DIR/npmrc/.npmrc"
+grep -q '^registry=http://registry.example.test/base$' "$WORK_DIR/npmrc/.npmrc"
+grep -q '^ignore-scripts=true$' "$WORK_DIR/npmrc/.npmrc"
+grep -q '^fund=false$' "$WORK_DIR/npmrc/.npmrc"
+grep -q '^audit=true$' "$WORK_DIR/npmrc/.npmrc"
+grep -q '^save-exact=true$' "$WORK_DIR/npmrc/.npmrc"
+grep -q '^foreground-scripts=true$' "$WORK_DIR/npmrc/.npmrc"
+test "$(grep -c '^registry=' "$WORK_DIR/npmrc/.npmrc")" = "1"
+test "$(grep -c '^ignore-scripts=' "$WORK_DIR/npmrc/.npmrc")" = "1"
+
+set +e
+ANVIL_NPMRC_PATH="$WORK_DIR/npmrc/invalid.npmrc" anvil-use-registry "https://user:pass@registry.example.test" >/tmp/anvil-use-registry-invalid.out 2>/tmp/anvil-use-registry-invalid.err
+USE_REGISTRY_STATUS=$?
+set -e
+test "$USE_REGISTRY_STATUS" = "64"
+test ! -e "$WORK_DIR/npmrc/invalid.npmrc"
+
 mkdir -p "$WORK_DIR/bin"
 cat > "$WORK_DIR/bin/strace" <<'SH'
 #!/usr/bin/env bash
