@@ -828,6 +828,7 @@ importers:
     expect(writes.join("")).toContain("Risk: high=0 medium=1");
     expect(writes.join("")).toContain("NON_STANDARD_PORT");
     expect(writes.join("")).toContain("198.51.100.10:8080");
+    expect(writes.join("").match(/198\.51\.100\.10:8080/g)).toHaveLength(1);
     expect(writes.join("")).toContain("Network policy:");
     expect(writes.join("")).toContain("allowed ports: 80, 443");
     expect(writes.join("")).toContain("blocked hosts: raw.githubusercontent.com");
