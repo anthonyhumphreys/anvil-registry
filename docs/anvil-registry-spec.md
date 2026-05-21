@@ -1124,6 +1124,12 @@ Use the Node Base image smoke to verify that the devcontainer image builds, defa
 pnpm smoke:node-base-image
 ```
 
+Use the image-to-registry smoke to verify that the built Node Base image can submit a generated report through the local gateway and that Admin/CLI can read the persisted report:
+
+```bash
+pnpm smoke:node-base-image-report
+```
+
 ---
 
 ## 12. AWS Deployment with SST
