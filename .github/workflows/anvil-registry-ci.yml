@@ -14,6 +14,7 @@ on:
       - "pnpm-workspace.yaml"
       - "scripts/smoke-analysis-queue"
       - "scripts/smoke-llm-review"
+      - "scripts/smoke-node-base-report"
       - "scripts/smoke-npm-clients"
       - "scripts/smoke-scoped-upstream.ts"
       - "turbo.json"
@@ -33,6 +34,7 @@ on:
       - "pnpm-workspace.yaml"
       - "scripts/smoke-analysis-queue"
       - "scripts/smoke-llm-review"
+      - "scripts/smoke-node-base-report"
       - "scripts/smoke-npm-clients"
       - "scripts/smoke-scoped-upstream.ts"
       - "turbo.json"
@@ -87,6 +89,9 @@ jobs:
 
       - name: Smoke analysis queue processing
         run: pnpm smoke:analysis
+
+      - name: Smoke Node Base report submission
+        run: pnpm smoke:node-base-report
 
       - name: Smoke LLM review processing
         run: pnpm smoke:llm-review
