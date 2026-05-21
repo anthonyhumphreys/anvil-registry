@@ -1090,6 +1090,14 @@ pnpm smoke:local
 
 The smoke check must call gateway liveness/readiness, fetch package metadata, verify tarball URLs have been rewritten through Anvil, download the rewritten tarball URL, and check admin health when `ANVIL_ADMIN_URL` is set.
 
+Use the client smoke to verify real package-manager install paths through the gateway:
+
+```bash
+pnpm smoke:clients
+```
+
+This command creates throwaway projects, installs a known package through Anvil with npm, pnpm, and Yarn, keeps lifecycle scripts disabled, and verifies the installed package version.
+
 To exercise reviewer-triggered LLM review locally, run:
 
 ```bash

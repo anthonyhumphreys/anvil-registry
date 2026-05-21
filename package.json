@@ -10,6 +10,7 @@
     "dev:gateway": "pnpm --filter @anvil/gateway dev",
     "dev:worker": "pnpm --filter @anvil/worker dev",
     "lint": "turbo run lint",
+    "smoke:clients": "./scripts/smoke-npm-clients",
     "smoke:llm-review": "./scripts/smoke-llm-review",
     "smoke:local": "ANVIL_REGISTRY_URL=http://localhost:4873 ANVIL_ADMIN_URL=http://localhost:3000 pnpm --filter @anvil/cli dev -- smoke",
     "smoke:node-base-report": "./scripts/smoke-node-base-report",

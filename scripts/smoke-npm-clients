@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REGISTRY_URL="${ANVIL_REGISTRY_URL:-http://localhost:4873}"
+PACKAGE_TARGET="${ANVIL_CLIENT_SMOKE_PACKAGE:-is-number@7.0.0}"
+PACKAGE_NAME="${PACKAGE_TARGET%@*}"
+PACKAGE_VERSION="${PACKAGE_TARGET##*@}"
+WORK_DIR="$(mktemp -d)"
+
+trap 'rm -rf "$WORK_DIR"' EXIT
+
+if [[ "$PACKAGE_NAME" == "$PACKAGE_VERSION" ]]; then
+  echo "[anvil] ANVIL_CLIENT_SMOKE_PACKAGE must include an explicit version, for example is-number@7.0.0" >&2
+  exit 1
+fi
+
+echo "[anvil] Client smoke package: $PACKAGE_TARGET"
+node - "$REGISTRY_URL" <<'NODE'
+const [registryUrl] = process.argv.slice(2);
+const response = await fetch(`${registryUrl.replace(/\/+$/, "")}/-/ready`);
+if (!response.ok) {
+  throw new Error(`[anvil] Gateway is not ready: ${response.status} ${response.statusText}`);
+}
+NODE
+
+smoke_npm() {
+  local dir="$WORK_DIR/npm"
+  mkdir -p "$dir"
+  write_package_json "$dir" "npm-client-smoke"
+  echo "[anvil] npm install through Anvil"
+  (
+    cd "$dir"
+    npm_config_cache="$WORK_DIR/npm-cache" npm install \
+      --ignore-scripts \
+      --registry="$REGISTRY_URL" \
+      --package-lock=false \
+      --no-audit \
+      --fund=false \
+      "$PACKAGE_TARGET" >/dev/null
+    verify_package "$PACKAGE_NAME" "$PACKAGE_VERSION"
+  )
+}
+
+smoke_pnpm() {
+  local dir="$WORK_DIR/pnpm"
+  mkdir -p "$dir"
+  write_package_json "$dir" "pnpm-client-smoke"
+  echo "[anvil] pnpm add through Anvil"
+  (
+    cd "$dir"
+    pnpm add \
+      --ignore-scripts \
+      --config.registry="$REGISTRY_URL" \
+      "$PACKAGE_TARGET" >/dev/null
+    verify_package "$PACKAGE_NAME" "$PACKAGE_VERSION"
+  )
+}
+
+smoke_yarn() {
+  local dir="$WORK_DIR/yarn"
+  mkdir -p "$dir"
+  write_package_json "$dir" "yarn-client-smoke"
+  echo "[anvil] yarn add through Anvil"
+  (
+    cd "$dir"
+    COREPACK_ENABLE_DOWNLOAD_PROMPT=0 corepack yarn@1.22.22 add \
+      --ignore-scripts \
+      --registry "$REGISTRY_URL" \
+      --non-interactive \
+      "$PACKAGE_TARGET" >/dev/null
+    verify_package "$PACKAGE_NAME" "$PACKAGE_VERSION"
+  )
+}
+
+write_package_json() {
+  local dir="$1"
+  local package_name="$2"
+  cat > "$dir/package.json" <<JSON
+{
+  "name": "$package_name",
+  "version": "0.0.0",
+  "private": true
+}
+JSON
+}
+
+verify_package() {
+  local package_name="$1"
+  local expected_version="$2"
+  node - "$package_name" "$expected_version" <<'NODE'
+const [packageName, expectedVersion] = process.argv.slice(2);
+const packageJson = require(`${process.cwd()}/node_modules/${packageName}/package.json`);
+if (packageJson.version !== expectedVersion) {
+  throw new Error(`[anvil] Expected ${packageName}@${expectedVersion}, installed ${packageJson.version}`);
+}
+NODE
+}
+
+smoke_npm
+smoke_pnpm
+smoke_yarn
+
+echo "[anvil] npm, pnpm, and yarn client smokes passed."
