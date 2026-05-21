@@ -241,7 +241,9 @@ export function detectNameSquatting(
 
       if (score >= 0.82) reasons.push("high_name_similarity");
       if (best.jaroWinkler >= 0.9) reasons.push("high_jaro_winkler_similarity");
-      if (knownCandidate === candidate.name) reasons.push("known_ecosystem_confusion");
+      if (knownCandidate === candidate.name || candidate.aliases?.some((alias) => alias.toLowerCase() === packageName.toLowerCase())) {
+        reasons.push("known_ecosystem_confusion");
+      }
       if (scopeConfusion) reasons.push("scope_confusion");
       if (requested.name !== candidateParts.name && requested.name.replace(/[-_]/g, "") === candidateParts.name.replace(/[-_]/g, "")) {
         reasons.push("hyphen_or_underscore_variant");

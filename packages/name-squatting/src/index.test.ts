@@ -104,6 +104,20 @@ describe("detectNameSquatting", () => {
     }
   });
 
+  it("treats exact popular-package aliases as known ecosystem confusion evidence", () => {
+    const [signal] = detectNameSquatting("loadash", {
+      source: "test",
+      popularPackages: [{ name: "lodash", weeklyDownloads: 60_000_000, aliases: ["loadash"] }],
+      knownConfusions: {}
+    });
+
+    expect(signal).toMatchObject({
+      candidate: "lodash",
+      suggestedPackage: "lodash",
+      reasons: expect.arrayContaining(["known_ecosystem_confusion"])
+    });
+  });
+
   it("rejects malformed popular package indexes", () => {
     expect(() => parsePopularPackageIndex({ popularPackages: [{ weeklyDownloads: -1 }] })).toThrow("Popular package entries require a name.");
   });
