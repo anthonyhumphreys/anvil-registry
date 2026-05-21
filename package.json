@@ -22,7 +22,8 @@
     "sst:migrate": "pnpm --dir infra/sst sst shell -- pnpm --filter @anvil/infra-sst migrate:run",
     "test:node-base": "./devcontainer-base/scripts/test-node-base-scripts",
     "test": "turbo run test",
-    "typecheck": "turbo run typecheck"
+    "typecheck": "turbo run typecheck",
+    "typecheck:smokes": "tsc --noEmit --module NodeNext --moduleResolution NodeNext --target ES2022 --types node --skipLibCheck scripts/smoke-scoped-upstream.ts"
   },
   "devDependencies": {
     "@types/node": "^22.15.21",

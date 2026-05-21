@@ -67,6 +67,9 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Typecheck smoke scripts
+        run: pnpm typecheck:smokes
+
       - name: Test
         run: pnpm test
 

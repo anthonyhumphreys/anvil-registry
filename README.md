@@ -32,6 +32,8 @@ Run the main checks:
 
 ```bash
 pnpm lint
+pnpm typecheck
+pnpm typecheck:smokes
 pnpm test
 pnpm build
 ```
