@@ -308,6 +308,7 @@ export type PolicyInput = {
   packageName: string;
   version: string;
   runtimeMode: RuntimeMode;
+  evaluatedAt?: string;
   metadata?: PackageMetadataSummary;
   versionMetadata?: PackageVersionMetadata;
   weeklyDownloads?: number;

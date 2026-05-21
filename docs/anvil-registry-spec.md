@@ -422,6 +422,7 @@ export type PolicyInput = {
   packageName: string;
   version: string;
   runtimeMode: "development" | "ci" | "production";
+  evaluatedAt?: string;
   metadata?: PackageMetadataSummary;
   versionMetadata?: PackageVersionMetadata;
   weeklyDownloads?: number;

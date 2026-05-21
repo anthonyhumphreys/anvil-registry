@@ -10,8 +10,9 @@ const severityScore = {
 
 export function evaluatePolicy(input: PolicyInput): PolicyDecision {
   const reasons: PolicyReason[] = [];
+  const evaluatedAt = evaluationTimestamp(input.evaluatedAt);
 
-  const activeOverride = resolveActiveOverride(input);
+  const activeOverride = resolveActiveOverride(input, evaluatedAt);
   if (activeOverride) {
     return {
       action: activeOverride.action,
@@ -138,7 +139,7 @@ export function evaluatePolicy(input: PolicyInput): PolicyDecision {
 
   const score = scorePolicyReasons(input, reasons);
   const action = decideAction(input, reasons, score);
-  const expiresAt = nextTimeSensitiveDecisionExpiry(input, reasons);
+  const expiresAt = nextTimeSensitiveDecisionExpiry(input, reasons, evaluatedAt);
 
   return {
     action,
@@ -157,10 +158,10 @@ function scorePolicyReasons(input: PolicyInput, reasons: PolicyReason[]) {
   return Math.max(0, rawScore - (input.policy.provenance?.trustedPublishingScoreReduction ?? 0));
 }
 
-function resolveActiveOverride(input: PolicyInput) {
+function resolveActiveOverride(input: PolicyInput, evaluatedAt: number) {
   if (!input.policy.overrides.enabled || !input.override) return undefined;
   if (input.override.version && input.override.version !== input.version) return undefined;
-  if (input.override.expiresAt && Date.parse(input.override.expiresAt) <= Date.now()) return undefined;
+  if (input.override.expiresAt && Date.parse(input.override.expiresAt) <= evaluatedAt) return undefined;
   return input.override;
 }
 
@@ -208,13 +209,20 @@ function pastTenseAction(action: PolicyDecision["action"]) {
   return "allowed";
 }
 
-function nextTimeSensitiveDecisionExpiry(input: PolicyInput, reasons: PolicyReason[]): string | undefined {
+function nextTimeSensitiveDecisionExpiry(input: PolicyInput, reasons: PolicyReason[], evaluatedAt: number): string | undefined {
   if (!reasons.some((reason) => reason.code === "PACKAGE_TOO_NEW")) return undefined;
   if (typeof input.packageAgeDays !== "number") return undefined;
 
   const nextBoundaryDays = input.packageAgeDays < 1 ? 1 : input.policy.minimumPackageAgeDays;
   const publishedAt = input.versionMetadata?.publishedAt ? Date.parse(input.versionMetadata.publishedAt) : NaN;
-  const expiry = Number.isNaN(publishedAt) ? Date.now() + Math.max(0, nextBoundaryDays - input.packageAgeDays) * 24 * 60 * 60 * 1000 : publishedAt + nextBoundaryDays * 24 * 60 * 60 * 1000;
+  const expiry = Number.isNaN(publishedAt) ? evaluatedAt + Math.max(0, nextBoundaryDays - input.packageAgeDays) * 24 * 60 * 60 * 1000 : publishedAt + nextBoundaryDays * 24 * 60 * 60 * 1000;
 
-  return expiry > Date.now() ? new Date(expiry).toISOString() : undefined;
+  return expiry > evaluatedAt ? new Date(expiry).toISOString() : undefined;
+}
+
+function evaluationTimestamp(evaluatedAt: string | undefined) {
+  if (!evaluatedAt) return Date.now();
+  const timestamp = Date.parse(evaluatedAt);
+  if (Number.isNaN(timestamp)) throw new Error(`Invalid policy evaluation timestamp: ${evaluatedAt}`);
+  return timestamp;
 }

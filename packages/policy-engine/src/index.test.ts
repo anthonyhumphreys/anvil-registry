@@ -1,12 +1,8 @@
 import { defaultPolicyConfig } from "@anvil/config";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { evaluatePolicy } from "./index.js";
 
 describe("evaluatePolicy", () => {
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
   it("blocks very new packages", () => {
     const publishedAt = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
     const decision = evaluatePolicy({
@@ -120,13 +116,11 @@ describe("evaluatePolicy", () => {
   });
 
   it("does not apply overrides expiring at the current instant", () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-05-21T12:00:00.000Z"));
-
     const decision = evaluatePolicy({
       packageName: "fresh-package",
       version: "1.0.0",
       runtimeMode: "ci",
+      evaluatedAt: "2026-05-21T12:00:00.000Z",
       packageAgeDays: 0,
       override: {
         packageName: "fresh-package",
@@ -140,6 +134,20 @@ describe("evaluatePolicy", () => {
 
     expect(decision.action).toBe("block");
     expect(decision.reasons.map((reason) => reason.code)).toContain("PACKAGE_TOO_NEW");
+  });
+
+  it("uses the supplied evaluation time for time-sensitive decision expiry", () => {
+    const decision = evaluatePolicy({
+      packageName: "young-package",
+      version: "1.0.0",
+      runtimeMode: "ci",
+      evaluatedAt: "2026-05-21T12:00:00.000Z",
+      packageAgeDays: 2,
+      policy: defaultPolicyConfig
+    });
+
+    expect(decision.action).toBe("quarantine");
+    expect(decision.expiresAt).toBe("2026-05-26T12:00:00.000Z");
   });
 
   it("blocks tarballs with unsafe extraction entries", () => {
