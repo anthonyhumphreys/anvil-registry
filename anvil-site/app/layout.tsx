@@ -15,17 +15,17 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Anvil | Safer npm installs",
+  title: "Anvil Registry | Safer npm installs",
   description: "Anvil Registry and Anvil Node Base help teams inspect, explain, and enforce dependency policy before npm packages reach developers or CI.",
   metadataBase: new URL("https://anvil-registry.vercel.app"),
   openGraph: {
-    title: "Anvil | Forge safer npm installs",
+    title: "Anvil Registry | Forge safer npm installs",
     description: "A drop-in npm registry gateway and hardened Node base image for dependency security.",
     type: "website"
   },
   twitter: {
     card: "summary_large_image",
-    title: "Anvil | Forge safer npm installs",
+    title: "Anvil Registry | Forge safer npm installs",
     description: "Open source dependency security for npm installs, CI, and devcontainers."
   }
 };

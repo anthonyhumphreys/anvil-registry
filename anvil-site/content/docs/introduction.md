@@ -1,26 +1,26 @@
 ---
 title: Introduction
-description: What Anvil is, who it is for, and how the pieces fit together.
+description: What Anvil Registry is, who it is for, and how the pieces fit together.
 section: Getting started
 order: 1
 ---
 
 # Introduction
 
-Anvil is an open source dependency safety toolkit for the Node and npm ecosystem.
+Anvil Registry is an open source dependency safety toolkit for the Node and npm ecosystem.
 
 It has two parts:
 
 - **Anvil Registry** is a drop-in npm registry gateway. It proxies metadata and tarballs, rewrites tarball URLs through the gateway, caches artifacts, evaluates policy, and records decisions before installs reach developers or CI.
 - **Anvil Node Base** is a hardened Node devcontainer base image. It defaults npm toward safer installs, supports observed install mode, and writes local security reports for unknown projects.
 
-The goal is practical dependency review. Anvil does not ask teams to stop using npm clients, rewrite package managers, or trust a black box. It puts policy and evidence in the install path.
+The goal is practical dependency review. Anvil Registry does not ask teams to stop using npm clients, rewrite package managers, or trust a black box. It puts policy and evidence in the install path.
 
 ## Why it exists
 
 Most teams discover dependency risk after the install has already happened. That is backwards.
 
-Anvil moves the decision earlier:
+Anvil Registry moves the decision earlier:
 
 1. Fetch package metadata through a controlled gateway.
 2. Evaluate cheap metadata policy immediately.

@@ -11,7 +11,7 @@ export function SiteFooter() {
             <Hammer className="size-5" aria-hidden="true" />
           </span>
           <div>
-            <p className="font-semibold">ANVIL</p>
+            <p className="font-semibold">ANVIL REGISTRY</p>
             <p className="text-sm text-muted-foreground">Open source dependency safety for the npm ecosystem.</p>
           </div>
         </div>

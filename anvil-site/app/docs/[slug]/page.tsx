@@ -17,7 +17,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const doc = await getDoc(slug);
   if (!doc) return {};
   return {
-    title: `${doc.title} | Anvil Docs`,
+    title: `${doc.title} | Anvil Registry Docs`,
     description: doc.description
   };
 }

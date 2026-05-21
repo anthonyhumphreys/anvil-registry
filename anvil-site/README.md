@@ -1,6 +1,6 @@
-# Anvil Site
+# Anvil Registry Site
 
-Standalone Next.js promotional and documentation site for Anvil.
+Standalone Next.js promotional and documentation site for Anvil Registry and Anvil Node Base.
 
 ## Local development
 

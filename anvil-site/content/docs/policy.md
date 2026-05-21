@@ -1,13 +1,13 @@
 ---
 title: Policy model
-description: How Anvil decides whether a package should be allowed, warned, quarantined, or blocked.
+description: How Anvil Registry decides whether a package should be allowed, warned, quarantined, or blocked.
 section: Concepts
 order: 3
 ---
 
 # Policy model
 
-Anvil policy is deterministic. It combines metadata, analysis reports, provenance context, package popularity, and audited overrides into a single decision.
+Anvil Registry policy is deterministic. It combines metadata, analysis reports, provenance context, package popularity, and audited overrides into a single decision.
 
 ## Decision actions
 
@@ -20,7 +20,7 @@ Anvil policy is deterministic. It combines metadata, analysis reports, provenanc
 
 ## Signals
 
-Anvil can detect:
+Anvil Registry can detect:
 
 - New or changed lifecycle scripts.
 - Runtime, optional, peer, and development dependency changes.

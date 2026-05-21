@@ -48,7 +48,7 @@ function HeroSection() {
               Forge safer npm installs
             </h1>
             <p className="max-w-2xl text-lg leading-8 text-muted-foreground">
-              Anvil is an open source npm registry gateway and hardened Node base image that puts policy, analysis, and audit trails before dependency installs.
+              Anvil Registry is an open source npm registry gateway, paired with Anvil Node Base, that puts policy, analysis, and audit trails before dependency installs.
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
@@ -132,7 +132,7 @@ function ArchitectureSection() {
   return (
     <section id="architecture" className="border-b py-16">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <SectionHeading title="Architecture that fits the toolchain" description="Anvil sits between package managers and upstream registries, then pushes expensive work out to the analysis worker." />
+        <SectionHeading title="Architecture that fits the toolchain" description="Anvil Registry sits between package managers and upstream registries, then pushes expensive work out to the analysis worker." />
         <div className="mt-8 grid gap-4 lg:grid-cols-4">
           {architectureNodes.map((node) => (
             <div key={node.label} className="rounded-lg border bg-card p-5 shadow-sm">
@@ -172,7 +172,7 @@ function WorkflowSection() {
             ))}
           </div>
           <div className="mt-5">
-            <CodePanel command={active.command} output={active.output} title="Anvil CLI" />
+            <CodePanel command={active.command} output={active.output} title="Registry CLI" />
           </div>
         </div>
         <div className="rounded-lg border bg-card p-6 shadow-sm">

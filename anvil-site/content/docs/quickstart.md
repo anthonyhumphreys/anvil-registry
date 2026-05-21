@@ -1,6 +1,6 @@
 ---
 title: Quickstart
-description: Run Anvil locally and point npm-compatible clients at the gateway.
+description: Run Anvil Registry locally and point npm-compatible clients at the gateway.
 section: Getting started
 order: 2
 ---
