@@ -1,0 +1,145 @@
+# Anvil Registry
+
+Anvil Registry is a TypeScript npm registry gateway and companion Node devcontainer base image for safer dependency installs.
+
+The gateway proxies npm metadata and tarballs, rewrites tarball URLs through itself, caches artefacts, runs deterministic package policy, queues static analysis outside the install path, and exposes review/override surfaces through the admin app and CLI. Anvil Node Base is the local harness: it defaults npm toward safer installs, reports lifecycle scripts, and provides explicit observed mode for packages that need install scripts.
+
+The source-of-truth specs live in:
+
+- `docs/anvil-registry-spec.md`
+- `docs/anvil-node-base-spec.md`
+
+## Workspace
+
+- `apps/gateway`: Fastify npm registry proxy and operator routes.
+- `apps/worker`: queue consumer for static package analysis and optional LLM risk review.
+- `apps/admin`: Fastify admin UI and JSON API for package reviews, policy, overrides, reports, and Node Base reports.
+- `apps/cli`: `anvil` command-line client for explain, scan, warm, smoke, queue, LLM review, reports, overrides, policy tests, and Node Base report views.
+- `packages/*`: shared config, logging, npm registry client, policy engine, package analysis, name-squatting, LLM review, persistence, object store, queue, provenance, and shared types.
+- `infra/docker`: local Docker Compose stack.
+- `infra/sst`: AWS/SST infrastructure.
+- `devcontainer-base`: hardened Node 22 devcontainer base image and helper scripts.
+
+## Local Development
+
+Install dependencies:
+
+```bash
+pnpm install
+```
+
+Run the main checks:
+
+```bash
+pnpm lint
+pnpm test
+pnpm build
+```
+
+Run individual services without Docker:
+
+```bash
+pnpm dev:gateway
+pnpm dev:worker
+```
+
+The defaults use in-memory adapters unless environment variables select Postgres, S3/MinIO, or BullMQ/SQS.
+
+## Docker Compose
+
+Start the local stack:
+
+```bash
+docker compose -f infra/docker/docker-compose.yml up -d --build gateway worker admin
+```
+
+This starts Postgres, Redis, MinIO, the migration job, gateway, worker, and admin through service dependencies. The gateway listens on `http://localhost:4873`; admin listens on `http://localhost:3000`. The local admin token defaults to `local-dev-token`.
+
+Point npm at the gateway:
+
+```bash
+npm config set registry http://localhost:4873
+```
+
+Then install as usual. Scoped packages and tarballs should stay routed through the gateway. Because scoped package paths apparently needed their own little tax on human happiness.
+
+## CLI
+
+Common commands:
+
+```bash
+ANVIL_REGISTRY_URL=http://localhost:4873 anvil explain is-number@7.0.0
+ANVIL_REGISTRY_URL=http://localhost:4873 anvil scan pnpm-lock.yaml --queue-analysis
+ANVIL_REGISTRY_URL=http://localhost:4873 anvil warm package-lock.json
+ANVIL_REGISTRY_URL=http://localhost:4873 ANVIL_ADMIN_TOKEN=local-dev-token anvil queue status
+ANVIL_ADMIN_URL=http://localhost:3000 anvil reports is-number@7.0.0
+ANVIL_ADMIN_URL=http://localhost:3000 anvil reports compare is-number@7.0.0
+ANVIL_ADMIN_URL=http://localhost:3000 anvil node-base reports --limit 20
+```
+
+Admin-gated mutations read `ANVIL_ADMIN_TOKEN`, falling back to `ADMIN_TOKEN`.
+
+## LLM Review
+
+LLM risk review is optional and never the enforcement authority. Deterministic policy still makes the final decision; LLM output is schema-validated context that can add quarantine-level risk signals.
+
+Run the local mock-provider smoke:
+
+```bash
+pnpm smoke:llm-review
+```
+
+Or start Compose with your own provider settings:
+
+```bash
+LLM_REVIEW_ENABLED=true \
+LLM_REVIEW_PROVIDER=http \
+LLM_REVIEW_MODEL=risk-reviewer \
+LLM_REVIEW_ENDPOINT=http://llm-review-mock:8787/review \
+docker compose -f infra/docker/docker-compose.yml --profile llm-review up -d --build llm-review-mock gateway worker admin
+```
+
+Private package metadata is excluded from LLM review unless `LLM_REVIEW_INCLUDE_PRIVATE_PACKAGES=true` is explicitly set.
+
+## Smoke Tests
+
+After the local stack is running:
+
+```bash
+pnpm smoke:local
+pnpm smoke:clients
+pnpm smoke:analysis
+pnpm smoke:node-base-report
+```
+
+Node Base image checks:
+
+```bash
+pnpm test:node-base
+pnpm smoke:node-base-image
+pnpm smoke:node-base-image-observed
+pnpm smoke:node-base-image-report
+```
+
+The image smokes build Docker images and can take longer than the unit suite.
+
+## Node Base
+
+See `devcontainer-base/README.md` for helper commands and image publishing details. The short version:
+
+- Safe mode runs `npm ci --ignore-scripts` and reports lifecycle scripts.
+- Observed mode deliberately enables scripts under tracing and writes IOC/network reports.
+- Reports are written to `${ANVIL_REPORT_DIR:-.anvil/reports}`.
+- Reports can be submitted back to Anvil Registry for admin visibility.
+
+## Deployment
+
+Docker Compose is the local path. SST is the AWS path and defines gateway, worker, admin, migration, S3, SQS, RDS, secrets, and CloudWatch resources under `infra/sst`.
+
+Run migrations for SST deployments with:
+
+```bash
+pnpm sst:migrate
+```
+
+Deployment details are intentionally driven by `docs/anvil-registry-spec.md`; if this README and the spec ever disagree, trust the spec and fix the README.
