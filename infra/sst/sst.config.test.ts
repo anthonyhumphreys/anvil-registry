@@ -127,6 +127,44 @@ describe("SST infrastructure shape", () => {
       ])
     });
   });
+
+  it("wires optional custom load-balancer domains and certificate ARNs", async () => {
+    const resources: RecordedResource[] = [];
+    const runtime = fakeRuntime(resources, {
+      ANVIL_GATEWAY_DOMAIN: "npm.example.test",
+      ANVIL_GATEWAY_CERT_ARN: "arn:aws:acm:eu-west-2:111122223333:certificate/gateway",
+      ANVIL_ADMIN_DOMAIN: "admin.example.test",
+      ANVIL_ADMIN_CERT_ARN: " "
+    });
+    const { createAnvilSstConfig } = await import("./sst.config.js");
+
+    const config = createAnvilSstConfig(runtime) as { run(): Promise<Record<string, unknown>> };
+    await config.run();
+
+    const gateway = resource(resources, "Service", "Gateway");
+    expect(gateway?.args).toMatchObject({
+      loadBalancer: {
+        domain: {
+          name: "npm.example.test",
+          dns: false,
+          cert: "arn:aws:acm:eu-west-2:111122223333:certificate/gateway"
+        }
+      },
+      environment: expect.objectContaining({
+        PUBLIC_BASE_URL: "https://npm.example.test"
+      })
+    });
+
+    const admin = resource(resources, "Service", "Admin");
+    expect(admin?.args).toMatchObject({
+      loadBalancer: {
+        domain: "admin.example.test"
+      },
+      environment: expect.objectContaining({
+        ANVIL_API_BASE_URL: "https://npm.example.test"
+      })
+    });
+  });
 });
 
 function fakeRuntime(resources: RecordedResource[], env: Record<string, string>): AnvilSstRuntime {

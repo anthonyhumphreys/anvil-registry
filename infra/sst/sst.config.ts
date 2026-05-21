@@ -88,8 +88,11 @@ export function createAnvilSstConfig(
         LLM_REVIEW_RUN_ON_QUARANTINE: env.LLM_REVIEW_RUN_ON_QUARANTINE ?? "false",
         LLM_REVIEW_INCLUDE_PRIVATE_PACKAGES: env.LLM_REVIEW_INCLUDE_PRIVATE_PACKAGES ?? "false"
       };
-      const publicBaseUrl = env.PUBLIC_BASE_URL ?? "https://npm.anvil.example.com";
-      const adminApiBaseUrl = env.ANVIL_API_BASE_URL ?? publicBaseUrl;
+      const gatewayDomain = loadBalancerDomain(env.ANVIL_GATEWAY_DOMAIN, env.ANVIL_GATEWAY_CERT_ARN);
+      const adminDomain = loadBalancerDomain(env.ANVIL_ADMIN_DOMAIN, env.ANVIL_ADMIN_CERT_ARN);
+      const gatewayDomainName = loadBalancerDomainName(gatewayDomain);
+      const publicBaseUrl = optionalEnv(env.PUBLIC_BASE_URL) ?? (gatewayDomainName ? `https://${gatewayDomainName}` : "https://npm.anvil.example.com");
+      const adminApiBaseUrl = optionalEnv(env.ANVIL_API_BASE_URL) ?? publicBaseUrl;
 
       new sstRuntime.aws.Task("DatabaseMigration", {
         cluster,
@@ -112,6 +115,7 @@ export function createAnvilSstConfig(
           dockerfile: "apps/gateway/Dockerfile"
         },
         loadBalancer: {
+          ...(gatewayDomain ? { domain: gatewayDomain } : {}),
           rules: [{ listen: "443/https", forward: "4873/http" }],
           health: {
             "4873/http": {
@@ -147,6 +151,7 @@ export function createAnvilSstConfig(
           dockerfile: "apps/admin/Dockerfile"
         },
         loadBalancer: {
+          ...(adminDomain ? { domain: adminDomain } : {}),
           rules: [{ listen: "443/https", forward: "3000/http" }],
           health: {
             "3000/http": {
@@ -232,4 +237,22 @@ export function upstreamRegistryAuthSecretNames(json: string) {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function loadBalancerDomain(domain: string | undefined, cert: string | undefined) {
+  const name = optionalEnv(domain);
+  if (!name) return undefined;
+
+  const certArn = optionalEnv(cert);
+  return certArn ? { name, dns: false, cert: certArn } : name;
+}
+
+function loadBalancerDomainName(domain: ReturnType<typeof loadBalancerDomain>) {
+  if (!domain) return undefined;
+  return typeof domain === "string" ? domain : domain.name;
+}
+
+function optionalEnv(value: string | undefined) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
 }
