@@ -280,7 +280,7 @@ always-auth=true
 NPMRC
 ANVIL_NPMRC_PATH="$WORK_DIR/npmrc/.npmrc" anvil-use-registry "http://registry.example.test/base/" >/tmp/anvil-use-registry.out
 grep -q '^# Existing project config$' "$WORK_DIR/npmrc/.npmrc"
-grep -q '^@scope:registry=https://registry.example.test$' "$WORK_DIR/npmrc/.npmrc"
+! grep -q '^@scope:registry=' "$WORK_DIR/npmrc/.npmrc"
 grep -q '^always-auth=true$' "$WORK_DIR/npmrc/.npmrc"
 grep -q '^# Managed by Anvil Node Base$' "$WORK_DIR/npmrc/.npmrc"
 grep -q '^registry=http://registry.example.test/base$' "$WORK_DIR/npmrc/.npmrc"
@@ -291,6 +291,15 @@ grep -q '^save-exact=true$' "$WORK_DIR/npmrc/.npmrc"
 grep -q '^foreground-scripts=true$' "$WORK_DIR/npmrc/.npmrc"
 test "$(grep -c '^registry=' "$WORK_DIR/npmrc/.npmrc")" = "1"
 test "$(grep -c '^ignore-scripts=' "$WORK_DIR/npmrc/.npmrc")" = "1"
+
+cat > "$WORK_DIR/npmrc/preserve-scoped.npmrc" <<'NPMRC'
+@scope:registry=https://registry.example.test
+NPMRC
+ANVIL_PRESERVE_SCOPED_REGISTRIES=true \
+ANVIL_NPMRC_PATH="$WORK_DIR/npmrc/preserve-scoped.npmrc" \
+  anvil-use-registry "http://registry.example.test/base/" >/tmp/anvil-use-registry-preserve.out
+grep -q '^@scope:registry=https://registry.example.test$' "$WORK_DIR/npmrc/preserve-scoped.npmrc"
+grep -q '^registry=http://registry.example.test/base$' "$WORK_DIR/npmrc/preserve-scoped.npmrc"
 
 set +e
 ANVIL_NPMRC_PATH="$WORK_DIR/npmrc/invalid.npmrc" anvil-use-registry "https://user:pass@registry.example.test" >/tmp/anvil-use-registry-invalid.out 2>/tmp/anvil-use-registry-invalid.err

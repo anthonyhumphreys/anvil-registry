@@ -45,12 +45,19 @@ const managed = new Map([
   ["foreground-scripts", "true"]
 ]);
 const managedKeys = new Set(managed.keys());
+const preserveScopedRegistries = process.env.ANVIL_PRESERVE_SCOPED_REGISTRIES === "true";
+let removedScopedRegistries = 0;
 const existing = fs.existsSync(npmrcPath) ? fs.readFileSync(npmrcPath, "utf8").split(/\r?\n/) : [];
 const retained = existing.filter((line) => {
   const trimmed = line.trim();
   if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith(";")) return true;
   const key = trimmed.split("=", 1)[0]?.trim();
-  return !managedKeys.has(key);
+  if (managedKeys.has(key)) return false;
+  if (!preserveScopedRegistries && /^@[^:]+:registry$/.test(key)) {
+    removedScopedRegistries += 1;
+    return false;
+  }
+  return true;
 });
 const lines = retained.filter((line, index, all) => line !== "" || all[index - 1] !== "");
 
@@ -68,4 +75,7 @@ fs.writeFileSync(npmrcPath, `${lines.join("\n")}\n`);
 
 console.log(`[anvil] Wrote npm registry config to ${npmrcPath}`);
 console.log(`[anvil] registry=${normalizedRegistry}`);
+if (removedScopedRegistries > 0) {
+  console.log(`[anvil] removed ${removedScopedRegistries} scoped registry override(s) so scoped packages route through Anvil`);
+}
 NODE

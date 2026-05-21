@@ -798,6 +798,7 @@ save-exact=true
 
 - Support `ANVIL_REGISTRY_URL`.
 - Generate `.npmrc` pointing to Anvil Registry.
+- Remove scoped registry overrides by default so scoped package installs still pass through Anvil policy; allow an explicit opt-out for projects that intentionally keep direct scoped registry routing.
 - Send validated JSON reports to Anvil Registry via `POST /-/anvil/node-base/reports`, passing `ANVIL_ADMIN_TOKEN` when the gateway is token-gated.
 
 ## Phase 5: Publish image

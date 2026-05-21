@@ -80,6 +80,7 @@ ANVIL_REGISTRY_URL=http://gateway:4873 ANVIL_NPMRC_PATH=/workspaces/my-app/.npmr
 ```
 
 The generated config keeps `ignore-scripts=true`, `fund=false`, `audit=true`, `save-exact=true`, and `foreground-scripts=true`.
+It removes existing `@scope:registry=` overrides by default so scoped packages still route through Anvil policy. Set `ANVIL_PRESERVE_SCOPED_REGISTRIES=true` only when a project must keep direct scoped registry routing.
 
 ## Report Submission
 
