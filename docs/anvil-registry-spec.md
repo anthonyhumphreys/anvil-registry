@@ -207,6 +207,9 @@ POST /-/anvil/override
 POST /-/anvil/node-base/reports
 GET  /-/anvil/policy
 GET  /-/anvil/queue
+
+POST /-/npm/v1/security/advisories/bulk
+POST /-/npm/v1/security/audits/quick
 ```
 
 `GET /-/health` is a liveness check and should only prove the gateway process can answer HTTP. `GET /-/ready` is a traffic-readiness check and must fail with HTTP 503 when required runtime dependencies are unavailable. At minimum, readiness should report component status for persistence, object storage, and the analysis queue so load balancers and deploy scripts do not route npm install traffic into a service that can only provide interpretive dance.
@@ -220,6 +223,8 @@ GET  /-/anvil/queue
 `POST /-/anvil/node-base/reports` accepts token-gated Anvil Node Base JSON reports for Admin visibility. The body is validated with Zod, requires a simple report type and JSON object report, and may include `source`, `projectName`, and `summary`. If `summary` is omitted, the gateway can lift `report.summary` into the persisted report summary.
 
 `GET /-/anvil/queue` is a token-gated operator endpoint that returns analysis queue depth for the configured queue driver. BullMQ reports waiting, active, delayed, failed, completed, and total pending counts. SQS reports approximate waiting, in-flight, and delayed counts from queue attributes because AWS enjoys putting "approximate" in the one place operators want a number.
+
+The npm security audit endpoints are proxied to the configured upstream registry so ordinary npm install flows can keep their default audit behaviour while package metadata and tarballs still route through Anvil policy.
 
 Actual npm scoped package paths can be quirky, so route handling must be tested against real npm, pnpm, and yarn requests.
 

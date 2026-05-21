@@ -116,6 +116,51 @@ describe("gateway policy enforcement", () => {
     await app.close();
   });
 
+  it("proxies npm security audit requests to the upstream registry", async () => {
+    const upstreamFetch = vi.fn(async (url: string, init?: RequestInit) =>
+      Response.json({ ok: true, path: new URL(url).pathname, packages: Object.keys((JSON.parse(String(init?.body)) as Record<string, unknown>) ?? {}) })
+    );
+    const app = buildGateway({
+      config: loadConfig({ ...process.env, RUNTIME_MODE: "development", PERSISTENCE_DRIVER: "memory", UPSTREAM_NPM_REGISTRY: "https://registry.npmjs.org/" }),
+      persistence: new MemoryPersistence(),
+      objectStore: new TestObjectStore(),
+      queue: new MemoryJobQueue(),
+      registry: {
+        fetchMetadata: vi.fn(),
+        fetchTarball: vi.fn()
+      },
+      downloadStats: noDownloadStats(),
+      fetch: upstreamFetch as unknown as typeof globalThis.fetch
+    });
+
+    const bulk = await app.inject({
+      method: "POST",
+      url: "/-/npm/v1/security/advisories/bulk",
+      payload: { "is-number": ["7.0.0"] }
+    });
+    const quick = await app.inject({
+      method: "POST",
+      url: "/-/npm/v1/security/audits/quick",
+      payload: { name: "fixture", requires: { "is-number": "7.0.0" } }
+    });
+
+    expect(bulk.statusCode).toBe(200);
+    expect(bulk.json()).toMatchObject({ ok: true, path: "/-/npm/v1/security/advisories/bulk", packages: ["is-number"] });
+    expect(quick.statusCode).toBe(200);
+    expect(quick.json()).toMatchObject({ ok: true, path: "/-/npm/v1/security/audits/quick" });
+    expect(upstreamFetch).toHaveBeenNthCalledWith(
+      1,
+      "https://registry.npmjs.org/-/npm/v1/security/advisories/bulk",
+      expect.objectContaining({
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ "is-number": ["7.0.0"] })
+      })
+    );
+
+    await app.close();
+  });
+
   it("exposes and persists the effective policy config", async () => {
     const persistence = new MemoryPersistence();
     const app = buildGateway({

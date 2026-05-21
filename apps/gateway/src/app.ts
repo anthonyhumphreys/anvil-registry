@@ -44,6 +44,7 @@ export type GatewayDependencies = {
   queue?: JobQueue;
   registry?: Pick<NpmRegistryClient, "fetchMetadata" | "fetchTarball">;
   downloadStats?: DownloadStatsClient;
+  fetch?: typeof fetch;
 };
 
 export function buildGateway(dependencies: GatewayDependencies = {}): FastifyInstance {
@@ -60,6 +61,7 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
     dependencies.registry ??
     new NpmRegistryRouter(config.UPSTREAM_NPM_REGISTRIES);
   const downloadStats = dependencies.downloadStats ?? new NpmDownloadsClient({ baseUrl: config.NPM_DOWNLOADS_API });
+  const upstreamFetch = dependencies.fetch ?? fetch;
 
   const app = Fastify({ logger: { name: "anvil-gateway" } });
 
@@ -78,6 +80,12 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
     }
 
     return { queue: await queue.getStats() };
+  });
+  app.post<{ Body: unknown }>("/-/npm/v1/security/advisories/bulk", async (request, reply) => {
+    return proxyNpmSecurityRequest("/-/npm/v1/security/advisories/bulk", request.body, reply);
+  });
+  app.post<{ Body: unknown }>("/-/npm/v1/security/audits/quick", async (request, reply) => {
+    return proxyNpmSecurityRequest("/-/npm/v1/security/audits/quick", request.body, reply);
   });
 
   app.post<{
@@ -600,7 +608,33 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
     });
   }
 
+  async function proxyNpmSecurityRequest(path: string, body: unknown, reply: FastifyReply) {
+    const response = await upstreamFetch(`${trimTrailingSlash(config.UPSTREAM_NPM_REGISTRY)}${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body ?? {})
+    });
+    const contentType = response.headers.get("content-type");
+    if (contentType) reply.header("content-type", contentType);
+    reply.code(response.status);
+
+    const text = await response.text();
+    if (!text) return reply.send();
+    if (contentType?.includes("application/json")) {
+      try {
+        return reply.send(JSON.parse(text) as unknown);
+      } catch {
+        return reply.send(text);
+      }
+    }
+    return reply.send(text);
+  }
+
   return app;
+}
+
+function trimTrailingSlash(value: string) {
+  return value.replace(/\/+$/, "");
 }
 
 function tarballCacheKey(packageName: string, version: string, integrity: string) {

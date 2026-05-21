@@ -76,7 +76,7 @@ Point npm at the gateway:
 npm config set registry http://localhost:4873
 ```
 
-Then install as usual. Scoped packages and tarballs should stay routed through the gateway. Because scoped package paths apparently needed their own little tax on human happiness.
+Then install as usual. Scoped packages, tarballs, and npm audit requests should stay routed through the gateway. Because scoped package paths apparently needed their own little tax on human happiness.
 
 ## CLI
 
