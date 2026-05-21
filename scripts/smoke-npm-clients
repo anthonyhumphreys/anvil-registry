@@ -40,21 +40,26 @@ NODE
 
 smoke_npm() {
   local dir="$WORK_DIR/npm"
-  local audit_flags=()
   mkdir -p "$dir"
   write_package_json "$dir" "npm-client-smoke"
-  if [[ "$NPM_AUDIT" != "true" ]]; then
-    audit_flags=(--no-audit --package-lock=false)
-  fi
   echo "[anvil] npm install through Anvil"
   (
     cd "$dir"
-    NO_UPDATE_NOTIFIER=1 npm_config_update_notifier=false npm_config_cache="$WORK_DIR/npm-cache" npm install \
-      --ignore-scripts \
-      --registry="$REGISTRY_URL" \
-      --fund=false \
-      "${audit_flags[@]}" \
-      "${PACKAGE_TARGETS[@]}" >/dev/null
+    if [[ "$NPM_AUDIT" == "true" ]]; then
+      NO_UPDATE_NOTIFIER=1 npm_config_update_notifier=false npm_config_cache="$WORK_DIR/npm-cache" npm install \
+        --ignore-scripts \
+        --registry="$REGISTRY_URL" \
+        --fund=false \
+        "${PACKAGE_TARGETS[@]}" >/dev/null
+    else
+      NO_UPDATE_NOTIFIER=1 npm_config_update_notifier=false npm_config_cache="$WORK_DIR/npm-cache" npm install \
+        --ignore-scripts \
+        --registry="$REGISTRY_URL" \
+        --package-lock=false \
+        --no-audit \
+        --fund=false \
+        "${PACKAGE_TARGETS[@]}" >/dev/null
+    fi
     verify_targets
     if [[ "$NPM_AUDIT" == "true" ]]; then
       echo "[anvil] npm audit through Anvil"

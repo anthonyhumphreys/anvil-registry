@@ -1,3 +1,4 @@
+import { gzipSync } from "node:zlib";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { loadConfig } from "@anvil/config";
 import type { NpmPackageMetadata } from "@anvil/npm-registry";
@@ -133,10 +134,17 @@ describe("gateway policy enforcement", () => {
       fetch: upstreamFetch as unknown as typeof globalThis.fetch
     });
 
+    const bulkPayload = Buffer.from(JSON.stringify({ "is-number": ["7.0.0"] }));
+    const compressedBulkPayload = gzipSync(bulkPayload);
     const bulk = await app.inject({
       method: "POST",
       url: "/-/npm/v1/security/advisories/bulk",
-      payload: { "is-number": ["7.0.0"] }
+      headers: {
+        "content-type": "application/json",
+        "content-encoding": "gzip",
+        "content-length": String(compressedBulkPayload.length)
+      },
+      payload: compressedBulkPayload
     });
     const quick = await app.inject({
       method: "POST",

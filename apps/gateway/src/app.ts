@@ -1,3 +1,4 @@
+import { createGunzip } from "node:zlib";
 import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
 import type { AnvilConfig } from "@anvil/config";
 import { loadConfig } from "@anvil/config";
@@ -64,6 +65,18 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
   const upstreamFetch = dependencies.fetch ?? fetch;
 
   const app = Fastify({ logger: { name: "anvil-gateway" } });
+
+  app.addHook("preParsing", async (request, _reply, payload) => {
+    if (!isNpmSecurityAuditPath(request.url) || request.headers["content-encoding"] !== "gzip") return payload;
+
+    const gunzip = createGunzip() as ReturnType<typeof createGunzip> & { receivedEncodedLength?: number };
+    gunzip.receivedEncodedLength = 0;
+    payload.on("data", (chunk: Buffer) => {
+      gunzip.receivedEncodedLength = (gunzip.receivedEncodedLength ?? 0) + chunk.length;
+    });
+    delete request.headers["content-encoding"];
+    return payload.pipe(gunzip);
+  });
 
   app.get("/-/health", async () => ({ ok: true, service: "anvil-gateway" }));
   app.get("/-/ready", async (_request, reply) => {
@@ -635,6 +648,10 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
 
 function trimTrailingSlash(value: string) {
   return value.replace(/\/+$/, "");
+}
+
+function isNpmSecurityAuditPath(path: string) {
+  return path === "/-/npm/v1/security/advisories/bulk" || path === "/-/npm/v1/security/audits/quick";
 }
 
 function tarballCacheKey(packageName: string, version: string, integrity: string) {
