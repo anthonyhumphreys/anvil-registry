@@ -72,7 +72,8 @@ console.log(JSON.stringify({
       blockedHosts: [...networkPolicy.blockedHosts],
       suspiciousHosts: [...networkPolicy.suspiciousHosts],
       directIpSeverity: networkPolicy.directIpSeverity,
-      nonStandardPortSeverity: networkPolicy.nonStandardPortSeverity
+      nonStandardPortSeverity: networkPolicy.nonStandardPortSeverity,
+      generatedDomainSeverity: networkPolicy.generatedDomainSeverity
     }
   },
   highConfidenceFindings,
@@ -215,7 +216,8 @@ function loadNetworkPolicy(env) {
     blockedHosts: parseList(env.ANVIL_NETWORK_BLOCKED_HOSTS),
     suspiciousHosts: parseList(env.ANVIL_NETWORK_SUSPICIOUS_HOSTS || "raw.githubusercontent.com,gist.githubusercontent.com,pastebin.com,hastebin.com,rentry.co,0x0.st"),
     directIpSeverity: parseSeverity(env.ANVIL_NETWORK_DIRECT_IP_SEVERITY, "medium"),
-    nonStandardPortSeverity: parseSeverity(env.ANVIL_NETWORK_NON_STANDARD_PORT_SEVERITY, "medium")
+    nonStandardPortSeverity: parseSeverity(env.ANVIL_NETWORK_NON_STANDARD_PORT_SEVERITY, "medium"),
+    generatedDomainSeverity: parseSeverity(env.ANVIL_NETWORK_GENERATED_DOMAIN_SEVERITY, "medium")
   };
 }
 
@@ -316,6 +318,14 @@ function applyNetworkPolicy(policy, networkSummary, npmLog, straceLog, highFindi
         evidence: rawUrl
       });
     }
+    if (looksGeneratedDomain(host)) {
+      addFinding(policy.generatedDomainSeverity, {
+        code: "GENERATED_DOMAIN_LOOKUP",
+        source: "install-log",
+        line,
+        evidence: rawUrl
+      });
+    }
     if (url.port && !policy.allowedPorts.has(Number.parseInt(url.port, 10))) {
       addFinding(policy.nonStandardPortSeverity, {
         code: "NON_STANDARD_PORT",
@@ -325,6 +335,18 @@ function applyNetworkPolicy(policy, networkSummary, npmLog, straceLog, highFindi
       });
     }
   }
+
+  for (const dnsMatch of `${npmLog}\n${straceLog}`.matchAll(/\b(?:dns\.lookup|dns\.resolve(?:4|6)?|getaddrinfo|gethostbyname|res_query)\(["']?([a-z0-9][a-z0-9.-]*\.[a-z]{2,})["']?/gi)) {
+    const host = dnsMatch[1].toLowerCase();
+    const line = lineNumberForIndex(`${npmLog}\n${straceLog}`, dnsMatch.index || 0);
+    if (hostMatches(host, policy.allowedHosts) || !looksGeneratedDomain(host)) continue;
+    addFinding(policy.generatedDomainSeverity, {
+      code: "GENERATED_DOMAIN_LOOKUP",
+      source: "install-log",
+      line,
+      evidence: dnsMatch[0]
+    });
+  }
 }
 
 function hostMatches(host, patterns) {
@@ -333,6 +355,29 @@ function hostMatches(host, patterns) {
 
 function isIpAddress(host) {
   return /^(\d{1,3}\.){3}\d{1,3}$/.test(host) || host.includes(":");
+}
+
+function looksGeneratedDomain(host) {
+  if (isIpAddress(host)) return false;
+  return host
+    .split(".")
+    .some((label) => {
+      if (label.length < 18 || !/\d/.test(label) || !/[a-z]/i.test(label)) return false;
+      const alphaNumeric = label.replace(/[^a-z0-9]/gi, "");
+      if (alphaNumeric.length < 18) return false;
+      return shannonEntropy(alphaNumeric.toLowerCase()) >= 3.35;
+    });
+}
+
+function shannonEntropy(value) {
+  const counts = new Map();
+  for (const char of value) counts.set(char, (counts.get(char) || 0) + 1);
+  let entropy = 0;
+  for (const count of counts.values()) {
+    const probability = count / value.length;
+    entropy -= probability * Math.log2(probability);
+  }
+  return entropy;
 }
 
 function lineNumberForIndex(text, index) {

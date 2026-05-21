@@ -15,6 +15,7 @@ const suspiciousPatterns = [
   { severity: "medium", code: "CHILD_PROCESS", regex: /\b(child_process|execSync|spawnSync|execFileSync|exec\()/i, description: "uses process execution primitives" },
   { severity: "medium", code: "NETWORK_TOOL", regex: /\b(curl|wget|nc|netcat|fetch|http\.request|https\.request|net\.connect|dns\.lookup)\b/i, description: "uses network-capable tools or APIs" },
   { severity: "medium", code: "DIRECT_IP_URL", regex: /https?:\/\/\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?\b/i, description: "connects to an IP address directly" },
+  { severity: "medium", code: "GENERATED_DOMAIN_URL", regex: /https?:\/\/[a-z0-9.-]*[a-z][a-z0-9]*\d[a-z0-9-]{12,}\.[a-z]{2,}/i, description: "references a generated-looking domain" },
   { severity: "medium", code: "RAW_OR_PASTE_SITE", regex: /(raw\.githubusercontent\.com|gist\.githubusercontent\.com|pastebin\.com|hastebin|rentry\.co|0x0\.st)/i, description: "references raw-code or paste hosting" },
   { severity: "medium", code: "CHMOD_EXECUTION", regex: /chmod\s+\+x/i, description: "marks files executable during install" },
   { severity: "medium", code: "BACKGROUND_PROCESS", regex: /\b(nohup|disown)\b|&\s*$/i, description: "starts or backgrounds a process" },

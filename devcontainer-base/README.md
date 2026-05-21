@@ -44,9 +44,11 @@ ANVIL_NETWORK_ALLOWED_HOSTS=registry.npmjs.org,npm.pkg.github.com
 ANVIL_NETWORK_BLOCKED_HOSTS=raw.githubusercontent.com,pastebin.com
 ANVIL_NETWORK_DIRECT_IP_SEVERITY=medium
 ANVIL_NETWORK_NON_STANDARD_PORT_SEVERITY=medium
+ANVIL_NETWORK_GENERATED_DOMAIN_SEVERITY=medium
 ```
 
 Allowed host matches suppress direct-IP and non-standard-port findings for that host or IP. Blocked hosts always produce a high-confidence finding. Direct IP connections and non-standard ports default to medium confidence, but can be promoted to `high` for stricter CI/devcontainer runs or set to `off` when a repo has a known noisy install path. Which, to be clear, should come with a raised eyebrow and a reason.
+Generated-looking domains in install logs or DNS calls are medium-confidence by default and can be promoted to `high` or disabled with `ANVIL_NETWORK_GENERATED_DOMAIN_SEVERITY`.
 
 ## Strict Mode
 
