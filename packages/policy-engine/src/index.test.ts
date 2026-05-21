@@ -295,6 +295,32 @@ describe("evaluatePolicy", () => {
     expect(decision.action).toBe("block");
   });
 
+  it("does not reduce risk for provenance subject mismatches", () => {
+    const decision = evaluatePolicy({
+      packageName: "subject-pkg",
+      version: "1.0.0",
+      runtimeMode: "ci",
+      versionMetadata: {
+        name: "subject-pkg",
+        version: "1.0.0",
+        provenance: { present: true, source: "dist.attestations" }
+      },
+      analysisReport: {
+        packageName: "subject-pkg",
+        version: "1.0.0",
+        analyserVersion: "static",
+        policyVersion: defaultPolicyConfig.version,
+        score: 70,
+        signals: [{ code: "PROVENANCE_SUBJECT_MISMATCH", message: "Provenance subject does not match.", severity: "high" }],
+        createdAt: new Date().toISOString()
+      },
+      policy: defaultPolicyConfig
+    });
+
+    expect(decision.action).toBe("block");
+    expect(decision.score).toBe(70);
+  });
+
   it("deduplicates provenance reasons when metadata and analysis report agree", () => {
     const decision = evaluatePolicy({
       packageName: "popular-package",

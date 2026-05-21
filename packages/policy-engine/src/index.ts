@@ -152,7 +152,7 @@ export function evaluatePolicy(input: PolicyInput): PolicyDecision {
 function scorePolicyReasons(input: PolicyInput, reasons: PolicyReason[]) {
   const rawScore = Math.min(100, reasons.reduce((total, reason) => total + severityScore[reason.severity], 0));
   const trustedPublishingPresent = reasons.some((reason) => reason.code === "TRUSTED_PUBLISHING_PRESENT");
-  const provenanceRisk = reasons.some((reason) => reason.code === "PROVENANCE_CHANGED" || reason.code === "PROVENANCE_MISSING");
+  const provenanceRisk = reasons.some((reason) => reason.code === "PROVENANCE_CHANGED" || reason.code === "PROVENANCE_MISSING" || reason.code === "PROVENANCE_SUBJECT_MISMATCH");
   if (!trustedPublishingPresent || provenanceRisk) return rawScore;
   return Math.max(0, rawScore - (input.policy.provenance?.trustedPublishingScoreReduction ?? 0));
 }

@@ -91,6 +91,33 @@ describe("worker analysis", () => {
     expect(registry.fetchTarball).toHaveBeenCalledTimes(2);
   });
 
+  it("preserves very-new package blocking and decision expiry in worker decisions", async () => {
+    const persistence = new MemoryPersistence();
+    const config = loadConfig({ ...process.env, RUNTIME_MODE: "ci" });
+    const publishedAt = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+    const registry = {
+      fetchMetadata: vi.fn(async () => freshMetadata(publishedAt)),
+      fetchTarball: vi.fn(async (url: string) => tarballs[url])
+    };
+
+    const result = await analysePackageTarget("fresh-worker-pkg@1.0.0", { config, registry, persistence });
+
+    expect(result.decision).toMatchObject({
+      action: "block",
+      expiresAt: new Date(Date.parse(publishedAt) + 24 * 60 * 60 * 1000).toISOString()
+    });
+    expect(
+      await persistence.getPolicyDecision("fresh-worker-pkg", "1.0.0", config.policy.version, {
+        tarballIntegrity: "sha512-fresh",
+        tarballShasum: "freshsum",
+        analyserVersion: result.report.analyserVersion
+      })
+    ).toMatchObject({
+      action: "block",
+      expiresAt: expect.any(String)
+    });
+  });
+
   it("passes the configured previous-version depth into manifest analysis", async () => {
     const persistence = new MemoryPersistence();
     const config = loadConfig({ ...process.env, RUNTIME_MODE: "ci", COMPARE_PREVIOUS_VERSIONS: "3" });
@@ -508,6 +535,12 @@ const tarballs: Record<string, Uint8Array> = {
       path: "package/package.json",
       content: JSON.stringify({ name: "@tenstack/react-query", version: "1.0.0" })
     }
+  ]),
+  "https://registry.example/fresh-worker-pkg/-/fresh-worker-pkg-1.0.0.tgz": makeTarball([
+    {
+      path: "package/package.json",
+      content: JSON.stringify({ name: "fresh-worker-pkg", version: "1.0.0" })
+    }
   ])
 };
 
@@ -556,6 +589,28 @@ function metadata(): NpmPackageMetadata {
           pkg: "./cli.js"
         },
         repository: { type: "git", url: "https://example.test/pkg-renamed.git" }
+      }
+    }
+  };
+}
+
+function freshMetadata(publishedAt: string): NpmPackageMetadata {
+  return {
+    name: "fresh-worker-pkg",
+    "dist-tags": { latest: "1.0.0" },
+    time: {
+      created: publishedAt,
+      "1.0.0": publishedAt
+    },
+    versions: {
+      "1.0.0": {
+        name: "fresh-worker-pkg",
+        version: "1.0.0",
+        dist: {
+          tarball: "https://registry.example/fresh-worker-pkg/-/fresh-worker-pkg-1.0.0.tgz",
+          integrity: "sha512-fresh",
+          shasum: "freshsum"
+        }
       }
     }
   };
