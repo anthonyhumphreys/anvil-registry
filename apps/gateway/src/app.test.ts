@@ -429,6 +429,57 @@ describe("gateway policy enforcement", () => {
     await app.close();
   });
 
+  it("limits metadata-triggered deep analysis to install-relevant dist-tag versions", async () => {
+    const metadata = packageMetadata("fresh-package", "2026-05-20T00:00:00.000Z");
+    metadata["dist-tags"] = { latest: "2.0.0" };
+    metadata.time = {
+      ...metadata.time,
+      "2.0.0": "2026-05-20T00:00:00.000Z"
+    };
+    metadata.versions = {
+      ...metadata.versions,
+      "2.0.0": {
+        name: "fresh-package",
+        version: "2.0.0",
+        dist: {
+          tarball: "https://registry.npmjs.org/fresh-package/-/fresh-package-2.0.0.tgz",
+          integrity: "sha512-new"
+        }
+      }
+    };
+    const queue = new MemoryJobQueue();
+    const persistence = new MemoryPersistence();
+    const app = buildGateway({
+      config: testConfig("ci"),
+      persistence,
+      queue,
+      registry: {
+        fetchMetadata: vi.fn(async () => metadata),
+        fetchTarball: vi.fn()
+      },
+      downloadStats: noDownloadStats()
+    });
+
+    const response = await app.inject({ method: "GET", url: "/fresh-package" });
+    const queuedJobs = [];
+    for await (const job of queue.receiveAnalysisJobs()) queuedJobs.push(job);
+
+    expect(response.statusCode).toBe(200);
+    expect(queuedJobs).toEqual([
+      expect.objectContaining({
+        packageName: "fresh-package",
+        version: "2.0.0",
+        reason: "metadata_request"
+      })
+    ]);
+    expect(await persistence.getPolicyDecision("fresh-package", "1.0.0", testConfig("ci").policy.version, {
+      tarballIntegrity: "sha512-test",
+      analyserVersion: "metadata-policy-2026-05-20.1"
+    })).toMatchObject({ action: "block" });
+
+    await app.close();
+  });
+
   it("loads name-squatting evidence from an object-store popular package index", async () => {
     const objectStore = new TestObjectStore();
     await objectStore.put(

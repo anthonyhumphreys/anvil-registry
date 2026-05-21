@@ -318,8 +318,11 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
     const weeklyDownloads = await safeWeeklyDownloads(packageName);
     await persistPackageVersions(metadata, weeklyDownloads);
 
+    const installRelevantVersions = metadataInstallRelevantVersions(metadata);
     for (const version of Object.keys(metadata.versions ?? {})) {
-      const decision = await evaluateAndCache(metadata, version, "metadata_request", weeklyDownloads);
+      const decision = await evaluateAndCache(metadata, version, "metadata_request", weeklyDownloads, {
+        enqueueMetadataAnalysis: installRelevantVersions.has(version)
+      });
       decisions.set(version, decision);
     }
 
@@ -415,7 +418,13 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
     };
   }
 
-  async function evaluateAndCache(metadata: NpmPackageMetadata, version: string, reason: "metadata_request" | "tarball_request", weeklyDownloads?: number) {
+  async function evaluateAndCache(
+    metadata: NpmPackageMetadata,
+    version: string,
+    reason: "metadata_request" | "tarball_request",
+    weeklyDownloads?: number,
+    options: { enqueueMetadataAnalysis?: boolean } = {}
+  ) {
     const packageName = metadata.name;
     const versionMetadata = toVersionMetadata(metadata, version);
     const analysisIdentity = {
@@ -473,7 +482,11 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
       identity: decisionIdentity
     }));
 
-    if (decision.action !== "allow" || (reason === "tarball_request" && !analysisReport)) {
+    const shouldEnqueueAnalysis =
+      reason === "tarball_request"
+        ? decision.action !== "allow" || !analysisReport
+        : Boolean(options.enqueueMetadataAnalysis && decision.action !== "allow");
+    if (shouldEnqueueAnalysis) {
       await enqueueAnalysisJobIfNeeded(packageName, version, reason, decision.action === "block" ? "high" : "normal", decisionIdentity);
     }
 
@@ -592,6 +605,14 @@ function analysisTargetsFromBody(body: PackageTargetRequest) {
       seen.add(key);
       return true;
     });
+}
+
+function metadataInstallRelevantVersions(metadata: NpmPackageMetadata) {
+  const versions = new Set<string>();
+  for (const version of Object.values(metadata["dist-tags"] ?? {})) {
+    if (typeof version === "string" && version) versions.add(version);
+  }
+  return versions;
 }
 
 function validationIssues(error: { issues: Array<{ path: Array<string | number>; message: string }> }) {
