@@ -1,8 +1,12 @@
 import { defaultPolicyConfig } from "@anvil/config";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { evaluatePolicy } from "./index.js";
 
 describe("evaluatePolicy", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("blocks very new packages", () => {
     const publishedAt = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
     const decision = evaluatePolicy({
@@ -113,6 +117,29 @@ describe("evaluatePolicy", () => {
     });
 
     expect(decision.action).toBe("allow");
+  });
+
+  it("does not apply overrides expiring at the current instant", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-21T12:00:00.000Z"));
+
+    const decision = evaluatePolicy({
+      packageName: "fresh-package",
+      version: "1.0.0",
+      runtimeMode: "ci",
+      packageAgeDays: 0,
+      override: {
+        packageName: "fresh-package",
+        version: "1.0.0",
+        action: "allow",
+        reason: "Expired exactly now",
+        expiresAt: "2026-05-21T12:00:00.000Z"
+      },
+      policy: defaultPolicyConfig
+    });
+
+    expect(decision.action).toBe("block");
+    expect(decision.reasons.map((reason) => reason.code)).toContain("PACKAGE_TOO_NEW");
   });
 
   it("blocks tarballs with unsafe extraction entries", () => {

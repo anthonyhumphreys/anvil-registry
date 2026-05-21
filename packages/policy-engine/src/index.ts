@@ -160,7 +160,7 @@ function scorePolicyReasons(input: PolicyInput, reasons: PolicyReason[]) {
 function resolveActiveOverride(input: PolicyInput) {
   if (!input.policy.overrides.enabled || !input.override) return undefined;
   if (input.override.version && input.override.version !== input.version) return undefined;
-  if (input.override.expiresAt && Date.parse(input.override.expiresAt) < Date.now()) return undefined;
+  if (input.override.expiresAt && Date.parse(input.override.expiresAt) <= Date.now()) return undefined;
   return input.override;
 }
 
