@@ -1090,6 +1090,14 @@ pnpm smoke:local
 
 The smoke check must call gateway liveness/readiness, fetch package metadata, verify tarball URLs have been rewritten through Anvil, download the rewritten tarball URL, and check admin health when `ANVIL_ADMIN_URL` is set.
 
+To exercise reviewer-triggered LLM review locally, run:
+
+```bash
+pnpm smoke:llm-review
+```
+
+This starts the Compose stack with the `llm-review` profile, uses the local mock LLM review endpoint, queues a forced review through `POST /-/anvil/llm-review`, and verifies that the worker persists a review visible through Admin.
+
 ---
 
 ## 12. AWS Deployment with SST

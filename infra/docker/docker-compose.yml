@@ -8,6 +8,7 @@ services:
     environment:
       RUNTIME_MODE: development
       PUBLIC_BASE_URL: http://localhost:4873
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-local-dev-token}
       DATABASE_URL: postgres://anvil:anvil@postgres:5432/anvil
       PERSISTENCE_DRIVER: postgres
       QUEUE_DRIVER: bullmq
@@ -131,6 +132,27 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+
+  llm-review-mock:
+    image: node:22-alpine
+    profiles: ["llm-review"]
+    working_dir: /app
+    command: ["node", "/app/llm-review-mock.mjs"]
+    environment:
+      PORT: 8787
+    volumes:
+      - ./llm-review-mock.mjs:/app/llm-review-mock.mjs:ro
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8787/-/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   migrate:
     build:
