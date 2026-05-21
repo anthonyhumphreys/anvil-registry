@@ -30,6 +30,10 @@ pnpm smoke:node-base-image-report
 
 `test:node-base` exercises the helper scripts against synthetic package trees and install logs. `smoke:node-base-image` builds the devcontainer image and verifies the runtime defaults that matter most: non-root user, safe npm config, helper command installation, and writable report directory. `smoke:node-base-image-observed` runs observed install mode inside the built image against a synthetic lifecycle-script dependency and verifies the generated IOC, lifecycle, and redacted environment reports. `smoke:node-base-image-report` runs report submission from inside the built image through the local Anvil Registry gateway, then verifies the persisted report through Admin and the CLI.
 
+## Publishing
+
+`.github/workflows/node-base-image.yml` builds and validates the image on pull requests. Pushes to `main` publish `ghcr.io/<owner>/anvil-node-base:latest`, `:22`, `:22-bookworm`, and a `sha-...` tag. `node-base-v*` tags publish the matching release tag. Pull requests validate without pushing.
+
 ## Network Policy
 
 `anvil-scan-install-logs`, `anvil-npm-ci-observed`, and `anvil-network-monitor` apply a small configurable network policy on top of raw IOC matching:

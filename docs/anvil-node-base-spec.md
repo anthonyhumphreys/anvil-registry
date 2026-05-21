@@ -808,3 +808,5 @@ save-exact=true
   - `22`
   - `22-bookworm`
   - `latest`
+
+The repository workflow `.github/workflows/node-base-image.yml` builds and validates the Node Base image for pull requests and publishes to `ghcr.io/<owner>/anvil-node-base` from `main` or `node-base-v*` tags.
