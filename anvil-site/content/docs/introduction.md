@@ -7,14 +7,14 @@ order: 1
 
 # Introduction
 
-Anvil Registry is an open source dependency safety toolkit for the Node and npm ecosystem.
+Anvil Registry and Anvil Node Base are open source dependency safety tools for the Node and npm ecosystem.
 
-It has two parts:
+They solve related problems at different points in the install path:
 
-- **Anvil Registry** is a drop-in npm registry gateway. It proxies metadata and tarballs, rewrites tarball URLs through the gateway, caches artifacts, evaluates policy, and records decisions before installs reach developers or CI.
-- **Anvil Node Base** is a hardened Node devcontainer base image. It defaults npm toward safer installs, supports observed install mode, and writes local security reports for unknown projects.
+- **Anvil Registry** sits between npm-compatible clients and upstream registries. It proxies metadata and tarballs, rewrites tarball URLs through itself, caches artifacts, evaluates policy, queues deeper analysis, and records package decisions before installs reach developers or CI.
+- **Anvil Node Base** is a hardened Node devcontainer base image. It defaults npm toward safer installs, provides explicit safe and observed install modes, and writes local security reports when you need to inspect an unfamiliar project.
 
-The goal is practical dependency review. Anvil Registry does not ask teams to stop using npm clients, rewrite package managers, or trust a black box. It puts policy and evidence in the install path.
+The goal is practical dependency review. These tools do not ask teams to stop using npm clients, rewrite package managers, or trust a black box. They put policy and evidence where dependency risk actually enters the workflow.
 
 ## Why it exists
 
@@ -35,6 +35,17 @@ Anvil Registry moves the decision earlier:
 - CI and production should fail closed where it matters.
 - Overrides must be explicit, reasoned, audited, and preferably expiring.
 - Install scripts should not execute unless someone intentionally opted into them.
+
+## When to use each tool
+
+| Situation | Use |
+| --- | --- |
+| You want all npm, pnpm, or yarn traffic to pass through a controlled policy gateway. | Anvil Registry |
+| You want package metadata and tarball requests cached and audited. | Anvil Registry |
+| You want CI to reject, quarantine, or explain risky dependency versions. | Anvil Registry |
+| You are inspecting an unknown repository locally. | Anvil Node Base |
+| You need `npm ci --ignore-scripts` by default, with a report of packages that wanted lifecycle scripts. | Anvil Node Base |
+| You need to run lifecycle scripts, but capture process, file, and network evidence while doing it. | Anvil Node Base observed mode |
 
 ## Core components
 

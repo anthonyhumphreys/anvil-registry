@@ -2,7 +2,6 @@ import {
   BookOpen,
   Boxes,
   ClipboardCheck,
-  Code2,
   Database,
   FileWarning,
   GitBranch,
@@ -12,8 +11,7 @@ import {
   PackageCheck,
   ShieldCheck,
   Sparkles,
-  Terminal,
-  Workflow
+  Terminal
 } from "lucide-react";
 
 export const repositoryUrl = process.env.NEXT_PUBLIC_GIT_REPO_URL || "#";
@@ -77,25 +75,25 @@ export const docsHighlights = [
     label: "Quickstart",
     href: "/docs/quickstart",
     icon: BookOpen,
-    description: "Run the gateway locally, point npm-compatible clients at it, and verify package traffic stays inside the proxy."
+    description: "Run the gateway locally, route npm-compatible clients through it, and try Node Base safe mode."
   },
   {
-    label: "Policy model",
-    href: "/docs/policy",
-    icon: ClipboardCheck,
-    description: "See how allow, warn, quarantine, block, and audited override decisions are made from deterministic signals."
+    label: "Anvil Registry",
+    href: "/docs/registry",
+    icon: PackageCheck,
+    description: "Understand metadata proxying, tarball rewriting, scoped upstreams, caching, analysis, and explain output."
   },
   {
-    label: "Node Base",
+    label: "Anvil Node Base",
     href: "/docs/node-base",
     icon: LockKeyhole,
-    description: "Use the hardened Node image for safe installs, observed installs, lifecycle-script reports, and local repo inspection."
+    description: "Use the hardened Node image for safe installs, observed installs, lifecycle reports, and strict-mode gates."
   },
   {
-    label: "Deploy",
-    href: "/docs/deploy",
-    icon: Workflow,
-    description: "Bring up the local stack with Docker Compose and prepare the registry path for AWS via SST."
+    label: "CI usage",
+    href: "/docs/ci",
+    icon: ClipboardCheck,
+    description: "Wire Registry decisions and Node Base reports into pull request and main branch dependency checks."
   }
 ];
 
