@@ -218,6 +218,50 @@ describe("gateway policy enforcement", () => {
     await app.close();
   });
 
+  it("rewrites latest dist-tag to the newest allowed version", async () => {
+    const metadata = packageMetadata("fresh-package", "2020-01-01T00:00:00.000Z");
+    metadata["dist-tags"] = { latest: "2.0.0" };
+    metadata.time = {
+      ...metadata.time,
+      "2.0.0": new Date().toISOString()
+    };
+    metadata.versions = {
+      ...metadata.versions,
+      "2.0.0": {
+        name: "fresh-package",
+        version: "2.0.0",
+        dist: {
+          tarball: "https://registry.npmjs.org/fresh-package/-/fresh-package-2.0.0.tgz",
+          integrity: "sha512-new"
+        }
+      }
+    };
+
+    const app = buildGateway({
+      config: testConfig("ci"),
+      persistence: new MemoryPersistence(),
+      queue: new MemoryJobQueue(),
+      registry: {
+        fetchMetadata: vi.fn(async () => metadata),
+        fetchTarball: vi.fn()
+      },
+      downloadStats: noDownloadStats()
+    });
+
+    const response = await app.inject({ method: "GET", url: "/fresh-package" });
+    expect(response.statusCode).toBe(200);
+
+    const body = response.json<NpmPackageMetadata>();
+    expect(body.versions?.["2.0.0"]).toBeUndefined();
+    expect(body.versions?.["1.0.0"]).toBeDefined();
+    expect(body["dist-tags"]?.latest).toBe("1.0.0");
+    expect(body.versions?.["1.0.0"]?.dist?.tarball).toBe(
+      "http://anvil.test/fresh-package/-/fresh-package-1.0.0.tgz"
+    );
+
+    await app.close();
+  });
+
   it("blocks tarball fetches for policy-denied package versions", async () => {
     const metadata = packageMetadata("fresh-package", new Date().toISOString());
     const fetchTarball = vi.fn();
