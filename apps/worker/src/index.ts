@@ -101,13 +101,16 @@ export async function startWorker(): Promise<AnalysisWorkerHandle | undefined> {
 
 export async function healthCheckWorkerDependencies(config = loadConfig()): Promise<void> {
   const persistence = createPersistence(config);
+  const objectStore = createObjectStore(config);
   const queue = createJobQueue(config);
 
   try {
     await persistence.healthCheck?.();
+    await objectStore.healthCheck?.();
     await queue.healthCheck?.();
   } finally {
     await closeIfSupported(persistence);
+    await closeIfSupported(objectStore);
     await closeIfSupported(queue);
   }
 }
