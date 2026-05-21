@@ -11,6 +11,7 @@ describe("MemoryPersistence", () => {
     expect(migrations).toHaveLength(1);
     expect(migrations[0]?.sql.join("\n")).toContain("CREATE TABLE IF NOT EXISTS packages");
     expect(migrations[0]?.sql.join("\n")).toContain("CREATE UNIQUE INDEX IF NOT EXISTS analysis_reports_identity_idx");
+    expect(migrations[0]?.sql.join("\n")).toContain("CREATE TABLE IF NOT EXISTS policy_configs");
   });
 
   it("stores package versions and preserves existing fields on partial updates", async () => {
@@ -283,5 +284,35 @@ describe("MemoryPersistence", () => {
     expect(await persistence.listNodeBaseReports({ risk: "risky" })).toHaveLength(2);
     expect(await persistence.listNodeBaseReports({ reportType: "network", risk: "medium" })).toHaveLength(1);
     expect((await persistence.listNodeBaseReports({ reportType: "network" }))[0]?.summary).toEqual({ medium: 1, outboundConnections: 1 });
+  });
+
+  it("stores active policy config snapshots", async () => {
+    const persistence = new MemoryPersistence();
+
+    await persistence.putPolicyConfig({
+      name: "effective",
+      version: "policy-v1",
+      active: true,
+      config: { runtimeMode: "development", policy: { version: "policy-v1" } }
+    });
+    await persistence.putPolicyConfig({
+      name: "effective",
+      version: "policy-v2",
+      active: true,
+      config: { runtimeMode: "ci", policy: { version: "policy-v2" } }
+    });
+
+    expect(await persistence.getActivePolicyConfig("effective")).toMatchObject({
+      name: "effective",
+      version: "policy-v2",
+      active: true,
+      config: { runtimeMode: "ci", policy: { version: "policy-v2" } }
+    });
+    expect(await persistence.listPolicyConfigs({ name: "effective" })).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ version: "policy-v1", active: false }),
+        expect.objectContaining({ version: "policy-v2", active: true })
+      ])
+    );
   });
 });

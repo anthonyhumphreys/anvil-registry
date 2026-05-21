@@ -62,7 +62,11 @@ describe("admin app", () => {
     expect(filteredOverrides.json().overrides).toHaveLength(1);
     expect(nodeBaseReports.json().reports).toHaveLength(1);
     expect(nodeBaseReports.json().reports[0]).toMatchObject({ source: "devcontainer", projectName: "demo", reportType: "dependency" });
-    expect(policy.json()).toMatchObject({ runtimeMode: "development", policy: { version: "2026-05-20.1", minimumPackageAgeDays: 7 } });
+    expect(policy.json()).toMatchObject({
+      runtimeMode: "development",
+      policy: { version: "2026-05-20.1", minimumPackageAgeDays: 7 },
+      policyConfig: { name: "effective", version: "2026-05-20.1", active: true }
+    });
     expect(popularPackageIndex.json().popularPackages).toEqual(expect.arrayContaining([expect.objectContaining({ name: "lodash" })]));
     expect(popularPackageIndex.json().knownConfusions).toMatchObject({ loadash: "lodash" });
     expect(auditEvents.json().auditEvents).toHaveLength(1);
@@ -84,6 +88,7 @@ describe("admin app", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.body).toContain("Effective Policy");
+    expect(response.body).toContain("Persisted Snapshot");
     expect(response.body).toContain("Deterministic Gates");
     expect(response.body).toContain("Raw Policy");
     expect(response.body).toContain("ci");

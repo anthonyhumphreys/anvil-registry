@@ -115,6 +115,32 @@ describe("gateway policy enforcement", () => {
     await app.close();
   });
 
+  it("exposes and persists the effective policy config", async () => {
+    const persistence = new MemoryPersistence();
+    const app = buildGateway({
+      config: testConfig("ci"),
+      persistence,
+      queue: new MemoryJobQueue(),
+      registry: {
+        fetchMetadata: vi.fn(),
+        fetchTarball: vi.fn()
+      },
+      downloadStats: noDownloadStats()
+    });
+
+    const response = await app.inject({ method: "GET", url: "/-/anvil/policy" });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      runtimeMode: "ci",
+      policy: { version: "2026-05-20.1" },
+      policyConfig: { name: "effective", version: "2026-05-20.1", active: true }
+    });
+    expect(await persistence.getActivePolicyConfig("effective")).toMatchObject({ version: "2026-05-20.1", active: true });
+
+    await app.close();
+  });
+
   it("filters blocked versions from metadata and removes unusable dist-tags", async () => {
     const metadata = packageMetadata("fresh-package", new Date().toISOString());
     const app = buildGateway({

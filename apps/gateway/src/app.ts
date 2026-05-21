@@ -72,7 +72,7 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
     if (!ok) return reply.code(503).send({ ok, upstream: config.UPSTREAM_NPM_REGISTRY, checks });
     return { ok, upstream: config.UPSTREAM_NPM_REGISTRY, checks };
   });
-  app.get("/-/anvil/policy", async () => ({ runtimeMode: config.RUNTIME_MODE, policy: config.policy }));
+  app.get("/-/anvil/policy", async () => ({ runtimeMode: config.RUNTIME_MODE, policy: config.policy, policyConfig: await recordEffectivePolicyConfig() }));
   app.get("/-/anvil/queue", async (request, reply) => {
     if (config.ADMIN_TOKEN && request.headers.authorization !== `Bearer ${config.ADMIN_TOKEN}`) {
       return reply.code(401).send({ error: "ANVIL_ADMIN_TOKEN_REQUIRED" });
@@ -579,6 +579,18 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
         }
       })
     );
+  }
+
+  async function recordEffectivePolicyConfig() {
+    return persistence.putPolicyConfig({
+      name: "effective",
+      version: config.policy.version,
+      active: true,
+      config: {
+        runtimeMode: config.RUNTIME_MODE,
+        policy: config.policy
+      }
+    });
   }
 
   return app;

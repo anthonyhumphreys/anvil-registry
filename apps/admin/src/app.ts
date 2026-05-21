@@ -20,6 +20,7 @@ import {
   type NodeBaseReportRisk,
   type OverrideRecord,
   type PackageVersionRecord,
+  type PolicyConfigRecord,
   type PolicyDecisionRecord
 } from "@anvil/persistence";
 import { llmReviewRequestBodySchema, overrideCreateRequestSchema, overrideRevokeRequestSchema, resolveOverrideExpiry, type Override } from "@anvil/shared";
@@ -91,7 +92,7 @@ export function buildAdmin(dependencies: AdminDependencies = {}): FastifyInstanc
     return { auditEvents: await persistence.listAuditEvents({ targetId: query.targetId, limit: parseLimit(query.limit) }) };
   });
 
-  app.get("/api/policy", async () => ({ runtimeMode: config.RUNTIME_MODE, policy: config.policy }));
+  app.get("/api/policy", async () => ({ runtimeMode: config.RUNTIME_MODE, policy: config.policy, policyConfig: await recordEffectivePolicyConfig(persistence, config) }));
 
   app.get("/api/popular-package-index", async () => await popularPackageIndex);
 
@@ -342,12 +343,17 @@ export function buildAdmin(dependencies: AdminDependencies = {}): FastifyInstanc
   });
 
   app.get("/policy", async (_request, reply) => {
+    const policyConfig = await recordEffectivePolicyConfig(persistence, config);
     reply.type("text/html");
     return page(
       "Policy Configuration",
       `<section>
         <h2>Effective Policy</h2>
         ${policySummary(config)}
+      </section>
+      <section>
+        <h2>Persisted Snapshot</h2>
+        ${policyConfigSummary(policyConfig)}
       </section>
       <section>
         <h2>Deterministic Gates</h2>
@@ -591,6 +597,18 @@ export function buildAdmin(dependencies: AdminDependencies = {}): FastifyInstanc
   });
 
   return app;
+}
+
+async function recordEffectivePolicyConfig(persistence: AnvilPersistence, config: AnvilConfig) {
+  return persistence.putPolicyConfig({
+    name: "effective",
+    version: config.policy.version,
+    active: true,
+    config: {
+      runtimeMode: config.RUNTIME_MODE,
+      policy: config.policy
+    }
+  });
 }
 
 async function loadPackageReview(persistence: AnvilPersistence, packageName: string, version: string) {
@@ -1464,6 +1482,15 @@ function policySummary(config: AnvilConfig) {
     ${summaryTile("Package Age", `${config.policy.minimumPackageAgeDays} days`, "warn")}
     ${summaryTile("LLM Review", config.policy.llmReview.enabled ? "enabled" : "disabled", config.policy.llmReview.enabled ? "warn" : "muted")}
   </div>`;
+}
+
+function policyConfigSummary(record: PolicyConfigRecord) {
+  return settingTable([
+    ["Name", record.name],
+    ["Version", record.version],
+    ["Active", record.active],
+    ["Created", record.createdAt ?? "unknown"]
+  ]);
 }
 
 function policyDetails(policy: AnvilConfig["policy"]) {

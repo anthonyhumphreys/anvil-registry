@@ -29,6 +29,9 @@ export interface AnvilPersistence {
   putNodeBaseReport(report: NodeBaseReportInput): Promise<NodeBaseReportRecord>;
   getNodeBaseReport(id: string): Promise<NodeBaseReportRecord | undefined>;
   listNodeBaseReports(options?: { reportType?: string; risk?: NodeBaseReportRisk; limit?: number }): Promise<NodeBaseReportRecord[]>;
+  putPolicyConfig(config: PolicyConfigInput): Promise<PolicyConfigRecord>;
+  getActivePolicyConfig(name: string): Promise<PolicyConfigRecord | undefined>;
+  listPolicyConfigs(options?: { name?: string; active?: boolean; limit?: number }): Promise<PolicyConfigRecord[]>;
   putAuditEvent(event: AuditEventInput): Promise<void>;
   listAuditEvents(options?: { targetId?: string; limit?: number }): Promise<AuditEventRecord[]>;
 }
@@ -111,6 +114,19 @@ export type NodeBaseReportRecord = NodeBaseReportInput & {
 
 export type NodeBaseReportRisk = "high" | "medium" | "risky";
 
+export type PolicyConfigInput = {
+  name: string;
+  version: string;
+  config: unknown;
+  active?: boolean;
+};
+
+export type PolicyConfigRecord = PolicyConfigInput & {
+  id?: string;
+  active: boolean;
+  createdAt?: string;
+};
+
 export type OverrideRecord = {
   override: Override;
   createdAt?: string;
@@ -138,6 +154,7 @@ export class MemoryPersistence implements AnvilPersistence {
   private readonly reports = new Map<string, AnalysisReportRecord>();
   private readonly llmRiskReviews: LlmRiskReviewRecord[] = [];
   private readonly nodeBaseReports: NodeBaseReportRecord[] = [];
+  private readonly policyConfigs = new Map<string, PolicyConfigRecord>();
   private readonly auditEvents: AuditEventRecord[] = [];
 
   async healthCheck(): Promise<void> {}
@@ -319,6 +336,36 @@ export class MemoryPersistence implements AnvilPersistence {
       .slice(0, options.limit ?? 50);
   }
 
+  async putPolicyConfig(config: PolicyConfigInput): Promise<PolicyConfigRecord> {
+    if (config.active) {
+      for (const [key, record] of this.policyConfigs.entries()) {
+        if (record.name === config.name) this.policyConfigs.set(key, { ...record, active: false });
+      }
+    }
+    const key = policyConfigKey(config.name, config.version);
+    const existing = this.policyConfigs.get(key);
+    const record = {
+      ...config,
+      active: config.active ?? false,
+      id: existing?.id ?? crypto.randomUUID(),
+      createdAt: existing?.createdAt ?? new Date().toISOString()
+    };
+    this.policyConfigs.set(key, record);
+    return record;
+  }
+
+  async getActivePolicyConfig(name: string): Promise<PolicyConfigRecord | undefined> {
+    return (await this.listPolicyConfigs({ name, active: true, limit: 1 }))[0];
+  }
+
+  async listPolicyConfigs(options: { name?: string; active?: boolean; limit?: number } = {}): Promise<PolicyConfigRecord[]> {
+    return [...this.policyConfigs.values()]
+      .filter((record) => !options.name || record.name === options.name)
+      .filter((record) => options.active === undefined || record.active === options.active)
+      .sort((a, b) => Date.parse(b.createdAt ?? "") - Date.parse(a.createdAt ?? ""))
+      .slice(0, options.limit ?? 50);
+  }
+
   async putAuditEvent(event: AuditEventInput): Promise<void> {
     this.auditEvents.push({
       ...event,
@@ -384,6 +431,10 @@ function nodeBaseRiskCounts(summary: Record<string, unknown> | undefined) {
 
 function numberValue(value: unknown) {
   return typeof value === "number" ? value : 0;
+}
+
+function policyConfigKey(name: string, version: string) {
+  return `${name}@${version}`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

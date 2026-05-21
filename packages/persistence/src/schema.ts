@@ -1,4 +1,4 @@
-import { index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const packages = pgTable(
   "packages",
@@ -158,3 +158,19 @@ export const auditEvents = pgTable("audit_events", {
   metadataJson: jsonb("metadata_json"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
 });
+
+export const policyConfigs = pgTable(
+  "policy_configs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    version: text("version").notNull(),
+    configJson: jsonb("config_json").notNull(),
+    active: boolean("active").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => ({
+    policyConfigsNameVersionIdx: uniqueIndex("policy_configs_name_version_idx").on(table.name, table.version),
+    policyConfigsActiveIdx: index("policy_configs_active_idx").on(table.name, table.active)
+  })
+);

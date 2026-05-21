@@ -17,6 +17,8 @@ import type {
   OverrideRecord,
   PackageVersionInput,
   PackageVersionRecord,
+  PolicyConfigInput,
+  PolicyConfigRecord,
   PolicyDecisionIdentity,
   PolicyDecisionRecord
 } from "./index.js";
@@ -29,6 +31,7 @@ export class PostgresPersistence implements AnvilPersistence {
   private analysisReportIdentitySchemaReady?: Promise<void>;
   private policyDecisionIdentitySchemaReady?: Promise<void>;
   private nodeBaseReportSchemaReady?: Promise<void>;
+  private policyConfigSchemaReady?: Promise<void>;
 
   constructor(databaseUrl: string) {
     this.pool = new pg.Pool({ connectionString: databaseUrl });
@@ -500,6 +503,62 @@ export class PostgresPersistence implements AnvilPersistence {
     return rows.map(toNodeBaseReportRecord);
   }
 
+  async putPolicyConfig(config: PolicyConfigInput): Promise<PolicyConfigRecord> {
+    await this.ensurePolicyConfigSchema();
+    if (config.active) {
+      await this.db.update(schema.policyConfigs).set({ active: false }).where(eq(schema.policyConfigs.name, config.name));
+    }
+
+    const [row] = await this.db
+      .insert(schema.policyConfigs)
+      .values({
+        name: config.name,
+        version: config.version,
+        configJson: config.config,
+        active: config.active ?? false
+      })
+      .onConflictDoUpdate({
+        target: [schema.policyConfigs.name, schema.policyConfigs.version],
+        set: {
+          configJson: config.config,
+          active: config.active ?? false,
+          createdAt: new Date()
+        }
+      })
+      .returning();
+
+    if (!row) throw new Error("Failed to persist policy config");
+    return toPolicyConfigRecord(row);
+  }
+
+  async getActivePolicyConfig(name: string): Promise<PolicyConfigRecord | undefined> {
+    await this.ensurePolicyConfigSchema();
+    const [row] = await this.db
+      .select()
+      .from(schema.policyConfigs)
+      .where(and(eq(schema.policyConfigs.name, name), eq(schema.policyConfigs.active, true)))
+      .orderBy(desc(schema.policyConfigs.createdAt))
+      .limit(1);
+
+    return row ? toPolicyConfigRecord(row) : undefined;
+  }
+
+  async listPolicyConfigs(options: { name?: string; active?: boolean; limit?: number } = {}): Promise<PolicyConfigRecord[]> {
+    await this.ensurePolicyConfigSchema();
+    const filters = [
+      options.name ? eq(schema.policyConfigs.name, options.name) : undefined,
+      options.active !== undefined ? eq(schema.policyConfigs.active, options.active) : undefined
+    ].filter((filter): filter is SQL => Boolean(filter));
+    const rows = await this.db
+      .select()
+      .from(schema.policyConfigs)
+      .where(filters.length > 0 ? and(...filters) : undefined)
+      .orderBy(desc(schema.policyConfigs.createdAt))
+      .limit(options.limit ?? 50);
+
+    return rows.map(toPolicyConfigRecord);
+  }
+
   async putAuditEvent(event: AuditEventInput): Promise<void> {
     await this.db.insert(schema.auditEvents).values({
       actor: event.actor,
@@ -614,6 +673,22 @@ export class PostgresPersistence implements AnvilPersistence {
     await this.nodeBaseReportSchemaReady;
   }
 
+  private async ensurePolicyConfigSchema(): Promise<void> {
+    this.policyConfigSchemaReady ??= this.pool.query(`
+      CREATE TABLE IF NOT EXISTS policy_configs (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        name text NOT NULL,
+        version text NOT NULL,
+        config_json jsonb NOT NULL,
+        active boolean NOT NULL DEFAULT false,
+        created_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS policy_configs_name_version_idx ON policy_configs(name, version);
+      CREATE INDEX IF NOT EXISTS policy_configs_active_idx ON policy_configs(name, active);
+    `).then(() => undefined);
+    await this.policyConfigSchemaReady;
+  }
+
   private async upsertPackage(packageName: string): Promise<string> {
     const [row] = await this.db
       .insert(schema.packages)
@@ -635,6 +710,7 @@ export class PostgresPersistence implements AnvilPersistence {
 
 type PackageVersionRow = typeof schema.packageVersions.$inferSelect;
 type NodeBaseReportRow = typeof schema.nodeBaseReports.$inferSelect;
+type PolicyConfigRow = typeof schema.policyConfigs.$inferSelect;
 
 function toPackageVersionRecord(row: PackageVersionRow): PackageVersionRecord {
   return {
@@ -659,6 +735,17 @@ function toNodeBaseReportRecord(row: NodeBaseReportRow): NodeBaseReportRecord {
     reportType: row.reportType,
     summary: (row.summaryJson as Record<string, unknown> | null) ?? undefined,
     report: row.reportJson,
+    createdAt: row.createdAt.toISOString()
+  };
+}
+
+function toPolicyConfigRecord(row: PolicyConfigRow): PolicyConfigRecord {
+  return {
+    id: row.id,
+    name: row.name,
+    version: row.version,
+    config: row.configJson,
+    active: row.active,
     createdAt: row.createdAt.toISOString()
   };
 }
