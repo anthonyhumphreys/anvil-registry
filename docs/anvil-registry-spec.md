@@ -1098,6 +1098,12 @@ pnpm smoke:clients
 
 This command creates throwaway projects, installs a known package through Anvil with npm, pnpm, and Yarn, keeps lifecycle scripts disabled, and verifies the installed package version.
 
+Use the analysis queue smoke to verify token-gated manual analysis enqueueing, worker consumption, persistence, and Admin report visibility:
+
+```bash
+pnpm smoke:analysis
+```
+
 To exercise reviewer-triggered LLM review locally, run:
 
 ```bash

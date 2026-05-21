@@ -30,7 +30,7 @@ smoke_npm() {
   echo "[anvil] npm install through Anvil"
   (
     cd "$dir"
-    npm_config_cache="$WORK_DIR/npm-cache" npm install \
+    NO_UPDATE_NOTIFIER=1 npm_config_update_notifier=false npm_config_cache="$WORK_DIR/npm-cache" npm install \
       --ignore-scripts \
       --registry="$REGISTRY_URL" \
       --package-lock=false \
