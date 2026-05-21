@@ -36,6 +36,24 @@ describe("detectNameSquatting", () => {
     });
   });
 
+  it("treats exact package names across scopes as scope confusion", () => {
+    const unscoped = detectNameSquatting("react-query", [{ name: "@tanstack/react-query", weeklyDownloads: 4_000_000 }])[0];
+    const scoped = detectNameSquatting("@unknown/lodash", [{ name: "lodash", weeklyDownloads: 60_000_000 }])[0];
+
+    expect(unscoped).toMatchObject({
+      candidate: "@tanstack/react-query",
+      similarity: 1,
+      suggestedPackage: "@tanstack/react-query",
+      reasons: expect.arrayContaining(["scope_confusion", "high_name_similarity"])
+    });
+    expect(scoped).toMatchObject({
+      candidate: "lodash",
+      similarity: 1,
+      suggestedPackage: "lodash",
+      reasons: expect.arrayContaining(["scope_confusion", "high_name_similarity"])
+    });
+  });
+
   it("labels edit-pattern variants", () => {
     const missing = detectNameSquatting("lodsh", [{ name: "lodash" }])[0];
     const extra = detectNameSquatting("loadash", [{ name: "lodash" }])[0];

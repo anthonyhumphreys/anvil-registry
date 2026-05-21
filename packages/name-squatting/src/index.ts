@@ -229,13 +229,20 @@ export function detectNameSquatting(
         distance: damerauLevenshtein(normaliseName(packageName), normaliseName(name))
       }));
       const best = scores.sort((a, b) => Math.max(b.editSimilarity, b.jaroWinkler) - Math.max(a.editSimilarity, a.jaroWinkler))[0]!;
-      const score = Math.max(best.editSimilarity, best.jaroWinkler);
+      const scopeConfusion = Boolean(
+        requested.name &&
+          candidateParts.name &&
+          requested.scope !== candidateParts.scope &&
+          normaliseName(requested.name) === normaliseName(candidateParts.name)
+      );
+      const score = scopeConfusion ? Math.max(best.editSimilarity, best.jaroWinkler, 1) : Math.max(best.editSimilarity, best.jaroWinkler);
       const distance = damerauLevenshtein(normaliseName(packageName), normaliseName(candidate.name));
       const reasons: string[] = [];
 
       if (score >= 0.82) reasons.push("high_name_similarity");
       if (best.jaroWinkler >= 0.9) reasons.push("high_jaro_winkler_similarity");
       if (knownCandidate === candidate.name) reasons.push("known_ecosystem_confusion");
+      if (scopeConfusion) reasons.push("scope_confusion");
       if (requested.name !== candidateParts.name && requested.name.replace(/[-_]/g, "") === candidateParts.name.replace(/[-_]/g, "")) {
         reasons.push("hyphen_or_underscore_variant");
       }

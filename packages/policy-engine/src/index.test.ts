@@ -32,6 +32,23 @@ describe("evaluatePolicy", () => {
     });
   });
 
+  it("blocks low-download scope-confusion packages", () => {
+    const decision = evaluatePolicy({
+      packageName: "react-query",
+      version: "1.0.0",
+      runtimeMode: "ci",
+      weeklyDownloads: 20,
+      similarPackages: [{ name: "@tanstack/react-query", similarity: 1, weeklyDownloads: 4_000_000, reasons: ["scope_confusion"], suggestedPackage: "@tanstack/react-query" }],
+      policy: defaultPolicyConfig
+    });
+
+    expect(decision.action).toBe("block");
+    expect(decision.reasons.find((reason) => reason.code === "SIMILAR_TO_POPULAR_PACKAGE")).toMatchObject({
+      severity: "critical",
+      evidence: { suggestedPackage: "@tanstack/react-query", reasons: ["scope_confusion"] }
+    });
+  });
+
   it("does not hard-block similar packages without low-adoption evidence", () => {
     const decision = evaluatePolicy({
       packageName: "@tenstack/react-query",
