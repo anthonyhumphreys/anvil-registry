@@ -95,6 +95,15 @@ async function analysePackageVersion(
       )
     : manifestReport;
   const weeklyDownloads = await dependencies.downloadStats?.getWeeklyDownloads(target.packageName);
+  await dependencies.persistence.putPackageVersion({
+    packageName: target.packageName,
+    version,
+    publishedAt: targetMetadata.publishedAt,
+    tarballUrl: targetMetadata.tarballUrl,
+    integrity: targetMetadata.integrity,
+    shasum: targetMetadata.shasum,
+    weeklyDownloads
+  });
   const packageAgeDays = calculatePackageAgeDays(targetMetadata.publishedAt);
   const popularPackageIndex = dependencies.popularPackageIndex ?? loadPopularPackageIndex(dependencies.config.POPULAR_PACKAGE_INDEX_PATH);
   const similarPackages = detectNameSquatting(target.packageName, popularPackageIndex).map((signal) => ({

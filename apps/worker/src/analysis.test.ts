@@ -31,6 +31,14 @@ describe("worker analysis", () => {
     expect(result.report.signals).toContainEqual(expect.objectContaining({ code: "UNSAFE_TARBALL_SYMLINK", evidence: expect.objectContaining({ path: "link-out", linkTarget: "../../outside" }) }));
     expect(result.report).toMatchObject({ tarballIntegrity: "sha512-new", tarballShasum: "newsum" });
     expect(await persistence.getAnalysisReport("pkg", "1.0.1")).toBeDefined();
+    expect(await persistence.getPackageVersion("pkg", "1.0.1")).toMatchObject({
+      packageName: "pkg",
+      version: "1.0.1",
+      publishedAt: "2020-01-02T00:00:00.000Z",
+      tarballUrl: "https://registry.example/pkg/-/pkg-1.0.1.tgz",
+      integrity: "sha512-new",
+      shasum: "newsum"
+    });
     expect(
       (await persistence.getPolicyDecision("pkg", "1.0.1", config.policy.version, {
         tarballIntegrity: "sha512-new",
