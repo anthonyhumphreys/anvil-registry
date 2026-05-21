@@ -167,6 +167,10 @@ describe("analyseManifestChange", () => {
           content: "[remote]\nurl=https://github.com/example/pkg"
         },
         {
+          path: "package/.git-credentials",
+          content: "https://token@example.test"
+        },
+        {
           path: "package/.env",
           content: "TOKEN=shh"
         },
@@ -189,6 +193,7 @@ describe("analyseManifestChange", () => {
     expect(codes).toContain("UNEXPECTED_BINARY_FILE");
     expect(result.fileFindings.map((finding) => finding.path)).toContain(".env");
     expect(result.fileFindings).toContainEqual(expect.objectContaining({ path: ".git/config", code: "SUSPICIOUS_FILE_ADDED", evidence: expect.objectContaining({ pathType: "credential" }) }));
+    expect(result.fileFindings).toContainEqual(expect.objectContaining({ path: ".git-credentials", code: "SUSPICIOUS_FILE_ADDED", evidence: expect.objectContaining({ pathType: "credential" }) }));
     expect(result.fileFindings).toContainEqual(expect.objectContaining({ path: "install.js", evidence: expect.objectContaining({ installPath: true, pattern: "child_process" }) }));
     expect(result.fileFindings).toContainEqual(expect.objectContaining({ path: "install.js", evidence: expect.objectContaining({ installPath: true, pattern: "sensitive-file-access" }) }));
   });
