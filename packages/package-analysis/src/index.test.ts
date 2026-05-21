@@ -210,6 +210,11 @@ describe("analyseManifestChange", () => {
           content: "TOKEN=shh"
         },
         {
+          path: "package/scripts/setup.sh",
+          content: "echo preparing package",
+          mode: 0o755
+        },
+        {
           path: "package/bin/native",
           content: "\u0000\u0001\u0002",
           mode: 0o755
@@ -230,6 +235,7 @@ describe("analyseManifestChange", () => {
     expect(result.fileFindings.map((finding) => finding.path)).toContain(".env");
     expect(result.fileFindings).toContainEqual(expect.objectContaining({ path: ".git/config", code: "SUSPICIOUS_FILE_ADDED", evidence: expect.objectContaining({ pathType: "credential" }) }));
     expect(result.fileFindings).toContainEqual(expect.objectContaining({ path: ".git-credentials", code: "SUSPICIOUS_FILE_ADDED", evidence: expect.objectContaining({ pathType: "credential" }) }));
+    expect(result.fileFindings).toContainEqual(expect.objectContaining({ path: "scripts/setup.sh", code: "SUSPICIOUS_FILE_ADDED", evidence: expect.objectContaining({ mode: "0o755", newFile: true }) }));
     expect(result.fileFindings).toContainEqual(expect.objectContaining({ path: "install.js", evidence: expect.objectContaining({ installPath: true, pattern: "child_process" }) }));
     expect(result.fileFindings).toContainEqual(expect.objectContaining({ path: "install.js", evidence: expect.objectContaining({ installPath: true, pattern: "sensitive-file-access" }) }));
     expect(result.fileFindings).toContainEqual(expect.objectContaining({ path: "package.json", code: "PACKAGE_MANIFEST_CHANGED", evidence: expect.objectContaining({ changedKeys: ["version"] }) }));

@@ -749,7 +749,7 @@ function looksBinary(content: Uint8Array): boolean {
 }
 
 function isExecutable(file: TarballFile): boolean {
-  return (file.mode & 0o111) !== 0 && !/\.(js|mjs|cjs|sh|bash|cmd|ps1)$/i.test(file.path);
+  return (file.mode & 0o111) !== 0;
 }
 
 function fileMode(mode: number) {
