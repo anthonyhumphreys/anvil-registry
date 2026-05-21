@@ -165,7 +165,7 @@ export function analyseFileTree(
   const baselineByPath = baselineFileStats(baselineFiles);
   const installPaths = installPathCandidates(options.lifecycleScripts);
   const targetFileEntries = targetFiles.filter((file) => file.type === "file");
-  const findings: FileFinding[] = [];
+  const findings: FileFinding[] = [...analysePackedPackageManifest(targetFileEntries, baselineFiles)];
 
   for (const entry of targetFiles) {
     if (isUnsafeTarPath(entry.rawPath)) {
@@ -339,6 +339,76 @@ function diffManifestDependencies(target: PackageVersionMetadata, previous?: Pac
     optional: diffDependencies(target.optionalDependencies, previous?.optionalDependencies),
     peer: diffDependencies(target.peerDependencies, previous?.peerDependencies)
   };
+}
+
+function analysePackedPackageManifest(targetFileEntries: TarballFile[], baselineFiles: TarballFile[][]): FileFinding[] {
+  const targetManifest = targetFileEntries.find(isPackageManifest);
+  const baselineManifests = baselineFiles.map((files) => files.find(isPackageManifest));
+  const primaryBaseline = baselineManifests[0];
+
+  if (!targetManifest) {
+    return [
+      {
+        path: "package.json",
+        code: "PACKAGE_MANIFEST_CHANGED",
+        reason: "Package tarball is missing package.json.",
+        severity: "high",
+        evidence: { changeType: "removed", compareDepth: baselineFiles.length }
+      }
+    ];
+  }
+
+  const targetParsed = parseJsonObject(targetManifest.content);
+  if (!targetParsed) {
+    return [
+      {
+        path: targetManifest.path,
+        code: "PACKAGE_MANIFEST_CHANGED",
+        reason: "Packed package.json is not valid JSON.",
+        severity: "high",
+        evidence: { changeType: "invalid", size: targetManifest.size }
+      }
+    ];
+  }
+
+  const previousParsed = primaryBaseline ? parseJsonObject(primaryBaseline.content) : undefined;
+  if (!previousParsed) return [];
+  if (stableJson(targetParsed) === stableJson(previousParsed)) return [];
+
+  return [
+    {
+      path: targetManifest.path,
+      code: "PACKAGE_MANIFEST_CHANGED",
+      reason: "Packed package.json changed compared with the previous package version.",
+      severity: "medium",
+      evidence: {
+        changeType: "changed",
+        changedKeys: changedManifestKeys(targetParsed, previousParsed),
+        compareDepth: baselineFiles.length,
+        missingBaselineManifests: baselineManifests.filter((manifest) => !manifest).length
+      }
+    }
+  ];
+}
+
+function isPackageManifest(file: TarballFile | undefined): file is TarballFile {
+  return file?.type === "file" && file.path === "package.json";
+}
+
+function parseJsonObject(content: Uint8Array | undefined): Record<string, unknown> | undefined {
+  if (!content) return undefined;
+  try {
+    const parsed = JSON.parse(new TextDecoder("utf-8", { fatal: false }).decode(content)) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function changedManifestKeys(target: Record<string, unknown>, previous: Record<string, unknown>) {
+  return [...new Set([...Object.keys(target), ...Object.keys(previous)])]
+    .filter((key) => stableJson(target[key]) !== stableJson(previous[key]))
+    .sort((left, right) => left.localeCompare(right));
 }
 
 type DependencyDiff = ReturnType<typeof diffManifestDependencies>;

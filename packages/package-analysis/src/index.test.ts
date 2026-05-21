@@ -221,6 +221,7 @@ describe("analyseManifestChange", () => {
     const codes = result.signals.map((signal) => signal.code);
 
     expect(target.map((file) => file.path)).toContain("install.js");
+    expect(codes).toContain("PACKAGE_MANIFEST_CHANGED");
     expect(codes).toContain("USES_CHILD_PROCESS");
     expect(codes).toContain("NETWORK_ACCESS_IN_INSTALL_PATH");
     expect(codes).toContain("USES_PROCESS_ENV");
@@ -231,6 +232,7 @@ describe("analyseManifestChange", () => {
     expect(result.fileFindings).toContainEqual(expect.objectContaining({ path: ".git-credentials", code: "SUSPICIOUS_FILE_ADDED", evidence: expect.objectContaining({ pathType: "credential" }) }));
     expect(result.fileFindings).toContainEqual(expect.objectContaining({ path: "install.js", evidence: expect.objectContaining({ installPath: true, pattern: "child_process" }) }));
     expect(result.fileFindings).toContainEqual(expect.objectContaining({ path: "install.js", evidence: expect.objectContaining({ installPath: true, pattern: "sensitive-file-access" }) }));
+    expect(result.fileFindings).toContainEqual(expect.objectContaining({ path: "package.json", code: "PACKAGE_MANIFEST_CHANGED", evidence: expect.objectContaining({ changedKeys: ["version"] }) }));
   });
 
   it("flags unsafe tar paths, symlinks, and large size deltas while scoping code checks to install paths", () => {
@@ -284,6 +286,46 @@ describe("analyseManifestChange", () => {
     expect(result.fileFindings).toContainEqual(expect.objectContaining({ path: "../escape.js", code: "UNSAFE_TARBALL_PATH", evidence: expect.objectContaining({ rawPath: "package/../escape.js" }) }));
     expect(result.fileFindings).toContainEqual(expect.objectContaining({ path: "scripts/install.js", code: "NETWORK_ACCESS_IN_INSTALL_PATH" }));
     expect(result.fileFindings).not.toContainEqual(expect.objectContaining({ path: "docs/example.js", code: "NETWORK_ACCESS_IN_INSTALL_PATH" }));
+  });
+
+  it("flags missing and invalid packed package manifests", () => {
+    const missing = analyseFileTree(
+      parseNpmTarball(
+        makeTarball([
+          {
+            path: "package/index.js",
+            content: "console.log('no manifest')"
+          }
+        ])
+      )
+    );
+    expect(missing.fileFindings).toContainEqual(
+      expect.objectContaining({
+        path: "package.json",
+        code: "PACKAGE_MANIFEST_CHANGED",
+        severity: "high",
+        evidence: expect.objectContaining({ changeType: "removed" })
+      })
+    );
+
+    const invalid = analyseFileTree(
+      parseNpmTarball(
+        makeTarball([
+          {
+            path: "package/package.json",
+            content: "{ nope"
+          }
+        ])
+      )
+    );
+    expect(invalid.fileFindings).toContainEqual(
+      expect.objectContaining({
+        path: "package.json",
+        code: "PACKAGE_MANIFEST_CHANGED",
+        severity: "high",
+        evidence: expect.objectContaining({ changeType: "invalid" })
+      })
+    );
   });
 });
 
