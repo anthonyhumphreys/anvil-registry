@@ -50,14 +50,14 @@ ANVIL_REGISTRY_URL="$REGISTRY_URL" \
 ANVIL_ADMIN_TOKEN="$ADMIN_TOKEN" \
   pnpm --dir "$ROOT_DIR" --filter @anvil/cli dev -- llm-review "$PACKAGE_TARGET" --requested-by anvil-llm-smoke --priority high
 
-node - "$ADMIN_URL" "$PACKAGE_NAME" "$PACKAGE_VERSION" "$MODEL" <<'NODE'
-const [adminUrl, packageName, version, model] = process.argv.slice(2);
+node - "$ADMIN_URL" "$ADMIN_TOKEN" "$PACKAGE_NAME" "$PACKAGE_VERSION" "$MODEL" <<'NODE'
+const [adminUrl, adminToken, packageName, version, model] = process.argv.slice(2);
 const endpoint = `${adminUrl.replace(/\/+$/, "")}/api/packages/${encodeURIComponent(packageName)}/${encodeURIComponent(version)}/review`;
 const deadline = Date.now() + 180_000;
 let lastBody;
 
 while (Date.now() < deadline) {
-  const response = await fetch(endpoint);
+  const response = await fetch(endpoint, { headers: { authorization: `Bearer ${adminToken}` } });
   if (response.ok) {
     const body = await response.json();
     lastBody = body;
