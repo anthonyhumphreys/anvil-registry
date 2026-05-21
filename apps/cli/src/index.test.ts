@@ -541,7 +541,10 @@ alias-left-pad@npm:left-pad@^1.3.0:
       env: { ANVIL_REGISTRY_URL: "http://anvil.test", ADMIN_TOKEN: "secret" }
     });
 
-    const exitCode = await run(["approve", "pkg@1.0.0", "--reason", "intentional", "--expires-at", "2026-06-20T00:00:00Z"], dependencies);
+    const exitCode = await run(
+      ["approve", "pkg@1.0.0", "--reason", "intentional", "--approved-by", "reviewer", "--expires-at", "2026-06-20T00:00:00Z"],
+      dependencies
+    );
 
     expect(exitCode).toBe(0);
     expect(dependencies.fetch).toHaveBeenCalledWith(
@@ -549,7 +552,14 @@ alias-left-pad@npm:left-pad@^1.3.0:
       expect.objectContaining({
         method: "POST",
         headers: expect.objectContaining({ authorization: "Bearer secret" }),
-        body: JSON.stringify({ packageName: "pkg", version: "1.0.0", reason: "intentional", action: "allow", expiresAt: "2026-06-20T00:00:00Z" })
+        body: JSON.stringify({
+          packageName: "pkg",
+          version: "1.0.0",
+          reason: "intentional",
+          action: "allow",
+          approvedBy: "reviewer",
+          expiresAt: "2026-06-20T00:00:00Z"
+        })
       })
     );
   });
@@ -566,7 +576,8 @@ alias-left-pad@npm:left-pad@^1.3.0:
     expect(dependencies.fetch).toHaveBeenCalledWith(
       "http://anvil.test/-/anvil/override",
       expect.objectContaining({
-        headers: expect.objectContaining({ authorization: "Bearer anvil-secret" })
+        headers: expect.objectContaining({ authorization: "Bearer anvil-secret" }),
+        body: JSON.stringify({ packageName: "pkg", version: "1.0.0", reason: "intentional", action: "allow", approvedBy: "anvil-cli" })
       })
     );
   });

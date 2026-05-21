@@ -387,7 +387,7 @@ anvil explain react@19.0.0
 anvil explain @tanstack/react-query@latest
 anvil warm package-lock.json
 anvil warm yarn.lock
-anvil approve package@version --reason "intentional dependency" --expires-at 2026-06-20T00:00:00Z
+anvil approve package@version --reason "intentional dependency" --approved-by reviewer --expires-at 2026-06-20T00:00:00Z
 anvil revoke package@version --revoked-by reviewer
 anvil llm-review package@version --requested-by reviewer
 anvil queue status
