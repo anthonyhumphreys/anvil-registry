@@ -85,6 +85,12 @@ jobs:
       - name: Smoke npm clients through gateway
         run: pnpm smoke:clients
 
+      - name: Smoke analysis queue processing
+        run: pnpm smoke:analysis
+
+      - name: Smoke LLM review processing
+        run: pnpm smoke:llm-review
+
       - name: Validate SST migration command
         run: pnpm --filter @anvil/infra-sst migrate:run -- --dry-run
 
