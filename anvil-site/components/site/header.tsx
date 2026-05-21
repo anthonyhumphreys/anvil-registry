@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BookOpen, Github, Hammer } from "lucide-react";
+import { ThemeToggle } from "@/components/site/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { navItems, repositoryUrl } from "@/lib/site";
 
@@ -21,6 +22,7 @@ export function SiteHeader() {
           ))}
         </nav>
         <div className="hidden items-center gap-2 md:flex">
+          <ThemeToggle />
           <Button asChild>
             <Link href="/docs/introduction">Read the docs</Link>
           </Button>
@@ -31,11 +33,14 @@ export function SiteHeader() {
             </Link>
           </Button>
         </div>
-        <Button asChild variant="outline" size="icon" className="md:hidden" aria-label="Read the docs">
-          <Link href="/docs/introduction">
-            <BookOpen aria-hidden="true" />
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2 md:hidden">
+          <ThemeToggle />
+          <Button asChild variant="outline" size="icon" aria-label="Read the docs">
+            <Link href="/docs/introduction">
+              <BookOpen aria-hidden="true" />
+            </Link>
+          </Button>
+        </div>
       </div>
     </header>
   );

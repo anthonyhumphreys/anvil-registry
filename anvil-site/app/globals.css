@@ -24,6 +24,30 @@
     --input: 190 12% 88%;
     --ring: 31 91% 54%;
     --radius: 0.5rem;
+    color-scheme: light;
+  }
+
+  .dark {
+    --background: 190 16% 7%;
+    --foreground: 190 10% 94%;
+    --card: 190 15% 10%;
+    --card-foreground: 190 10% 94%;
+    --popover: 190 15% 10%;
+    --popover-foreground: 190 10% 94%;
+    --primary: 190 10% 94%;
+    --primary-foreground: 190 16% 7%;
+    --secondary: 190 12% 15%;
+    --secondary-foreground: 190 10% 94%;
+    --muted: 190 12% 15%;
+    --muted-foreground: 190 8% 68%;
+    --accent: 31 91% 58%;
+    --accent-foreground: 190 16% 7%;
+    --destructive: 0 70% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 190 11% 20%;
+    --input: 190 11% 20%;
+    --ring: 31 91% 58%;
+    color-scheme: dark;
   }
 
   * {
