@@ -535,6 +535,60 @@ describe("worker analysis", () => {
     expect(await persistence.listLlmRiskReviews({ packageName: "@scope/private-pkg", version: "1.0.0" })).toEqual([]);
   });
 
+  it("does not let forced LLM review jobs bypass private package opt-in", async () => {
+    const persistence = new MemoryPersistence();
+    const config = loadConfig({
+      ...process.env,
+      RUNTIME_MODE: "ci",
+      LLM_REVIEW_ENABLED: "true",
+      LLM_REVIEW_PROVIDER: "test-provider",
+      LLM_REVIEW_MODEL: "test-model"
+    });
+    const registry = { fetchMetadata: vi.fn(async () => privateMetadata()), fetchTarball: vi.fn() };
+    const review = {
+      riskLevel: "critical",
+      confidence: "high",
+      summary: "This should not be sent for a private package.",
+      suspectedRiskTypes: ["unknown"],
+      evidence: [{ signal: "PRIVATE", explanation: "Private package.", source: "metadata" }],
+      recommendedAction: "block"
+    } satisfies LlmRiskReview;
+    const llmRiskReviewProvider: LlmRiskReviewProvider = {
+      review: vi.fn(async () => review)
+    };
+
+    await analyseAnalysisJob(
+      {
+        packageName: "@scope/private-pkg",
+        version: "1.0.0",
+        reason: "manual_review",
+        priority: "high",
+        requestedBy: "reviewer",
+        runLlmReview: true,
+        createdAt: "2026-05-20T00:00:00.000Z"
+      },
+      { config, registry, persistence, llmRiskReviewProvider }
+    );
+
+    expect(llmRiskReviewProvider.review).not.toHaveBeenCalled();
+    expect(await persistence.listLlmRiskReviews({ packageName: "@scope/private-pkg", version: "1.0.0" })).toEqual([]);
+    expect(await persistence.listAuditEvents({ targetId: "@scope/private-pkg@1.0.0" })).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          actor: "reviewer",
+          eventType: "llm_review.unavailable",
+          metadata: expect.objectContaining({
+            reason: "manual_review",
+            priority: "high",
+            provider: "test-provider",
+            model: "test-model",
+            privatePackageSkipped: true
+          })
+        })
+      ])
+    );
+  });
+
   it("can send private package metadata to LLM review when explicitly enabled", async () => {
     const persistence = new MemoryPersistence();
     const config = loadConfig({
