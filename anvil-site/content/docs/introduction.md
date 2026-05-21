@@ -45,7 +45,3 @@ Anvil Registry moves the decision earlier:
 | Admin | Human review, decisions, reports, overrides, policy visibility |
 | CLI | Explain decisions, scan lockfiles, request analysis, manage overrides |
 | Node Base | Safer local and CI container for dependency installation |
-
-## Repository link
-
-Set `NEXT_PUBLIC_GIT_REPO_URL` in Vercel to wire the repository buttons on this site.

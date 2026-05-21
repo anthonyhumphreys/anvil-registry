@@ -1,29 +1,11 @@
 ---
 title: Deployment
-description: Deploy the docs site to Vercel and the registry stack locally or on AWS.
+description: Run Anvil Registry locally and prepare the registry stack for AWS.
 section: Operations
 order: 5
 ---
 
 # Deployment
-
-This site is intentionally standalone from the registry workspace. Deploy it from the `anvil-site` folder.
-
-## Vercel
-
-Set the project root to:
-
-```text
-anvil-site
-```
-
-Add this environment variable:
-
-```bash
-NEXT_PUBLIC_GIT_REPO_URL=https://github.com/your-org/your-repo
-```
-
-The site uses that value for repository CTAs.
 
 ## Local registry stack
 
