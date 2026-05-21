@@ -121,6 +121,34 @@ describe("worker analysis", () => {
     expect(registry.fetchTarball).toHaveBeenCalledTimes(2);
   });
 
+  it("persists latest queued jobs against the resolved package version", async () => {
+    const persistence = new MemoryPersistence();
+    const config = loadConfig({ ...process.env, RUNTIME_MODE: "ci" });
+    const registry = { fetchMetadata: vi.fn(async () => metadata()), fetchTarball: vi.fn(async (url: string) => tarballs[url]) };
+
+    const result = await analyseAnalysisJob(
+      {
+        packageName: "pkg",
+        version: "latest",
+        reason: "manual_review",
+        priority: "normal",
+        createdAt: new Date().toISOString()
+      },
+      { config, registry, persistence }
+    );
+
+    expect(result.version).toBe("1.0.1");
+    expect(await persistence.getAnalysisReport("pkg", "1.0.1")).toBeDefined();
+    expect(await persistence.getAnalysisReport("pkg", "latest")).toBeUndefined();
+    expect(await persistence.listAuditEvents({ targetId: "pkg@1.0.1" })).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ eventType: "analysis.completed" }),
+        expect.objectContaining({ eventType: "policy.decision" })
+      ])
+    );
+    expect(await persistence.listAuditEvents({ targetId: "pkg@latest" })).toHaveLength(0);
+  });
+
   it("preserves very-new package blocking and decision expiry in worker decisions", async () => {
     const persistence = new MemoryPersistence();
     const config = loadConfig({ ...process.env, RUNTIME_MODE: "ci" });
