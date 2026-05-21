@@ -436,7 +436,9 @@ function nodeBaseRiskCounts(summary: Record<string, unknown> | undefined) {
 }
 
 function numberValue(value: unknown) {
-  return typeof value === "number" ? value : 0;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && /^\d+$/.test(value)) return Number(value);
+  return 0;
 }
 
 function aliasedSummaryCount(summary: Record<string, unknown> | undefined, primaryKey: string, compatibilityKey: string) {

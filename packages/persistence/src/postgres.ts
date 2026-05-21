@@ -766,7 +766,14 @@ function nodeBaseRiskFilter(risk: NodeBaseReportRisk | undefined): SQL | undefin
 }
 
 function nodeBaseRiskCountSql(summaryKey: string, compatibilityKey: string): SQL<number> {
-  return sql<number>`greatest(coalesce((${schema.nodeBaseReports.summaryJson}->>${summaryKey})::int, 0), coalesce((${schema.nodeBaseReports.summaryJson}->>${compatibilityKey})::int, 0))`;
+  const primary = nodeBaseSummaryNumberSql(summaryKey);
+  const compatibility = nodeBaseSummaryNumberSql(compatibilityKey);
+  return sql<number>`greatest(${primary}, ${compatibility})`;
+}
+
+function nodeBaseSummaryNumberSql(summaryKey: string): SQL<number> {
+  const value = sql`${schema.nodeBaseReports.summaryJson}->>${summaryKey}`;
+  return sql<number>`case when ${value} ~ '^\\d+$' then (${value})::int else 0 end`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

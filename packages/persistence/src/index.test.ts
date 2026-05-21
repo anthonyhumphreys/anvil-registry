@@ -315,6 +315,20 @@ describe("MemoryPersistence", () => {
     expect(await persistence.listNodeBaseReports({ risk: "risky" })).toHaveLength(1);
   });
 
+  it("ignores malformed Node Base risk summary counts", async () => {
+    const persistence = new MemoryPersistence();
+    await persistence.putNodeBaseReport({
+      source: "devcontainer",
+      reportType: "network",
+      summary: { high: "not-a-number", mediumConfidenceFindings: "2" },
+      report: { summary: { high: "not-a-number", mediumConfidenceFindings: "2" } }
+    });
+
+    expect(await persistence.listNodeBaseReports({ risk: "high" })).toHaveLength(0);
+    expect(await persistence.listNodeBaseReports({ risk: "medium" })).toHaveLength(1);
+    expect(await persistence.listNodeBaseReports({ risk: "risky" })).toHaveLength(1);
+  });
+
   it("stores active policy config snapshots", async () => {
     const persistence = new MemoryPersistence();
 
