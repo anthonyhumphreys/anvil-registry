@@ -169,6 +169,54 @@ describe("gateway policy enforcement", () => {
     await app.close();
   });
 
+  it("passes default upstream auth to npm security audit proxy requests", async () => {
+    const upstreamFetch = vi.fn(async () => Response.json({ ok: true }));
+    const app = buildGateway({
+      config: loadConfig({
+        ...process.env,
+        RUNTIME_MODE: "development",
+        PERSISTENCE_DRIVER: "memory",
+        UPSTREAM_NPM_REGISTRY: "https://private-registry.example.test",
+        UPSTREAM_NPM_REGISTRIES_JSON: JSON.stringify([
+          {
+            name: "private",
+            baseUrl: "https://private-registry.example.test",
+            authTokenSecretName: "PRIVATE_NPM_TOKEN"
+          }
+        ]),
+        PRIVATE_NPM_TOKEN: "private-token"
+      }),
+      persistence: new MemoryPersistence(),
+      objectStore: new TestObjectStore(),
+      queue: new MemoryJobQueue(),
+      registry: {
+        fetchMetadata: vi.fn(),
+        fetchTarball: vi.fn()
+      },
+      downloadStats: noDownloadStats(),
+      fetch: upstreamFetch as unknown as typeof globalThis.fetch
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/-/npm/v1/security/advisories/bulk",
+      payload: { "private-pkg": ["1.0.0"] }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(upstreamFetch).toHaveBeenCalledWith(
+      "https://private-registry.example.test/-/npm/v1/security/advisories/bulk",
+      expect.objectContaining({
+        headers: {
+          "content-type": "application/json",
+          authorization: "Bearer private-token"
+        }
+      })
+    );
+
+    await app.close();
+  });
+
   it("exposes and persists the effective policy config", async () => {
     const persistence = new MemoryPersistence();
     const app = buildGateway({

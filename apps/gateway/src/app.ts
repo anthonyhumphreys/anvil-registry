@@ -622,9 +622,13 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
   }
 
   async function proxyNpmSecurityRequest(path: string, body: unknown, reply: FastifyReply) {
-    const response = await upstreamFetch(`${trimTrailingSlash(config.UPSTREAM_NPM_REGISTRY)}${path}`, {
+    const upstream = npmSecurityAuditUpstream(config);
+    const response = await upstreamFetch(`${trimTrailingSlash(upstream.baseUrl)}${path}`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        ...(upstream.authToken ? { authorization: `Bearer ${upstream.authToken}` } : {})
+      },
       body: JSON.stringify(body ?? {})
     });
     const contentType = response.headers.get("content-type");
@@ -684,6 +688,15 @@ function isFreshMetadata(updatedAt: string | undefined, ttlSeconds: number) {
 
 function upstreamRegistrySummaries(config: AnvilConfig) {
   return config.UPSTREAM_NPM_REGISTRIES.map(({ name, baseUrl, scopes }) => ({ name, baseUrl, scopes: scopes ?? [] }));
+}
+
+function npmSecurityAuditUpstream(config: AnvilConfig) {
+  const configuredBaseUrl = trimTrailingSlash(config.UPSTREAM_NPM_REGISTRY);
+  return (
+    config.UPSTREAM_NPM_REGISTRIES.find((registry) => trimTrailingSlash(registry.baseUrl) === configuredBaseUrl) ??
+    config.UPSTREAM_NPM_REGISTRIES.find((registry) => !registry.scopes?.length) ??
+    config.UPSTREAM_NPM_REGISTRIES[0]!
+  );
 }
 
 function analysisTargetsFromBody(body: PackageTargetRequest) {
