@@ -51,6 +51,7 @@ const envSchema = z.object({
   S3_ACCESS_KEY_ID: z.string().optional(),
   S3_SECRET_ACCESS_KEY: z.string().optional(),
   AWS_REGION: z.string().default("us-east-1"),
+  ANVIL_ADMIN_TOKEN: optionalEnvString,
   ADMIN_TOKEN: z.string().optional(),
   LLM_REVIEW_ENABLED: booleanEnv.default(false),
   LLM_REVIEW_PROVIDER: optionalEnvString,
@@ -121,6 +122,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
 
   return {
     ...parsed,
+    ADMIN_TOKEN: parsed.ANVIL_ADMIN_TOKEN ?? parsed.ADMIN_TOKEN,
     ANVIL_API_BASE_URL: parsed.ANVIL_API_BASE_URL ?? parsed.PUBLIC_BASE_URL,
     DATABASE_URL: databaseUrl,
     policy: {

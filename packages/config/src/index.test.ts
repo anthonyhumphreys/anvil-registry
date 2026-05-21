@@ -43,6 +43,16 @@ describe("config", () => {
     expect(config.ANVIL_API_BASE_URL).toBe("http://gateway:4873");
   });
 
+  it("prefers ANVIL_ADMIN_TOKEN over the legacy ADMIN_TOKEN", () => {
+    const config = loadConfig({
+      ...process.env,
+      ANVIL_ADMIN_TOKEN: "anvil-secret",
+      ADMIN_TOKEN: "legacy-secret"
+    });
+
+    expect(config.ADMIN_TOKEN).toBe("anvil-secret");
+  });
+
   it("loads the npm metadata cache TTL", () => {
     const config = loadConfig({
       ...process.env,
