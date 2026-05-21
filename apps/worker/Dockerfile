@@ -6,9 +6,11 @@ FROM base AS deps
 COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml turbo.json tsconfig.base.json ./
 COPY apps/worker/package.json apps/worker/package.json
 COPY packages/config/package.json packages/config/package.json
+COPY packages/llm-risk-review/package.json packages/llm-risk-review/package.json
 COPY packages/logger/package.json packages/logger/package.json
 COPY packages/name-squatting/package.json packages/name-squatting/package.json
 COPY packages/npm-registry/package.json packages/npm-registry/package.json
+COPY packages/object-store/package.json packages/object-store/package.json
 COPY packages/package-analysis/package.json packages/package-analysis/package.json
 COPY packages/persistence/package.json packages/persistence/package.json
 COPY packages/policy-engine/package.json packages/policy-engine/package.json
