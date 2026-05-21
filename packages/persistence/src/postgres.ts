@@ -766,7 +766,7 @@ function nodeBaseRiskFilter(risk: NodeBaseReportRisk | undefined): SQL | undefin
 }
 
 function nodeBaseRiskCountSql(summaryKey: string, compatibilityKey: string): SQL<number> {
-  return sql<number>`coalesce((${schema.nodeBaseReports.summaryJson}->>${summaryKey})::int, 0) + coalesce((${schema.nodeBaseReports.summaryJson}->>${compatibilityKey})::int, 0)`;
+  return sql<number>`greatest(coalesce((${schema.nodeBaseReports.summaryJson}->>${summaryKey})::int, 0), coalesce((${schema.nodeBaseReports.summaryJson}->>${compatibilityKey})::int, 0))`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

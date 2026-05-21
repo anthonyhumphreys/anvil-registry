@@ -301,6 +301,20 @@ describe("MemoryPersistence", () => {
     expect((await persistence.listNodeBaseReports({ reportType: "network" }))[0]?.summary).toEqual({ medium: 1, outboundConnections: 1 });
   });
 
+  it("treats Node Base risk summary aliases as the same count", async () => {
+    const persistence = new MemoryPersistence();
+    await persistence.putNodeBaseReport({
+      source: "devcontainer",
+      reportType: "ioc",
+      summary: { high: 1, highConfidenceFindings: 1, medium: 2, mediumConfidenceFindings: 2 },
+      report: { summary: { high: 1, highConfidenceFindings: 1, medium: 2, mediumConfidenceFindings: 2 } }
+    });
+
+    expect(await persistence.listNodeBaseReports({ risk: "high" })).toHaveLength(1);
+    expect(await persistence.listNodeBaseReports({ risk: "medium" })).toHaveLength(0);
+    expect(await persistence.listNodeBaseReports({ risk: "risky" })).toHaveLength(1);
+  });
+
   it("stores active policy config snapshots", async () => {
     const persistence = new MemoryPersistence();
 

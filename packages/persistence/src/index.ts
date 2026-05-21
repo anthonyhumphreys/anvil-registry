@@ -430,13 +430,17 @@ function nodeBaseRiskMatches(record: NodeBaseReportRecord, risk: NodeBaseReportR
 
 function nodeBaseRiskCounts(summary: Record<string, unknown> | undefined) {
   return {
-    high: numberValue(summary?.highConfidenceFindings) + numberValue(summary?.high),
-    medium: numberValue(summary?.mediumConfidenceFindings) + numberValue(summary?.medium)
+    high: aliasedSummaryCount(summary, "high", "highConfidenceFindings"),
+    medium: aliasedSummaryCount(summary, "medium", "mediumConfidenceFindings")
   };
 }
 
 function numberValue(value: unknown) {
   return typeof value === "number" ? value : 0;
+}
+
+function aliasedSummaryCount(summary: Record<string, unknown> | undefined, primaryKey: string, compatibilityKey: string) {
+  return Math.max(numberValue(summary?.[primaryKey]), numberValue(summary?.[compatibilityKey]));
 }
 
 function policyConfigKey(name: string, version: string) {

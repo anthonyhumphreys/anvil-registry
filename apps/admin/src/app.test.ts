@@ -313,6 +313,28 @@ describe("admin app", () => {
     await app.close();
   });
 
+  it("does not double-count Node Base risk summary aliases", async () => {
+    const persistence = new MemoryPersistence();
+    await persistence.putNodeBaseReport({
+      source: "devcontainer",
+      projectName: "demo",
+      reportType: "ioc",
+      summary: { high: 1, highConfidenceFindings: 1, medium: 2, mediumConfidenceFindings: 2 },
+      report: { summary: { high: 1, highConfidenceFindings: 1, medium: 2, mediumConfidenceFindings: 2 } }
+    });
+    const app = buildAdmin({ persistence });
+
+    const list = await app.inject({ method: "GET", url: "/node-base/reports" });
+    const mediumApi = await app.inject({ method: "GET", url: "/api/node-base/reports?risk=medium" });
+
+    expect(list.statusCode).toBe(200);
+    expect(list.body).toContain("1 high findings | 2 medium findings");
+    expect(list.body).not.toContain("1 high findings | 2 medium findings | 1 high findings | 2 medium findings");
+    expect(mediumApi.statusCode).toBe(200);
+    expect(mediumApi.json().reports).toHaveLength(0);
+    await app.close();
+  });
+
   it("exposes a package version review API", async () => {
     const persistence = new MemoryPersistence();
     await seed(persistence);

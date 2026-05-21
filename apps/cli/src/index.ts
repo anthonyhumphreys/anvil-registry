@@ -922,8 +922,8 @@ function nodeBaseReportRisk(report: NodeBaseReportRecord) {
   const body = isRecord(report.report) ? report.report : {};
   const summary = report.summary ?? (isRecord(body.summary) ? body.summary : undefined);
   return {
-    high: numberValue(summary?.highConfidenceFindings) + numberValue(summary?.high),
-    medium: numberValue(summary?.mediumConfidenceFindings) + numberValue(summary?.medium)
+    high: aliasedSummaryCount(summary, "high", "highConfidenceFindings"),
+    medium: aliasedSummaryCount(summary, "medium", "mediumConfidenceFindings")
   };
 }
 
@@ -947,6 +947,10 @@ function countPart(summary: Record<string, unknown> | undefined, key: string, la
 
 function numberValue(value: unknown) {
   return typeof value === "number" ? value : 0;
+}
+
+function aliasedSummaryCount(summary: Record<string, unknown> | undefined, primaryKey: string, compatibilityKey: string) {
+  return Math.max(numberValue(summary?.[primaryKey]), numberValue(summary?.[compatibilityKey]));
 }
 
 function arrayField(value: unknown) {

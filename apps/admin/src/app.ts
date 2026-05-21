@@ -1702,10 +1702,8 @@ function nodeBaseReportHighlights(record: NodeBaseReportRecord) {
   const parts = [
     numberHighlight(summary, "packagesWithLifecycleScripts", "lifecycle scripts"),
     numberHighlight(summary, "packagesWithFindings", "packages with findings"),
-    numberHighlight(summary, "highConfidenceFindings", "high findings"),
-    numberHighlight(summary, "mediumConfidenceFindings", "medium findings"),
-    numberHighlight(summary, "high", "high findings"),
-    numberHighlight(summary, "medium", "medium findings"),
+    aliasedNumberHighlight(summary, "high", "highConfidenceFindings", "high findings"),
+    aliasedNumberHighlight(summary, "medium", "mediumConfidenceFindings", "medium findings"),
     numberHighlight(summary, "executedProcesses", "execs"),
     numberHighlight(summary, "outboundConnections", "connections"),
     numberHighlight(summary, "sensitiveFileAccesses", "sensitive files")
@@ -1717,6 +1715,11 @@ function nodeBaseReportHighlights(record: NodeBaseReportRecord) {
 function numberHighlight(summary: Record<string, unknown> | undefined, key: string, label: string) {
   const value = summary?.[key];
   return typeof value === "number" ? `${value} ${label}` : undefined;
+}
+
+function aliasedNumberHighlight(summary: Record<string, unknown> | undefined, primaryKey: string, compatibilityKey: string, label: string) {
+  const count = aliasedSummaryCount(summary, primaryKey, compatibilityKey);
+  return count > 0 ? `${count} ${label}` : undefined;
 }
 
 function nodeBaseReportTone(record: NodeBaseReportRecord) {
@@ -1737,9 +1740,13 @@ function nodeBaseRiskCounts(record: NodeBaseReportRecord) {
   const report = isRecord(record.report) ? record.report : {};
   const summary = record.summary ?? (isRecord(report.summary) ? report.summary : undefined);
   return {
-    high: numberValue(summary?.highConfidenceFindings) + numberValue(summary?.high),
-    medium: numberValue(summary?.mediumConfidenceFindings) + numberValue(summary?.medium)
+    high: aliasedSummaryCount(summary, "high", "highConfidenceFindings"),
+    medium: aliasedSummaryCount(summary, "medium", "mediumConfidenceFindings")
   };
+}
+
+function aliasedSummaryCount(summary: Record<string, unknown> | undefined, primaryKey: string, compatibilityKey: string) {
+  return Math.max(numberValue(summary?.[primaryKey]), numberValue(summary?.[compatibilityKey]));
 }
 
 function nodeBaseTypeTone(type: string) {

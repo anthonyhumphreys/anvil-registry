@@ -983,6 +983,40 @@ importers:
     expect(writes.join("")).toContain("2 connections");
   });
 
+  it("does not double-count Node Base summary aliases", async () => {
+    const writes: string[] = [];
+    const dependencies = fakeDependencies({
+      env: { ANVIL_ADMIN_URL: "http://admin.test" },
+      fetch: vi.fn(async (url: string) => {
+        expect(url).toBe("http://admin.test/api/node-base/reports?limit=20");
+        return jsonResponse({
+          reports: [
+            {
+              id: "report-1",
+              source: "devcontainer",
+              reportType: "ioc",
+              summary: { high: 1, highConfidenceFindings: 1, medium: 2, mediumConfidenceFindings: 2 },
+              report: { summary: { high: 1, highConfidenceFindings: 1, medium: 2, mediumConfidenceFindings: 2 } },
+              createdAt: "2026-05-20T12:00:00.000Z"
+            }
+          ]
+        });
+      }) as unknown as typeof globalThis.fetch,
+      stdout: {
+        write: (value: string) => {
+          writes.push(value);
+          return true;
+        }
+      }
+    });
+
+    const exitCode = await run(["node-base", "reports"], dependencies);
+
+    expect(exitCode).toBe(1);
+    expect(writes.join("")).toContain("high=1 medium=2");
+    expect(writes.join("")).not.toContain("high=2 medium=4");
+  });
+
   it("prints a Node Base report detail with findings and connections", async () => {
     const writes: string[] = [];
     const dependencies = fakeDependencies({
