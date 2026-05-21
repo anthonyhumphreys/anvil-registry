@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { NpmDownloadsClient, NpmRegistryRouter, encodePackagePath, resolveMetadataVersion, rewriteMetadataTarballs, toVersionMetadata } from "./index.js";
+import { NpmDownloadsClient, NpmRegistryRouter, encodePackagePath, filterMetadataVersions, resolveMetadataVersion, rewriteMetadataTarballs, toVersionMetadata } from "./index.js";
 
 describe("npm registry helpers", () => {
   afterEach(() => {
@@ -44,6 +44,41 @@ describe("npm registry helpers", () => {
     expect(resolveMetadataVersion(metadata, "latest")).toBe("1.0.0");
     expect(resolveMetadataVersion(metadata, "beta")).toBe("2.0.0-beta.1");
     expect(resolveMetadataVersion(metadata, "missing")).toBeUndefined();
+  });
+
+  it("removes filtered versions from npm time metadata", () => {
+    const filtered = filterMetadataVersions(
+      {
+        name: "pkg",
+        "dist-tags": { latest: "2.0.0" },
+        time: {
+          created: "2020-01-01T00:00:00.000Z",
+          modified: "2020-01-03T00:00:00.000Z",
+          "1.0.0": "2020-01-01T00:00:00.000Z",
+          "2.0.0": "2020-01-02T00:00:00.000Z"
+        },
+        versions: {
+          "1.0.0": { name: "pkg", version: "1.0.0" },
+          "2.0.0": { name: "pkg", version: "2.0.0" }
+        }
+      },
+      new Map([
+        [
+          "2.0.0",
+          {
+            action: "block",
+            score: 95,
+            reasons: [{ code: "NEW_INSTALL_SCRIPT", message: "blocked", severity: "critical" }],
+            explanation: "blocked"
+          }
+        ]
+      ]),
+      { hideQuarantined: true }
+    );
+
+    expect(filtered.versions).not.toHaveProperty("2.0.0");
+    expect(filtered.time).toMatchObject({ created: "2020-01-01T00:00:00.000Z", modified: "2020-01-03T00:00:00.000Z", "1.0.0": "2020-01-01T00:00:00.000Z" });
+    expect(filtered.time).not.toHaveProperty("2.0.0");
   });
 
   it("fetches weekly download counts from the npm downloads API", async () => {

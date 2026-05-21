@@ -231,6 +231,7 @@ export function filterMetadataVersions(
   for (const [version, decision] of decisions) {
     if (decision.action === "block" || (options.hideQuarantined && decision.action === "quarantine")) {
       delete versions[version];
+      if (filtered.time) delete filtered.time[version];
     }
   }
 
