@@ -94,7 +94,7 @@ export function createAnvilSstConfig(
       const gatewayDomain = loadBalancerDomain(env.ANVIL_GATEWAY_DOMAIN, env.ANVIL_GATEWAY_CERT_ARN);
       const adminDomain = loadBalancerDomain(env.ANVIL_ADMIN_DOMAIN, env.ANVIL_ADMIN_CERT_ARN);
       const gatewayDomainName = loadBalancerDomainName(gatewayDomain);
-      const publicBaseUrl = optionalEnv(env.PUBLIC_BASE_URL) ?? (gatewayDomainName ? `https://${gatewayDomainName}` : "https://npm.anvil.example.com");
+      const publicBaseUrl = requiredPublicBaseUrl(env.PUBLIC_BASE_URL, gatewayDomainName);
       const adminApiBaseUrl = optionalEnv(env.ANVIL_API_BASE_URL) ?? publicBaseUrl;
 
       new sstRuntime.aws.Task("DatabaseMigration", {
@@ -257,6 +257,13 @@ function loadBalancerDomain(domain: string | undefined, cert: string | undefined
 function loadBalancerDomainName(domain: ReturnType<typeof loadBalancerDomain>) {
   if (!domain) return undefined;
   return typeof domain === "string" ? domain : domain.name;
+}
+
+function requiredPublicBaseUrl(publicBaseUrl: string | undefined, gatewayDomainName: string | undefined) {
+  const explicit = optionalEnv(publicBaseUrl);
+  if (explicit) return explicit;
+  if (gatewayDomainName) return `https://${gatewayDomainName}`;
+  throw new Error("Set PUBLIC_BASE_URL or ANVIL_GATEWAY_DOMAIN so npm tarball URLs rewrite to the deployed gateway.");
 }
 
 function optionalEnv(value: string | undefined) {

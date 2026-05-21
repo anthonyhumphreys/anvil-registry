@@ -201,6 +201,16 @@ describe("SST infrastructure shape", () => {
       })
     });
   });
+
+  it("requires a public gateway URL for deployed tarball rewrites", async () => {
+    const resources: RecordedResource[] = [];
+    const runtime = fakeRuntime(resources, {});
+    const { createAnvilSstConfig } = await import("./sst.config.js");
+
+    const config = createAnvilSstConfig(runtime) as { run(): Promise<Record<string, unknown>> };
+
+    await expect(config.run()).rejects.toThrow("Set PUBLIC_BASE_URL or ANVIL_GATEWAY_DOMAIN");
+  });
 });
 
 function fakeRuntime(resources: RecordedResource[], env: Record<string, string>): AnvilSstRuntime {
