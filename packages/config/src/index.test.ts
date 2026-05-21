@@ -97,6 +97,57 @@ describe("config", () => {
     expect(config.LLM_REVIEW_API_KEY).toBe("secret");
   });
 
+  it("loads deterministic policy controls from environment flags", () => {
+    const config = loadConfig({
+      ...process.env,
+      POLICY_VERSION: "test-policy-v2",
+      POLICY_MINIMUM_PACKAGE_AGE_DAYS: "3",
+      POLICY_COMPARE_PREVIOUS_VERSIONS: "5",
+      POLICY_LOW_DOWNLOAD_THRESHOLD: "5000",
+      POLICY_STRICT_LOW_DOWNLOAD_THRESHOLD: "250",
+      POLICY_BLOCK_SIMILAR_LOW_DOWNLOAD_PACKAGES: "false",
+      POLICY_BLOCK_NEW_INSTALL_SCRIPTS: "false",
+      POLICY_QUARANTINE_CHANGED_INSTALL_SCRIPTS: "false",
+      POLICY_BLOCK_UNEXPECTED_BINARIES: "false",
+      POLICY_QUARANTINE_OBFUSCATED_CODE: "false",
+      POLICY_HIDE_QUARANTINED_METADATA: "false",
+      POLICY_PROVENANCE_ENABLED: "false",
+      POLICY_PROVENANCE_HIGH_DOWNLOAD_THRESHOLD: "200000",
+      POLICY_TRUSTED_PUBLISHING_SCORE_REDUCTION: "25",
+      POLICY_QUARANTINE_CHANGED_PROVENANCE: "false",
+      POLICY_QUARANTINE_MISSING_PROVENANCE_HIGH_DOWNLOAD: "false",
+      POLICY_OVERRIDES_ENABLED: "false",
+      POLICY_OVERRIDE_REQUIRE_REASON: "false",
+      POLICY_OVERRIDE_DEFAULT_EXPIRY_DAYS: "7"
+    });
+
+    expect(config.policy).toMatchObject({
+      version: "test-policy-v2",
+      minimumPackageAgeDays: 3,
+      comparePreviousVersions: 5,
+      lowDownloadThreshold: 5000,
+      strictLowDownloadThreshold: 250,
+      blockSimilarLowDownloadPackages: false,
+      blockNewInstallScripts: false,
+      quarantineChangedInstallScripts: false,
+      blockUnexpectedBinaries: false,
+      quarantineObfuscatedCode: false,
+      hideQuarantinedMetadata: false,
+      provenance: {
+        enabled: false,
+        highDownloadThreshold: 200000,
+        trustedPublishingScoreReduction: 25,
+        quarantineChangedProvenance: false,
+        quarantineMissingForHighDownloadPackages: false
+      },
+      overrides: {
+        enabled: false,
+        requireReason: false,
+        defaultExpiryDays: 7
+      }
+    });
+  });
+
   it("treats empty optional LLM provider environment values as unset", () => {
     const config = loadConfig({
       ...process.env,

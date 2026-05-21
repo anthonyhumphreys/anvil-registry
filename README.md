@@ -81,6 +81,19 @@ ANVIL_ADMIN_URL=http://localhost:3000 anvil node-base reports --limit 20
 
 Admin-gated mutations read `ANVIL_ADMIN_TOKEN`, falling back to `ADMIN_TOKEN`.
 
+## Policy Configuration
+
+Deterministic policy defaults are conservative and can be tuned from environment variables:
+
+- `POLICY_MINIMUM_PACKAGE_AGE_DAYS`
+- `POLICY_LOW_DOWNLOAD_THRESHOLD`
+- `POLICY_STRICT_LOW_DOWNLOAD_THRESHOLD`
+- `POLICY_BLOCK_SIMILAR_LOW_DOWNLOAD_PACKAGES`
+- `POLICY_HIDE_QUARANTINED_METADATA`
+- `POLICY_OVERRIDE_DEFAULT_EXPIRY_DAYS`
+
+Additional policy knobs use the same `POLICY_` prefix for install scripts, provenance, override behaviour, analyser comparison depth, and policy versioning. The gateway records the effective policy at `GET /-/anvil/policy`, because guessing production policy from vibes is how incident reviews get spicy.
+
 ## LLM Review
 
 LLM risk review is optional and never the enforcement authority. Deterministic policy still makes the final decision; LLM output is schema-validated context that can add quarantine-level risk signals.

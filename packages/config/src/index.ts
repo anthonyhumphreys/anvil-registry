@@ -59,7 +59,26 @@ const envSchema = z.object({
   LLM_REVIEW_API_KEY: optionalEnvString,
   LLM_REVIEW_INCLUDE_PRIVATE_PACKAGES: booleanEnv.default(false),
   LLM_REVIEW_RUN_ON_UNKNOWN_PACKAGES: booleanEnv.default(false),
-  LLM_REVIEW_RUN_ON_QUARANTINE: booleanEnv.default(false)
+  LLM_REVIEW_RUN_ON_QUARANTINE: booleanEnv.default(false),
+  POLICY_VERSION: z.string().default("2026-05-20.1"),
+  POLICY_MINIMUM_PACKAGE_AGE_DAYS: z.coerce.number().int().min(0).default(7),
+  POLICY_COMPARE_PREVIOUS_VERSIONS: z.coerce.number().int().min(0).default(3),
+  POLICY_LOW_DOWNLOAD_THRESHOLD: z.coerce.number().int().min(0).default(1000),
+  POLICY_STRICT_LOW_DOWNLOAD_THRESHOLD: z.coerce.number().int().min(0).default(100),
+  POLICY_BLOCK_SIMILAR_LOW_DOWNLOAD_PACKAGES: booleanEnv.default(true),
+  POLICY_BLOCK_NEW_INSTALL_SCRIPTS: booleanEnv.default(true),
+  POLICY_QUARANTINE_CHANGED_INSTALL_SCRIPTS: booleanEnv.default(true),
+  POLICY_BLOCK_UNEXPECTED_BINARIES: booleanEnv.default(true),
+  POLICY_QUARANTINE_OBFUSCATED_CODE: booleanEnv.default(true),
+  POLICY_HIDE_QUARANTINED_METADATA: booleanEnv.default(true),
+  POLICY_PROVENANCE_ENABLED: booleanEnv.default(true),
+  POLICY_PROVENANCE_HIGH_DOWNLOAD_THRESHOLD: z.coerce.number().int().min(0).default(100_000),
+  POLICY_TRUSTED_PUBLISHING_SCORE_REDUCTION: z.coerce.number().int().min(0).default(10),
+  POLICY_QUARANTINE_CHANGED_PROVENANCE: booleanEnv.default(true),
+  POLICY_QUARANTINE_MISSING_PROVENANCE_HIGH_DOWNLOAD: booleanEnv.default(true),
+  POLICY_OVERRIDES_ENABLED: booleanEnv.default(true),
+  POLICY_OVERRIDE_REQUIRE_REASON: booleanEnv.default(true),
+  POLICY_OVERRIDE_DEFAULT_EXPIRY_DAYS: z.coerce.number().int().min(0).default(30)
 });
 
 export type AnvilConfig = ReturnType<typeof loadConfig>;
@@ -106,6 +125,29 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     DATABASE_URL: databaseUrl,
     policy: {
       ...defaultPolicyConfig,
+      version: parsed.POLICY_VERSION,
+      minimumPackageAgeDays: parsed.POLICY_MINIMUM_PACKAGE_AGE_DAYS,
+      comparePreviousVersions: parsed.POLICY_COMPARE_PREVIOUS_VERSIONS,
+      lowDownloadThreshold: parsed.POLICY_LOW_DOWNLOAD_THRESHOLD,
+      strictLowDownloadThreshold: parsed.POLICY_STRICT_LOW_DOWNLOAD_THRESHOLD,
+      blockSimilarLowDownloadPackages: parsed.POLICY_BLOCK_SIMILAR_LOW_DOWNLOAD_PACKAGES,
+      blockNewInstallScripts: parsed.POLICY_BLOCK_NEW_INSTALL_SCRIPTS,
+      quarantineChangedInstallScripts: parsed.POLICY_QUARANTINE_CHANGED_INSTALL_SCRIPTS,
+      blockUnexpectedBinaries: parsed.POLICY_BLOCK_UNEXPECTED_BINARIES,
+      quarantineObfuscatedCode: parsed.POLICY_QUARANTINE_OBFUSCATED_CODE,
+      hideQuarantinedMetadata: parsed.POLICY_HIDE_QUARANTINED_METADATA,
+      provenance: {
+        enabled: parsed.POLICY_PROVENANCE_ENABLED,
+        highDownloadThreshold: parsed.POLICY_PROVENANCE_HIGH_DOWNLOAD_THRESHOLD,
+        trustedPublishingScoreReduction: parsed.POLICY_TRUSTED_PUBLISHING_SCORE_REDUCTION,
+        quarantineChangedProvenance: parsed.POLICY_QUARANTINE_CHANGED_PROVENANCE,
+        quarantineMissingForHighDownloadPackages: parsed.POLICY_QUARANTINE_MISSING_PROVENANCE_HIGH_DOWNLOAD
+      },
+      overrides: {
+        enabled: parsed.POLICY_OVERRIDES_ENABLED,
+        requireReason: parsed.POLICY_OVERRIDE_REQUIRE_REASON,
+        defaultExpiryDays: parsed.POLICY_OVERRIDE_DEFAULT_EXPIRY_DAYS
+      },
       llmReview: {
         enabled: parsed.LLM_REVIEW_ENABLED,
         includePrivatePackages: parsed.LLM_REVIEW_INCLUDE_PRIVATE_PACKAGES,
