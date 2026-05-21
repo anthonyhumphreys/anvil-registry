@@ -328,7 +328,7 @@ export function buildAdmin(dependencies: AdminDependencies = {}): FastifyInstanc
           ${summaryTile("Warned", countActions(decisions, "warn"), "muted")}
           ${summaryTile("Allowed", countActions(decisions, "allow"), "ok")}
         </div>
-        <p><a href="/decisions/blocked">View blocked packages</a> · <a href="/decisions/quarantined">View quarantined packages</a></p>
+        <p><a href="/decisions/blocked">View blocked packages</a> | <a href="/decisions/quarantined">View quarantined packages</a></p>
       </section>
       <section>
         <h2>Policy Configuration</h2>
