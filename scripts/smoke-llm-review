@@ -15,6 +15,10 @@ if [[ "$PACKAGE_NAME" == "$PACKAGE_VERSION" ]]; then
   echo "[anvil] ANVIL_LLM_SMOKE_PACKAGE must include an explicit version, for example is-number@7.0.0" >&2
   exit 1
 fi
+if [[ -z "$PACKAGE_NAME" || -z "$PACKAGE_VERSION" ]]; then
+  echo "[anvil] ANVIL_LLM_SMOKE_PACKAGE must include a package name and explicit version, for example @scope/pkg@1.0.0" >&2
+  exit 1
+fi
 
 echo "[anvil] Starting local stack with mock LLM review provider ($MODEL)"
 LLM_REVIEW_ENABLED=true \
