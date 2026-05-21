@@ -485,7 +485,7 @@ describe("admin app", () => {
       method: "POST",
       url: "/api/overrides",
       headers: { authorization: "Bearer secret" },
-      payload: { packageName: " pkg ", version: " 1.0.0 ", reason: " intentional " }
+      payload: { packageName: " pkg ", version: " 1.0.0 ", reason: " intentional ", approvedBy: " reviewer " }
     });
     const invalid = await app.inject({
       method: "POST",
@@ -498,8 +498,18 @@ describe("admin app", () => {
     expect(accepted.statusCode).toBe(201);
     expect(invalid.statusCode).toBe(400);
     expect(invalid.json()).toMatchObject({ error: "ANVIL_OVERRIDE_INVALID" });
-    expect(await persistence.getOverride("pkg", "1.0.0")).toMatchObject({ reason: "intentional", expiresAt: "2026-06-19T00:00:00.000Z" });
-    expect(await persistence.listAuditEvents()).toHaveLength(1);
+    expect(await persistence.getOverride("pkg", "1.0.0")).toMatchObject({
+      reason: "intentional",
+      approvedBy: "reviewer",
+      expiresAt: "2026-06-19T00:00:00.000Z"
+    });
+    expect(await persistence.listAuditEvents()).toEqual([
+      expect.objectContaining({
+        actor: "reviewer",
+        eventType: "override.created",
+        targetId: "pkg@1.0.0"
+      })
+    ]);
     await app.close();
     now.mockRestore();
   });
@@ -520,9 +530,10 @@ describe("admin app", () => {
       method: "POST",
       url: "/api/overrides",
       headers: { "content-type": "application/x-www-form-urlencoded", cookie },
-      payload: "packageName=form-pkg&version=1.0.0&action=allow&reason=intentional&expiresAt=2026-06-01T00%3A00%3A00Z"
+      payload: "packageName=form-pkg&version=1.0.0&action=allow&reason=intentional&approvedBy=form-reviewer&expiresAt=2026-06-01T00%3A00%3A00Z"
     });
     const managedDashboard = await app.inject({ method: "GET", url: "/", headers: { cookie } });
+    const createdOverride = await persistence.getOverride("form-pkg", "1.0.0");
     const revoked = await app.inject({
       method: "POST",
       url: "/api/overrides/revoke",
@@ -535,6 +546,8 @@ describe("admin app", () => {
     expect(session.statusCode).toBe(302);
     expect(String(cookie)).toContain("anvil_admin_token=");
     expect(created.statusCode).toBe(201);
+    expect(createdOverride).toMatchObject({ approvedBy: "form-reviewer" });
+    expect(managedDashboard.body).toContain("approved by");
     expect(managedDashboard.body).toContain("expires at");
     expect(managedDashboard.body).toContain("Revoke");
     expect(revoked.statusCode).toBe(200);

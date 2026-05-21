@@ -1434,6 +1434,7 @@ function overrideForm(packageName = "", version = "") {
       <option value="block">block</option>
     </select>
     <input name="reason" placeholder="reason" aria-label="Reason" />
+    <input name="approvedBy" placeholder="approved by" aria-label="Approved by" value="admin-ui" />
     <input name="expiresAt" placeholder="expires at" aria-label="Expires at" />
     <button type="submit">Create Override</button>
   </form>`;
@@ -1635,7 +1636,7 @@ function page(title: string, body: string) {
     dd { margin: 0; }
     .pill { display: inline-block; border-radius: 999px; padding: 2px 8px; background: #eef1ef; font-size: 12px; font-weight: 700; }
     .empty { color: #66706c; }
-    .override-form { display: grid; grid-template-columns: 1.2fr .7fr .7fr 1.5fr 1fr auto; gap: 8px; margin-bottom: 12px; }
+    .override-form { display: grid; grid-template-columns: 1.2fr .7fr .7fr 1.5fr 1fr 1fr auto; gap: 8px; margin-bottom: 12px; }
     .llm-review-form { display: grid; grid-template-columns: minmax(180px, 320px) minmax(120px, 160px) auto; gap: 8px; margin-bottom: 12px; max-width: 680px; }
     .token-form { display: grid; grid-template-columns: minmax(220px, 360px) auto; gap: 8px; max-width: 540px; }
     .inline-form { margin: 0; }
