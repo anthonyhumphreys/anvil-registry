@@ -6,7 +6,7 @@ import type { NpmPackageMetadata } from "@anvil/npm-registry";
 import { MemoryPersistence } from "@anvil/persistence";
 import { MetadataProvenanceVerifier } from "@anvil/provenance";
 import type { LlmRiskReview } from "@anvil/shared";
-import { analyseAnalysisJob, analysePackageTarget, analysisReportObjectKey, parsePackageTarget } from "./analysis.js";
+import { analyseAnalysisJob, analysePackageTarget, analysisReportObjectKeyForReport, parsePackageTarget } from "./analysis.js";
 
 describe("worker analysis", () => {
   it("parses scoped package targets", () => {
@@ -78,15 +78,17 @@ describe("worker analysis", () => {
     const registry = { fetchMetadata: vi.fn(async () => metadata()), fetchTarball: vi.fn(async (url: string) => tarballs[url]) };
 
     const result = await analysePackageTarget("pkg@1.0.1", { config, registry, persistence, objectStore });
-    const objectKey = analysisReportObjectKey(result.report);
+    const objectKey = analysisReportObjectKeyForReport(result.report);
     const stored = await objectStore.get(objectKey);
 
-    expect(objectKey).toBe(`analysis/pkg/1.0.1/${config.policy.version}/${encodeURIComponent(result.report.analyserVersion)}/sha512-new.json`);
+    expect(objectKey).toBe(`analysis/pkg/1.0.1/${config.policy.version}/${encodeURIComponent(result.report.analyserVersion)}/sha512-new/report.json`);
+    expect(result.report.objectKey).toBe(objectKey);
     expect(stored).toBeDefined();
     expect(JSON.parse(Buffer.from(stored ?? []).toString("utf8"))).toMatchObject({
       packageName: "pkg",
       version: "1.0.1",
       tarballIntegrity: "sha512-new",
+      objectKey,
       signals: expect.arrayContaining([expect.objectContaining({ code: "NEW_INSTALL_SCRIPT" })])
     });
     expect(await persistence.listAuditEvents({ targetId: "pkg@1.0.1" })).toEqual(

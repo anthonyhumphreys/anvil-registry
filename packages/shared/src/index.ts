@@ -257,6 +257,7 @@ export type AnalysisReport = {
   manifestDiff?: Record<string, unknown>;
   dependencyDiff?: Record<string, unknown>;
   fileFindings?: Array<{ path: string; code: PolicyReasonCode; reason: string; severity: PolicyReason["severity"]; evidence?: Record<string, unknown> }>;
+  objectKey?: string;
   createdAt: string;
 };
 

@@ -133,8 +133,10 @@ async function analysePackageVersion(
     }
   );
 
-  await dependencies.persistence.putAnalysisReport(report);
-  const analysisReportObjectKey = await storeAnalysisReportArtifact(report, dependencies.objectStore);
+  const analysisReportObjectKey = dependencies.objectStore ? analysisReportObjectKeyForReport(report) : undefined;
+  const storedReport: AnalysisReport = analysisReportObjectKey ? { ...report, objectKey: analysisReportObjectKey } : report;
+  await storeAnalysisReportArtifact(storedReport, dependencies.objectStore, analysisReportObjectKey);
+  await dependencies.persistence.putAnalysisReport(storedReport);
   const override = await dependencies.persistence.getOverride(target.packageName, version);
   const preliminaryDecision = evaluatePolicy({
     packageName: target.packageName,
@@ -145,7 +147,7 @@ async function analysePackageVersion(
     packageAgeDays,
     weeklyDownloads,
     similarPackages,
-    analysisReport: report,
+    analysisReport: storedReport,
     override,
     policy: dependencies.config.policy
   });
@@ -156,13 +158,13 @@ async function analysePackageVersion(
       packageAgeDays,
       weeklyDownloads,
       similarPopularPackages: similarPackages,
-      deterministicSignals: report.signals.map((signal) => signal.code),
-      manifestDiff: report.manifestDiff,
-      dependencyDiff: report.dependencyDiff,
-      suspiciousSnippets: suspiciousSnippetsFromReport(report)
+      deterministicSignals: storedReport.signals.map((signal) => signal.code),
+      manifestDiff: storedReport.manifestDiff,
+      dependencyDiff: storedReport.dependencyDiff,
+      suspiciousSnippets: suspiciousSnippetsFromReport(storedReport)
     },
     {
-      report,
+      report: storedReport,
       previousMetadata,
       targetMetadata,
       preliminaryDecision,
@@ -176,7 +178,7 @@ async function analysePackageVersion(
       version,
       tarballIntegrity: targetMetadata.integrity,
       tarballShasum: targetMetadata.shasum,
-      analyserVersion: report.analyserVersion,
+      analyserVersion: storedReport.analyserVersion,
       provider: dependencies.config.policy.llmReview.provider ?? "http",
       model: dependencies.config.policy.llmReview.model ?? "unspecified",
       review: llmRiskReview
@@ -194,7 +196,7 @@ async function analysePackageVersion(
         model: dependencies.config.policy.llmReview.model ?? "unspecified",
         tarballIntegrity: targetMetadata.integrity,
         tarballShasum: targetMetadata.shasum,
-        analyserVersion: report.analyserVersion,
+        analyserVersion: storedReport.analyserVersion,
         riskLevel: llmRiskReview.riskLevel,
         recommendedAction: llmRiskReview.recommendedAction
       }
@@ -225,7 +227,7 @@ async function analysePackageVersion(
     packageAgeDays,
     weeklyDownloads,
     similarPackages,
-    analysisReport: report,
+    analysisReport: storedReport,
     llmRiskReview,
     override,
     policy: dependencies.config.policy
@@ -233,7 +235,7 @@ async function analysePackageVersion(
   const decisionIdentity = {
     tarballIntegrity: targetMetadata.integrity,
     tarballShasum: targetMetadata.shasum,
-    analyserVersion: report.analyserVersion
+    analyserVersion: storedReport.analyserVersion
   };
   await dependencies.persistence.putPolicyDecision(target.packageName, version, dependencies.config.policy.version, decision, decisionIdentity);
   await dependencies.persistence.putAuditEvent(buildPolicyDecisionAuditEvent({
@@ -253,24 +255,22 @@ async function analysePackageVersion(
     metadata: {
       action: decision.action,
       score: decision.score,
-      analyserVersion: report.analyserVersion,
+      analyserVersion: storedReport.analyserVersion,
       policyVersion: dependencies.config.policy.version,
-      signalCount: report.signals.length,
+      signalCount: storedReport.signals.length,
       ...(analysisReportObjectKey ? { analysisReportObjectKey } : {})
     }
   });
 
-  return { report, decision, packageName: target.packageName, version };
+  return { report: storedReport, decision, packageName: target.packageName, version };
 }
 
-async function storeAnalysisReportArtifact(report: AnalysisReport, objectStore: ObjectStore | undefined) {
-  if (!objectStore) return undefined;
-  const objectKey = analysisReportObjectKey(report);
+async function storeAnalysisReportArtifact(report: AnalysisReport, objectStore: ObjectStore | undefined, objectKey: string | undefined) {
+  if (!objectStore || !objectKey) return;
   await objectStore.put(objectKey, Buffer.from(JSON.stringify(report), "utf8"));
-  return objectKey;
 }
 
-export function analysisReportObjectKey(report: Pick<AnalysisReport, "packageName" | "version" | "policyVersion" | "analyserVersion" | "tarballIntegrity" | "tarballShasum">) {
+export function analysisReportObjectKeyForReport(report: Pick<AnalysisReport, "packageName" | "version" | "policyVersion" | "analyserVersion" | "tarballIntegrity" | "tarballShasum">) {
   const identity = report.tarballIntegrity ?? report.tarballShasum ?? "no-integrity";
   return [
     "analysis",
@@ -278,7 +278,8 @@ export function analysisReportObjectKey(report: Pick<AnalysisReport, "packageNam
     encodeURIComponent(report.version),
     encodeURIComponent(report.policyVersion),
     encodeURIComponent(report.analyserVersion),
-    `${encodeURIComponent(identity)}.json`
+    encodeURIComponent(identity),
+    "report.json"
   ].join("/");
 }
 

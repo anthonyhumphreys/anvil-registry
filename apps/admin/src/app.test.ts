@@ -760,6 +760,7 @@ describe("admin app", () => {
       policyVersion: "policy",
       tarballIntegrity: "sha512-new",
       tarballShasum: "newsum",
+      objectKey: "analysis/pkg/1.0.0/policy/static-v2/sha512-new/report.json",
       score: 30,
       signals: [{ code: "INSTALL_SCRIPT_CHANGED", message: "New tarball changed install script.", severity: "medium" }],
       manifestDiff: {
@@ -785,6 +786,7 @@ describe("admin app", () => {
     expect(compareApi.json().comparison.signals.removed[0]).toMatchObject({ code: "UNEXPECTED_BINARY_FILE" });
     expect(page.statusCode).toBe(200);
     expect(page.body).toContain("sha512-new");
+    expect(page.body).toContain("analysis/pkg/1.0.0/policy/static-v2/sha512-new/report.json");
     expect(page.body).toContain("New tarball changed install script.");
     expect(comparePage.statusCode).toBe(200);
     expect(comparePage.body).toContain("Comparison Summary");
@@ -802,6 +804,7 @@ describe("admin app", () => {
     expect(comparePage.body).toContain("size: 2048");
     expect(comparePage.body).toContain("mode: 0o755");
     expect(review.body).toContain("Compare latest reports");
+    expect(review.body).toContain("analysis/pkg/1.0.0/policy/static-v2/sha512-new/report.json");
     expect(review.body).toContain("/reports/pkg/1.0.0?integrity=sha512-new&amp;shasum=newsum&amp;analyser=static-v2");
     await app.close();
   });

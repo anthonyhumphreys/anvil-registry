@@ -522,6 +522,7 @@ export function buildAdmin(dependencies: AdminDependencies = {}): FastifyInstanc
           <dt>Policy</dt><dd>${escapeHtml(report.policyVersion)}</dd>
           <dt>Tarball Integrity</dt><dd>${escapeHtml(report.tarballIntegrity ?? "")}</dd>
           <dt>Tarball Shasum</dt><dd>${escapeHtml(report.tarballShasum ?? "")}</dd>
+          <dt>Object Store Key</dt><dd>${analysisReportObjectKeyDetails(report)}</dd>
           <dt>Score</dt><dd>${report.score}</dd>
         </dl>
         <h3>Signals</h3>
@@ -717,7 +718,7 @@ function analysisReportIdentityDetails(record: AnalysisReportRecord) {
 function reportTable(reports: AnalysisReportRecord[]) {
   if (reports.length === 0) return `<p class="empty">No analysis reports yet.</p>`;
   return `<table>
-    <thead><tr><th>Package</th><th>Analyser</th><th>Signals</th><th>Score</th><th>Identity</th><th>Created</th></tr></thead>
+    <thead><tr><th>Package</th><th>Analyser</th><th>Signals</th><th>Score</th><th>Identity</th><th>Artifact</th><th>Created</th></tr></thead>
     <tbody>${reports
       .map(
         (record) => `<tr>
@@ -726,11 +727,16 @@ function reportTable(reports: AnalysisReportRecord[]) {
           <td>${record.report.signals.length}</td>
           <td>${record.report.score}</td>
           <td>${analysisReportIdentityDetails(record)}</td>
+          <td>${analysisReportObjectKeyDetails(record.report)}</td>
           <td>${escapeHtml(formatDate(record.createdAt))}</td>
         </tr>`
       )
       .join("")}</tbody>
   </table>`;
+}
+
+function analysisReportObjectKeyDetails(report: { objectKey?: string }) {
+  return report.objectKey ? `<code>${escapeHtml(report.objectKey)}</code>` : `<span class="empty">not stored</span>`;
 }
 
 function popularPackageIndexSummary(index: PopularPackageIndex) {
