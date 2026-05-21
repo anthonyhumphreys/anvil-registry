@@ -34,6 +34,8 @@ export async function run(argv: string[], dependencies: CliDependencies = defaul
     if (command === "revoke") return await revoke(args, dependencies);
     if (command === "llm-review") return await llmReview(args, dependencies);
     if (command === "queue" && args[0] === "status") return await queueStatus(args.slice(1), dependencies);
+    if (command === "reports" && args[0] === "compare") return await analysisReportCompare(args.slice(1), dependencies);
+    if (command === "reports") return await analysisReport(args, dependencies);
     if (command === "popular-index" && args[0] === "show") return await popularIndexShow(args.slice(1), dependencies);
     if (command === "popular-index" && args[0] === "upload") return await popularIndexUpload(args.slice(1), dependencies);
     if (command === "node-base" && args[0] === "reports") return await nodeBaseReports(args.slice(1), dependencies);
@@ -375,6 +377,51 @@ async function policyTest(args: string[], dependencies: CliDependencies): Promis
   return risky.some((result) => result.decision.action === "block" || result.decision.action === "quarantine") ? 1 : 0;
 }
 
+async function analysisReport(args: string[], dependencies: CliDependencies): Promise<number> {
+  const targetArg = firstPositionalArg(args);
+  if (!targetArg) throw new Error("Usage: anvil reports package@version [--integrity sha512-...] [--shasum ...] [--analyser static-v1]");
+  const target = parseTarget(targetArg);
+  const adminUrl = adminBaseUrl(dependencies.env);
+  const params = new URLSearchParams();
+  addOptionalParam(params, "integrity", readFlag(args, "--integrity"));
+  addOptionalParam(params, "shasum", readFlag(args, "--shasum"));
+  addOptionalParam(params, "analyser", readFlag(args, "--analyser"));
+  const query = params.toString();
+  const result = await requestJson<{ report: AnalysisReportRecord }>(
+    dependencies,
+    `${adminUrl}/api/reports/${encodeURIComponent(target.packageName)}/${encodeURIComponent(target.version)}${query ? `?${query}` : ""}`
+  );
+
+  printAnalysisReport(result.report, dependencies);
+  return hasHighAnalysisRisk(result.report.report) ? 1 : 0;
+}
+
+async function analysisReportCompare(args: string[], dependencies: CliDependencies): Promise<number> {
+  const targetArg = firstPositionalArg(args);
+  if (!targetArg) {
+    throw new Error(
+      "Usage: anvil reports compare package@version [--left-integrity sha512-old] [--right-integrity sha512-new] [--left-shasum ...] [--right-shasum ...] [--left-analyser static-v1] [--right-analyser static-v1]"
+    );
+  }
+  const target = parseTarget(targetArg);
+  const adminUrl = adminBaseUrl(dependencies.env);
+  const params = new URLSearchParams();
+  addOptionalParam(params, "leftIntegrity", readFlag(args, "--left-integrity"));
+  addOptionalParam(params, "rightIntegrity", readFlag(args, "--right-integrity"));
+  addOptionalParam(params, "leftShasum", readFlag(args, "--left-shasum"));
+  addOptionalParam(params, "rightShasum", readFlag(args, "--right-shasum"));
+  addOptionalParam(params, "leftAnalyser", readFlag(args, "--left-analyser"));
+  addOptionalParam(params, "rightAnalyser", readFlag(args, "--right-analyser"));
+  const query = params.toString();
+  const result = await requestJson<AnalysisReportComparisonResult>(
+    dependencies,
+    `${adminUrl}/api/packages/${encodeURIComponent(target.packageName)}/${encodeURIComponent(target.version)}/reports/compare${query ? `?${query}` : ""}`
+  );
+
+  printAnalysisReportComparison(result, dependencies);
+  return result.comparison.signals.added.some(isHighSeverity) || result.comparison.fileFindings.added.some(isHighSeverity) ? 1 : 0;
+}
+
 async function nodeBaseReports(args: string[], dependencies: CliDependencies): Promise<number> {
   const reportType = readFlag(args, "--type");
   const risk = readFlag(args, "--risk");
@@ -479,6 +526,67 @@ function printAnalysisSummary(report: AnalysisReport, dependencies: CliDependenc
   if (report.signals.length > 0) {
     dependencies.stdout.write(`- signals: ${report.signals.map((signal) => signal.code).join(", ")}\n`);
   }
+}
+
+function printAnalysisReport(record: AnalysisReportRecord, dependencies: CliDependencies) {
+  const report = record.report;
+  dependencies.stdout.write(`Analysis report ${record.packageName}@${record.version}\n`);
+  dependencies.stdout.write(`Analyser: ${record.analyserVersion ?? report.analyserVersion}\n`);
+  dependencies.stdout.write(`Policy: ${report.policyVersion}\n`);
+  dependencies.stdout.write(`Score: ${report.score}\n`);
+  if (record.createdAt ?? report.createdAt) dependencies.stdout.write(`Created: ${record.createdAt ?? report.createdAt}\n`);
+  const integrity = record.tarballIntegrity ?? report.tarballIntegrity;
+  const shasum = record.tarballShasum ?? report.tarballShasum;
+  if (integrity || shasum) dependencies.stdout.write(`Identity: ${[integrity ? `integrity=${integrity}` : "", shasum ? `shasum=${shasum}` : ""].filter(Boolean).join(" ")}\n`);
+  printSignalList("Signals", report.signals, dependencies);
+  printDependencyDiff(report.dependencyDiff, dependencies);
+  printFileFindings("File findings", report.fileFindings ?? [], dependencies);
+}
+
+function printAnalysisReportComparison(result: AnalysisReportComparisonResult, dependencies: CliDependencies) {
+  dependencies.stdout.write(`Analysis report comparison ${result.packageName}@${result.version}\n`);
+  dependencies.stdout.write(`Left: ${analysisReportIdentity(result.left)} score=${result.left.report.score}\n`);
+  dependencies.stdout.write(`Right: ${analysisReportIdentity(result.right)} score=${result.right.report.score}\n`);
+  dependencies.stdout.write(`Score delta: ${result.comparison.scoreDelta}\n`);
+  printSignalList("Added signals", result.comparison.signals.added, dependencies);
+  printSignalList("Removed signals", result.comparison.signals.removed, dependencies);
+  printFileFindings("Added file findings", result.comparison.fileFindings.added, dependencies);
+  printFileFindings("Removed file findings", result.comparison.fileFindings.removed, dependencies);
+}
+
+function printSignalList(title: string, signals: AnalysisSignal[], dependencies: CliDependencies) {
+  if (signals.length === 0) {
+    dependencies.stdout.write(`${title}: none\n`);
+    return;
+  }
+  dependencies.stdout.write(`${title}:\n`);
+  for (const signal of signals.slice(0, 20)) {
+    dependencies.stdout.write(`- ${signal.code} [${signal.severity}] ${signal.message}\n`);
+  }
+  if (signals.length > 20) dependencies.stdout.write(`- ... ${signals.length - 20} more\n`);
+}
+
+function printDependencyDiff(diff: Record<string, unknown> | undefined, dependencies: CliDependencies) {
+  const rows = dependencyDiffRows(diff);
+  if (rows.length === 0) return;
+  dependencies.stdout.write("Dependency changes:\n");
+  for (const row of rows.slice(0, 20)) {
+    dependencies.stdout.write(`- ${row.group} ${row.change} ${row.name}${row.previous ? ` ${row.previous}` : ""}${row.target ? ` -> ${row.target}` : ""}\n`);
+  }
+  if (rows.length > 20) dependencies.stdout.write(`- ... ${rows.length - 20} more\n`);
+}
+
+function printFileFindings(title: string, findings: AnalysisFileFinding[], dependencies: CliDependencies) {
+  if (findings.length === 0) {
+    dependencies.stdout.write(`${title}: none\n`);
+    return;
+  }
+  dependencies.stdout.write(`${title}:\n`);
+  for (const finding of findings.slice(0, 20)) {
+    const evidence = formatEvidence(finding.evidence);
+    dependencies.stdout.write(`- ${finding.path} ${finding.code} [${finding.severity}] ${finding.reason}${evidence ? ` evidence=${evidence}` : ""}\n`);
+  }
+  if (findings.length > 20) dependencies.stdout.write(`- ... ${findings.length - 20} more\n`);
 }
 
 function printLlmRiskReviewSummary(reviews: LlmRiskReviewRecord[], dependencies: CliDependencies) {
@@ -600,6 +708,40 @@ type NodeBaseReportRecord = {
   createdAt?: string;
 };
 
+type AnalysisSignal = AnalysisReport["signals"][number];
+
+type AnalysisFileFinding = NonNullable<AnalysisReport["fileFindings"]>[number];
+
+type AnalysisReportRecord = {
+  packageName: string;
+  version: string;
+  tarballIntegrity?: string;
+  tarballShasum?: string;
+  analyserVersion?: string;
+  report: AnalysisReport;
+  createdAt?: string;
+};
+
+type AnalysisReportComparisonResult = {
+  packageName: string;
+  version: string;
+  left: AnalysisReportRecord;
+  right: AnalysisReportRecord;
+  comparison: {
+    scoreDelta: number;
+    signals: {
+      added: AnalysisSignal[];
+      removed: AnalysisSignal[];
+      unchanged: AnalysisSignal[];
+    };
+    fileFindings: {
+      added: AnalysisFileFinding[];
+      removed: AnalysisFileFinding[];
+      unchanged: AnalysisFileFinding[];
+    };
+  };
+};
+
 type SmokePackageMetadata = {
   name: string;
   "dist-tags"?: { latest?: string };
@@ -665,6 +807,10 @@ function readFlag(args: string[], flag: string): string | undefined {
   return args[index + 1];
 }
 
+function addOptionalParam(params: URLSearchParams, key: string, value: string | undefined) {
+  if (value) params.set(key, value);
+}
+
 function firstPositionalArg(args: string[]): string | undefined {
   return args.find((arg) => !arg.startsWith("--"));
 }
@@ -720,6 +866,46 @@ function formatList(value: unknown) {
   return items.length > 0 ? items.join(", ") : "(none)";
 }
 
+function dependencyDiffRows(diff: Record<string, unknown> | undefined) {
+  const rows = [
+    ...dependencyGroupRows("runtime", isRecord(diff?.runtime) ? diff.runtime : diff),
+    ...dependencyGroupRows("dev", isRecord(diff?.dev) ? diff.dev : undefined),
+    ...dependencyGroupRows("optional", isRecord(diff?.optional) ? diff.optional : undefined),
+    ...dependencyGroupRows("peer", isRecord(diff?.peer) ? diff.peer : undefined)
+  ];
+  return rows.sort((left, right) => `${left.group}:${left.name}`.localeCompare(`${right.group}:${right.name}`));
+}
+
+function dependencyGroupRows(group: string, diff: Record<string, unknown> | undefined) {
+  const added = isRecord(diff?.added) ? Object.entries(diff.added).map(([name, version]) => ({ group, name, previous: "", target: String(version), change: "added" })) : [];
+  const removed = isRecord(diff?.removed) ? Object.entries(diff.removed).map(([name, version]) => ({ group, name, previous: String(version), target: "", change: "removed" })) : [];
+  const changed = isRecord(diff?.changed)
+    ? Object.entries(diff.changed).map(([name, value]) => {
+        const change = isRecord(value) ? value : {};
+        return { group, name, previous: String(change.previous ?? ""), target: String(change.target ?? ""), change: "changed" };
+      })
+    : [];
+  return [...added, ...removed, ...changed];
+}
+
+function formatEvidence(evidence: Record<string, unknown> | undefined) {
+  return evidence ? JSON.stringify(evidence) : "";
+}
+
+function analysisReportIdentity(record: AnalysisReportRecord) {
+  const report = record.report;
+  const identity = [record.tarballIntegrity ?? report.tarballIntegrity, record.tarballShasum ?? report.tarballShasum, record.analyserVersion ?? report.analyserVersion].filter(Boolean);
+  return identity.length > 0 ? identity.join(" / ") : "latest";
+}
+
+function hasHighAnalysisRisk(report: AnalysisReport) {
+  return report.signals.some(isHighSeverity) || (report.fileFindings ?? []).some(isHighSeverity);
+}
+
+function isHighSeverity(item: { severity: string }) {
+  return item.severity === "high" || item.severity === "critical";
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -742,6 +928,8 @@ function usage() {
   anvil queue status
   anvil popular-index show
   anvil popular-index upload popular-index.json [--generated-at 2026-05-20T00:00:00Z]
+  anvil reports package@version [--integrity sha512-...] [--shasum ...] [--analyser static-v1]
+  anvil reports compare package@version [--left-integrity sha512-old] [--right-integrity sha512-new]
   anvil node-base reports [--type dependency|lifecycle|ioc|network] [--risk risky|high|medium] [--limit 20]
   anvil node-base report <id>
   anvil policy test package.json

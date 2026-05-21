@@ -629,6 +629,125 @@ importers:
     expect(writes.join("")).toContain("- total pending: 6");
   });
 
+  it("prints persisted analysis report detail through the admin API", async () => {
+    const writes: string[] = [];
+    const dependencies = fakeDependencies({
+      env: { ANVIL_ADMIN_URL: "http://admin.test" },
+      fetch: vi.fn(async (url: string) => {
+        expect(url).toBe("http://admin.test/api/reports/pkg/1.0.0?integrity=sha512-new&analyser=static-v2");
+        return jsonResponse({
+          report: {
+            packageName: "pkg",
+            version: "1.0.0",
+            tarballIntegrity: "sha512-new",
+            analyserVersion: "static-v2",
+            createdAt: "2026-05-21T10:00:00.000Z",
+            report: {
+              packageName: "pkg",
+              version: "1.0.0",
+              analyserVersion: "static-v2",
+              policyVersion: "policy-v1",
+              tarballIntegrity: "sha512-new",
+              score: 80,
+              signals: [{ code: "NEW_DEPENDENCY_IN_PATCH_VERSION", severity: "high", message: "Patch version added runtime dependencies." }],
+              dependencyDiff: { runtime: { added: { "left-pad": "^1.0.0" } } },
+              fileFindings: [{ path: "install.js", code: "USES_CHILD_PROCESS", reason: "Uses child process.", severity: "high", evidence: { pattern: "child_process" } }],
+              createdAt: "2026-05-21T10:00:00.000Z"
+            }
+          }
+        });
+      }) as unknown as typeof globalThis.fetch,
+      stdout: {
+        write: (value: string) => {
+          writes.push(value);
+          return true;
+        }
+      }
+    });
+
+    const exitCode = await run(["reports", "pkg@1.0.0", "--integrity", "sha512-new", "--analyser", "static-v2"], dependencies);
+
+    expect(exitCode).toBe(1);
+    expect(writes.join("")).toContain("Analysis report pkg@1.0.0");
+    expect(writes.join("")).toContain("Analyser: static-v2");
+    expect(writes.join("")).toContain("NEW_DEPENDENCY_IN_PATCH_VERSION [high]");
+    expect(writes.join("")).toContain("runtime added left-pad -> ^1.0.0");
+    expect(writes.join("")).toContain("install.js USES_CHILD_PROCESS [high]");
+  });
+
+  it("prints persisted analysis report comparisons through the admin API", async () => {
+    const writes: string[] = [];
+    const dependencies = fakeDependencies({
+      env: { ANVIL_ADMIN_URL: "http://admin.test" },
+      fetch: vi.fn(async (url: string) => {
+        expect(url).toBe("http://admin.test/api/packages/pkg/1.0.0/reports/compare?leftIntegrity=sha512-old&rightIntegrity=sha512-new");
+        return jsonResponse({
+          packageName: "pkg",
+          version: "1.0.0",
+          left: {
+            packageName: "pkg",
+            version: "1.0.0",
+            tarballIntegrity: "sha512-old",
+            analyserVersion: "static-v1",
+            report: {
+              packageName: "pkg",
+              version: "1.0.0",
+              analyserVersion: "static-v1",
+              policyVersion: "policy-v1",
+              score: 10,
+              signals: [],
+              fileFindings: [],
+              createdAt: "2026-05-21T09:00:00.000Z"
+            }
+          },
+          right: {
+            packageName: "pkg",
+            version: "1.0.0",
+            tarballIntegrity: "sha512-new",
+            analyserVersion: "static-v2",
+            report: {
+              packageName: "pkg",
+              version: "1.0.0",
+              analyserVersion: "static-v2",
+              policyVersion: "policy-v1",
+              score: 60,
+              signals: [{ code: "INSTALL_SCRIPT_CHANGED", severity: "medium", message: "Install script changed." }],
+              fileFindings: [{ path: "scripts/install.js", code: "NETWORK_ACCESS_IN_INSTALL_PATH", reason: "Network access in install path.", severity: "high" }],
+              createdAt: "2026-05-21T10:00:00.000Z"
+            }
+          },
+          comparison: {
+            scoreDelta: 50,
+            signals: {
+              added: [{ code: "INSTALL_SCRIPT_CHANGED", severity: "medium", message: "Install script changed." }],
+              removed: [],
+              unchanged: []
+            },
+            fileFindings: {
+              added: [{ path: "scripts/install.js", code: "NETWORK_ACCESS_IN_INSTALL_PATH", reason: "Network access in install path.", severity: "high" }],
+              removed: [],
+              unchanged: []
+            }
+          }
+        });
+      }) as unknown as typeof globalThis.fetch,
+      stdout: {
+        write: (value: string) => {
+          writes.push(value);
+          return true;
+        }
+      }
+    });
+
+    const exitCode = await run(["reports", "compare", "pkg@1.0.0", "--left-integrity", "sha512-old", "--right-integrity", "sha512-new"], dependencies);
+
+    expect(exitCode).toBe(1);
+    expect(writes.join("")).toContain("Analysis report comparison pkg@1.0.0");
+    expect(writes.join("")).toContain("Score delta: 50");
+    expect(writes.join("")).toContain("INSTALL_SCRIPT_CHANGED [medium]");
+    expect(writes.join("")).toContain("scripts/install.js NETWORK_ACCESS_IN_INSTALL_PATH [high]");
+  });
+
   it("smoke tests gateway metadata and tarball proxying", async () => {
     const writes: string[] = [];
     const fetch = vi.fn(async (url: string) => {
