@@ -230,12 +230,19 @@ function parsePackageJson(content: string): PackageTarget[] {
 
   for (const dependencies of [parsed.dependencies, parsed.devDependencies, parsed.optionalDependencies, parsed.peerDependencies]) {
     for (const [packageName, versionRange] of Object.entries(dependencies ?? {})) {
-      if (versionRange.startsWith("file:") || versionRange.startsWith("link:") || versionRange.startsWith("workspace:")) continue;
-      targets.set(packageName, { packageName, version: "latest" });
+      const target = packageJsonDependencyTarget(packageName, versionRange);
+      if (!target) continue;
+      targets.set(target.packageName, target);
     }
   }
 
   return [...targets.values()].sort(compareTargets);
+}
+
+function packageJsonDependencyTarget(packageName: string, versionRange: string): PackageTarget | undefined {
+  if (versionRange.startsWith("file:") || versionRange.startsWith("link:") || versionRange.startsWith("workspace:")) return undefined;
+  const npmAlias = versionRange.match(/^npm:((?:@[^/\s]+\/)?[^@\s]+)(?:@.+)?$/);
+  return { packageName: npmAlias?.[1] ?? packageName, version: "latest" };
 }
 
 async function doctor(dependencies: CliDependencies): Promise<number> {

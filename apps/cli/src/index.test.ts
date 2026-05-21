@@ -103,6 +103,31 @@ alias-left-pad@npm:left-pad@^1.3.0:
     ]);
   });
 
+  it("parses package.json registry dependencies and npm aliases", async () => {
+    const targets = await parseLockfile(
+      "package.json",
+      async () => JSON.stringify({
+        dependencies: {
+          "alias-left-pad": "npm:left-pad@^1.3.0",
+          "@scope/alias": "npm:@scope/real@^2.0.0",
+          react: "^19.0.0",
+          local: "file:../local"
+        },
+        devDependencies: {
+          "workspace-tool": "workspace:*",
+          typescript: "^5.8.0"
+        }
+      })
+    );
+
+    expect(targets).toEqual([
+      { packageName: "@scope/real", version: "latest" },
+      { packageName: "left-pad", version: "latest" },
+      { packageName: "react", version: "latest" },
+      { packageName: "typescript", version: "latest" }
+    ]);
+  });
+
   it("explains a package using the gateway", async () => {
     const writes: string[] = [];
     const dependencies = fakeDependencies({
