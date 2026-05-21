@@ -16,6 +16,13 @@ export default $config({
         retry: 3
       }
     });
+    const upstreamNpmRegistriesJson = process.env.UPSTREAM_NPM_REGISTRIES_JSON ?? "";
+    const upstreamRegistryAuthSecrets = upstreamRegistryAuthSecretNames(upstreamNpmRegistriesJson).map((secretName) => ({
+      secretName,
+      secret: new sst.Secret(secretName)
+    }));
+    const upstreamRegistryAuthEnvironment = Object.fromEntries(upstreamRegistryAuthSecrets.map(({ secretName, secret }) => [secretName, secret.value]));
+    const upstreamRegistryAuthSecretLinks = upstreamRegistryAuthSecrets.map(({ secret }) => secret);
     const adminToken = new sst.Secret("AdminToken");
     const llmReviewApiKey = new sst.Secret("LlmReviewApiKey", "");
     const database = new sst.aws.Postgres("Database", {
@@ -47,8 +54,9 @@ export default $config({
       QUEUE_DRIVER: "sqs",
       ANALYSIS_QUEUE_URL: queue.url,
       UPSTREAM_NPM_REGISTRY: "https://registry.npmjs.org",
-      UPSTREAM_NPM_REGISTRIES_JSON: process.env.UPSTREAM_NPM_REGISTRIES_JSON ?? "",
+      UPSTREAM_NPM_REGISTRIES_JSON: upstreamNpmRegistriesJson,
       NPM_DOWNLOADS_API: "https://api.npmjs.org/downloads",
+      ...upstreamRegistryAuthEnvironment,
       ...databaseEnvironment
     };
     const llmReviewEnvironment = {
@@ -109,7 +117,7 @@ export default $config({
         PUBLIC_BASE_URL: publicBaseUrl,
         ADMIN_TOKEN: adminToken.value
       },
-      link: [bucket, queue, database, adminToken]
+      link: [bucket, queue, database, adminToken, ...upstreamRegistryAuthSecretLinks]
     });
 
     const admin = new sst.aws.Service("Admin", {
@@ -144,7 +152,7 @@ export default $config({
         ANVIL_API_BASE_URL: adminApiBaseUrl,
         ADMIN_TOKEN: adminToken.value
       },
-      link: [bucket, database, adminToken]
+      link: [bucket, database, adminToken, ...upstreamRegistryAuthSecretLinks]
     });
 
     new sst.aws.Service("Worker", {
@@ -165,7 +173,7 @@ export default $config({
         ...llmReviewEnvironment,
         LLM_REVIEW_API_KEY: llmReviewApiKey.value
       },
-      link: [bucket, queue, database, llmReviewApiKey]
+      link: [bucket, queue, database, llmReviewApiKey, ...upstreamRegistryAuthSecretLinks]
     });
 
     return {
@@ -176,3 +184,29 @@ export default $config({
     };
   }
 });
+
+function upstreamRegistryAuthSecretNames(json: string) {
+  const trimmed = json.trim();
+  if (!trimmed) return [];
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed) as unknown;
+  } catch {
+    throw new Error("UPSTREAM_NPM_REGISTRIES_JSON must be valid JSON.");
+  }
+
+  if (!Array.isArray(parsed)) return [];
+
+  return [
+    ...new Set(
+      parsed
+        .map((entry) => (isRecord(entry) && typeof entry.authTokenSecretName === "string" ? entry.authTokenSecretName.trim() : ""))
+        .filter((secretName) => secretName.length > 0)
+    )
+  ];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
