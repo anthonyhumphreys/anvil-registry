@@ -98,7 +98,7 @@ services:
       - "3000:3000"
     environment:
       ANVIL_API_BASE_URL: http://gateway:4873
-      ADMIN_TOKEN: local-dev-token
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-local-dev-token}
       DATABASE_URL: postgres://anvil:anvil@postgres:5432/anvil
       PERSISTENCE_DRIVER: postgres
       OBJECT_STORE_DRIVER: s3
