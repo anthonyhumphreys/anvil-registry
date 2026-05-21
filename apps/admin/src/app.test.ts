@@ -49,20 +49,24 @@ describe("admin app", () => {
     const decisions = await app.inject({ method: "GET", url: "/api/decisions?action=block" });
     const reports = await app.inject({ method: "GET", url: "/api/reports" });
     const overrides = await app.inject({ method: "GET", url: "/api/overrides" });
+    const filteredOverrides = await app.inject({ method: "GET", url: "/api/overrides?packageName=pkg&version=1.0.0" });
     const nodeBaseReports = await app.inject({ method: "GET", url: "/api/node-base/reports" });
     const policy = await app.inject({ method: "GET", url: "/api/policy" });
     const popularPackageIndex = await app.inject({ method: "GET", url: "/api/popular-package-index" });
     const auditEvents = await app.inject({ method: "GET", url: "/api/audit-events" });
+    const filteredAuditEvents = await app.inject({ method: "GET", url: "/api/audit-events?targetId=pkg@1.0.0" });
 
     expect(decisions.json().decisions).toHaveLength(1);
     expect(reports.json().reports).toHaveLength(1);
     expect(overrides.json().overrides).toHaveLength(1);
+    expect(filteredOverrides.json().overrides).toHaveLength(1);
     expect(nodeBaseReports.json().reports).toHaveLength(1);
     expect(nodeBaseReports.json().reports[0]).toMatchObject({ source: "devcontainer", projectName: "demo", reportType: "dependency" });
     expect(policy.json()).toMatchObject({ runtimeMode: "development", policy: { version: "2026-05-20.1", minimumPackageAgeDays: 7 } });
     expect(popularPackageIndex.json().popularPackages).toEqual(expect.arrayContaining([expect.objectContaining({ name: "lodash" })]));
     expect(popularPackageIndex.json().knownConfusions).toMatchObject({ loadash: "lodash" });
     expect(auditEvents.json().auditEvents).toHaveLength(1);
+    expect(filteredAuditEvents.json().auditEvents).toHaveLength(1);
     await app.close();
   });
 

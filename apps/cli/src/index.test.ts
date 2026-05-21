@@ -629,6 +629,79 @@ importers:
     expect(writes.join("")).toContain("- total pending: 6");
   });
 
+  it("lists overrides through the admin API", async () => {
+    const writes: string[] = [];
+    const dependencies = fakeDependencies({
+      env: { ANVIL_ADMIN_URL: "http://admin.test" },
+      fetch: vi.fn(async (url: string) => {
+        expect(url).toBe("http://admin.test/api/overrides?limit=5&packageName=pkg&version=1.0.0");
+        return jsonResponse({
+          overrides: [
+            {
+              override: {
+                packageName: "pkg",
+                version: "1.0.0",
+                action: "allow",
+                reason: "intentional",
+                approvedBy: "reviewer",
+                expiresAt: "2026-06-20T00:00:00.000Z"
+              },
+              createdAt: "2026-05-21T10:00:00.000Z"
+            }
+          ]
+        });
+      }) as unknown as typeof globalThis.fetch,
+      stdout: {
+        write: (value: string) => {
+          writes.push(value);
+          return true;
+        }
+      }
+    });
+
+    const exitCode = await run(["overrides", "--target", "pkg@1.0.0", "--limit", "5"], dependencies);
+
+    expect(exitCode).toBe(0);
+    expect(writes.join("")).toContain("Overrides: 1");
+    expect(writes.join("")).toContain("pkg@1.0.0 allow active by=reviewer");
+    expect(writes.join("")).toContain("intentional");
+  });
+
+  it("lists audit events through the admin API", async () => {
+    const writes: string[] = [];
+    const dependencies = fakeDependencies({
+      env: { ANVIL_ADMIN_URL: "http://admin.test" },
+      fetch: vi.fn(async (url: string) => {
+        expect(url).toBe("http://admin.test/api/audit-events?limit=10&targetId=pkg%401.0.0");
+        return jsonResponse({
+          auditEvents: [
+            {
+              actor: "worker",
+              eventType: "analysis.completed",
+              targetType: "package",
+              targetId: "pkg@1.0.0",
+              metadata: { action: "warn", score: 20 },
+              createdAt: "2026-05-21T10:00:00.000Z"
+            }
+          ]
+        });
+      }) as unknown as typeof globalThis.fetch,
+      stdout: {
+        write: (value: string) => {
+          writes.push(value);
+          return true;
+        }
+      }
+    });
+
+    const exitCode = await run(["audit-events", "--target", "pkg@1.0.0", "--limit", "10"], dependencies);
+
+    expect(exitCode).toBe(0);
+    expect(writes.join("")).toContain("Audit events: 1");
+    expect(writes.join("")).toContain("analysis.completed package:pkg@1.0.0 actor=worker");
+    expect(writes.join("")).toContain('"action":"warn"');
+  });
+
   it("prints persisted analysis report detail through the admin API", async () => {
     const writes: string[] = [];
     const dependencies = fakeDependencies({

@@ -34,6 +34,8 @@ export async function run(argv: string[], dependencies: CliDependencies = defaul
     if (command === "revoke") return await revoke(args, dependencies);
     if (command === "llm-review") return await llmReview(args, dependencies);
     if (command === "queue" && args[0] === "status") return await queueStatus(args.slice(1), dependencies);
+    if (command === "overrides") return await overrides(args, dependencies);
+    if (command === "audit-events") return await auditEvents(args, dependencies);
     if (command === "reports" && args[0] === "compare") return await analysisReportCompare(args.slice(1), dependencies);
     if (command === "reports") return await analysisReport(args, dependencies);
     if (command === "popular-index" && args[0] === "show") return await popularIndexShow(args.slice(1), dependencies);
@@ -327,6 +329,43 @@ async function queueStatus(_args: string[], dependencies: CliDependencies): Prom
   return 0;
 }
 
+async function overrides(args: string[], dependencies: CliDependencies): Promise<number> {
+  const adminUrl = adminBaseUrl(dependencies.env);
+  const params = new URLSearchParams({ limit: readFlag(args, "--limit") ?? "20" });
+  const targetArg = readFlag(args, "--target");
+  if (targetArg) {
+    const target = parseTarget(targetArg);
+    params.set("packageName", target.packageName);
+    if (target.version !== "latest") params.set("version", target.version);
+  }
+  addOptionalParam(params, "packageName", readFlag(args, "--package"));
+  addOptionalParam(params, "version", readFlag(args, "--version"));
+
+  const result = await requestJson<{ overrides: OverrideRecord[] }>(dependencies, `${adminUrl}/api/overrides?${params.toString()}`);
+  dependencies.stdout.write(`Overrides: ${result.overrides.length}\n`);
+  if (result.overrides.length === 0) {
+    dependencies.stdout.write("No overrides found.\n");
+    return 0;
+  }
+  for (const record of result.overrides) dependencies.stdout.write(formatOverrideLine(record));
+  return 0;
+}
+
+async function auditEvents(args: string[], dependencies: CliDependencies): Promise<number> {
+  const adminUrl = adminBaseUrl(dependencies.env);
+  const params = new URLSearchParams({ limit: readFlag(args, "--limit") ?? "20" });
+  addOptionalParam(params, "targetId", readFlag(args, "--target"));
+
+  const result = await requestJson<{ auditEvents: AuditEventRecord[] }>(dependencies, `${adminUrl}/api/audit-events?${params.toString()}`);
+  dependencies.stdout.write(`Audit events: ${result.auditEvents.length}\n`);
+  if (result.auditEvents.length === 0) {
+    dependencies.stdout.write("No audit events found.\n");
+    return 0;
+  }
+  for (const event of result.auditEvents) dependencies.stdout.write(formatAuditEventLine(event));
+  return 0;
+}
+
 async function popularIndexShow(_args: string[], dependencies: CliDependencies): Promise<number> {
   const adminUrl = adminBaseUrl(dependencies.env);
   const index = await requestJson<PopularPackageIndex>(dependencies, `${adminUrl}/api/popular-package-index`);
@@ -611,6 +650,22 @@ function printQueueStatus(queue: AnalysisQueueStats, dependencies: CliDependenci
   dependencies.stdout.write(`- checked: ${queue.checkedAt}\n`);
 }
 
+function formatOverrideLine(record: OverrideRecord) {
+  const override = record.override;
+  const status = overrideStatus(record);
+  const created = record.createdAt ? ` created=${record.createdAt}` : "";
+  const expiry = override.expiresAt ? ` expires=${override.expiresAt}` : "";
+  const reviewer = override.approvedBy ? ` by=${override.approvedBy}` : "";
+  return `- ${override.packageName}${override.version ? `@${override.version}` : ""} ${override.action} ${status}${reviewer}${expiry}${created}: ${override.reason}\n`;
+}
+
+function formatAuditEventLine(event: AuditEventRecord) {
+  const actor = event.actor ? ` actor=${event.actor}` : "";
+  const created = event.createdAt ? ` created=${event.createdAt}` : "";
+  const metadata = event.metadata ? ` ${JSON.stringify(event.metadata)}` : "";
+  return `- ${event.eventType} ${event.targetType}:${event.targetId}${actor}${created}${metadata}\n`;
+}
+
 function formatNodeBaseReportLine(report: NodeBaseReportRecord) {
   const risk = nodeBaseReportRisk(report);
   const highlights = nodeBaseHighlights(report);
@@ -740,6 +795,21 @@ type AnalysisReportComparisonResult = {
       unchanged: AnalysisFileFinding[];
     };
   };
+};
+
+type OverrideRecord = {
+  override: Override;
+  createdAt?: string;
+  revokedAt?: string;
+};
+
+type AuditEventRecord = {
+  actor?: string;
+  eventType: string;
+  targetType: string;
+  targetId: string;
+  metadata?: Record<string, unknown>;
+  createdAt?: string;
 };
 
 type SmokePackageMetadata = {
@@ -898,6 +968,12 @@ function analysisReportIdentity(record: AnalysisReportRecord) {
   return identity.length > 0 ? identity.join(" / ") : "latest";
 }
 
+function overrideStatus(record: OverrideRecord) {
+  if (record.revokedAt) return "revoked";
+  if (record.override.expiresAt && Date.parse(record.override.expiresAt) <= Date.now()) return "expired";
+  return "active";
+}
+
 function hasHighAnalysisRisk(report: AnalysisReport) {
   return report.signals.some(isHighSeverity) || (report.fileFindings ?? []).some(isHighSeverity);
 }
@@ -926,6 +1002,8 @@ function usage() {
   anvil revoke package@version [--revoked-by reviewer]
   anvil llm-review package@version [--requested-by reviewer] [--priority high]
   anvil queue status
+  anvil overrides [--target package@version] [--package package] [--version version] [--limit 20]
+  anvil audit-events [--target package@version] [--limit 20]
   anvil popular-index show
   anvil popular-index upload popular-index.json [--generated-at 2026-05-20T00:00:00Z]
   anvil reports package@version [--integrity sha512-...] [--shasum ...] [--analyser static-v1]

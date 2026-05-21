@@ -82,13 +82,13 @@ export function buildAdmin(dependencies: AdminDependencies = {}): FastifyInstanc
   });
 
   app.get("/api/overrides", async (request) => {
-    const query = request.query as { limit?: string };
-    return { overrides: await persistence.listOverrides({ limit: parseLimit(query.limit) }) };
+    const query = request.query as { packageName?: string; version?: string; limit?: string };
+    return { overrides: await persistence.listOverrides({ packageName: query.packageName, version: query.version, limit: parseLimit(query.limit) }) };
   });
 
   app.get("/api/audit-events", async (request) => {
-    const query = request.query as { limit?: string };
-    return { auditEvents: await persistence.listAuditEvents({ limit: parseLimit(query.limit) }) };
+    const query = request.query as { targetId?: string; limit?: string };
+    return { auditEvents: await persistence.listAuditEvents({ targetId: query.targetId, limit: parseLimit(query.limit) }) };
   });
 
   app.get("/api/policy", async () => ({ runtimeMode: config.RUNTIME_MODE, policy: config.policy }));
