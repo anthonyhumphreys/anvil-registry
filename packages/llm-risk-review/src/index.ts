@@ -69,7 +69,7 @@ export class HttpLlmRiskReviewProvider implements LlmRiskReviewProvider {
     });
 
     if (!response.ok) return undefined;
-    const body = await response.json();
+    const body = await safeResponseJson(response);
     const candidate = extractReviewCandidate(body);
     const parsed = llmRiskReviewSchema.safeParse(candidate);
     return parsed.success ? parsed.data : undefined;
@@ -110,6 +110,14 @@ function extractReviewCandidate(body: unknown): unknown {
   }
 
   return body;
+}
+
+async function safeResponseJson(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch {
+    return undefined;
+  }
 }
 
 function parseJson(text: string): unknown {

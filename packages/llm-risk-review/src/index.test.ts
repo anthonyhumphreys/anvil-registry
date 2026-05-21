@@ -100,6 +100,22 @@ describe("llmRiskReviewSchema", () => {
     ).resolves.toBeUndefined();
   });
 
+  it("ignores malformed HTTP provider JSON", async () => {
+    const provider = new HttpLlmRiskReviewProvider({
+      endpoint: "https://llm.example.test/review",
+      fetch: (async () => new Response("{ nope", { status: 200 })) as unknown as typeof fetch
+    });
+
+    await expect(
+      provider.review({
+        packageName: "pkg",
+        version: "1.0.0",
+        similarPopularPackages: [],
+        deterministicSignals: []
+      })
+    ).resolves.toBeUndefined();
+  });
+
   it("creates a disabled provider without an endpoint", async () => {
     const provider = createLlmRiskReviewProvider({ enabled: true });
 
