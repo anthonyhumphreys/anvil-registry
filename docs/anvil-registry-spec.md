@@ -377,9 +377,11 @@ The CLI gives developers a way to inspect decisions before install or CI.
 ```bash
 anvil scan package-lock.json
 anvil scan pnpm-lock.yaml --queue-analysis
+anvil scan yarn.lock --queue-analysis
 anvil explain react@19.0.0
 anvil explain @tanstack/react-query@latest
 anvil warm package-lock.json
+anvil warm yarn.lock
 anvil approve package@version --reason "intentional dependency" --expires-at 2026-06-20T00:00:00Z
 anvil revoke package@version --revoked-by reviewer
 anvil llm-review package@version --requested-by reviewer

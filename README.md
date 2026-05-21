@@ -85,6 +85,7 @@ Common commands:
 ```bash
 ANVIL_REGISTRY_URL=http://localhost:4873 anvil explain is-number@7.0.0
 ANVIL_REGISTRY_URL=http://localhost:4873 anvil scan pnpm-lock.yaml --queue-analysis
+ANVIL_REGISTRY_URL=http://localhost:4873 anvil scan yarn.lock --queue-analysis
 ANVIL_REGISTRY_URL=http://localhost:4873 anvil warm package-lock.json
 ANVIL_REGISTRY_URL=http://localhost:4873 ANVIL_ADMIN_TOKEN=local-dev-token anvil queue status
 ANVIL_ADMIN_URL=http://localhost:3000 anvil reports is-number@7.0.0

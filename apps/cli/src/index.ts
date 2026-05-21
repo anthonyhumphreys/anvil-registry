@@ -62,6 +62,7 @@ export async function parseLockfile(path: string, read: ReadTextFile = (filePath
   const content = await read(path);
   if (basename(path) === "package-lock.json") return parsePackageLock(content);
   if (basename(path) === "pnpm-lock.yaml") return parsePnpmLock(content);
+  if (basename(path) === "yarn.lock") return parseYarnLock(content);
   if (basename(path) === "package.json") return parsePackageJson(content);
   throw new Error(`Unsupported file type: ${path}`);
 }
@@ -140,6 +141,84 @@ function cleanPnpmTarget(packageName: string | undefined, version: string | unde
   return { packageName, version };
 }
 
+function parseYarnLock(content: string): PackageTarget[] {
+  const targets = new Map<string, PackageTarget>();
+  let currentDescriptors: string[] = [];
+  let currentVersion: string | undefined;
+
+  const flush = () => {
+    if (!currentVersion) return;
+    for (const descriptor of currentDescriptors) {
+      const packageName = packageNameFromYarnDescriptor(descriptor);
+      if (!packageName) continue;
+      targets.set(`${packageName}@${currentVersion}`, { packageName, version: currentVersion });
+    }
+  };
+
+  for (const line of content.split(/\r?\n/)) {
+    if (isYarnLockEntryLine(line)) {
+      flush();
+      currentDescriptors = splitYarnDescriptors(line.slice(0, -1));
+      currentVersion = undefined;
+      continue;
+    }
+
+    const version = line.match(/^\s+version:?\s+"?([^"\s]+)"?\s*$/)?.[1];
+    if (version && !isWorkspaceOrFileVersion(version)) currentVersion = version;
+  }
+
+  flush();
+  return [...targets.values()].sort(compareTargets);
+}
+
+function isYarnLockEntryLine(line: string) {
+  return Boolean(line) && !line.startsWith(" ") && !line.startsWith("\t") && !line.startsWith("#") && line.endsWith(":");
+}
+
+function splitYarnDescriptors(raw: string): string[] {
+  const descriptors: string[] = [];
+  let current = "";
+  let quote: string | undefined;
+
+  for (const char of raw) {
+    if ((char === "'" || char === '"') && !quote) {
+      quote = char;
+      continue;
+    }
+    if (quote === char) {
+      quote = undefined;
+      continue;
+    }
+    if (char === "," && !quote) {
+      if (current.trim()) descriptors.push(current.trim());
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+
+  if (current.trim()) descriptors.push(current.trim());
+  return descriptors;
+}
+
+function packageNameFromYarnDescriptor(descriptor: string): string | undefined {
+  const key = descriptor.trim();
+  if (!key || key === "__metadata") return undefined;
+  const npmAlias = key.match(/^((?:@[^/\s]+\/)?[^@\s]+)@npm:((?:@[^/\s]+\/)?[^@\s]+)@.+$/);
+  if (npmAlias) return npmAlias[2];
+  const npmProtocol = key.match(/^((?:@[^/\s]+\/)?[^@\s]+)@npm:.+$/);
+  if (npmProtocol) return npmProtocol[1];
+  if (key.includes("@workspace:") || key.includes("@file:") || key.includes("@link:")) return undefined;
+
+  const atIndex = key.startsWith("@") ? key.lastIndexOf("@") : key.indexOf("@");
+  if (atIndex <= 0) return undefined;
+  return key.slice(0, atIndex);
+}
+
+function isWorkspaceOrFileVersion(version: string) {
+  return version.startsWith("workspace:") || version.startsWith("file:") || version.startsWith("link:");
+}
+
 function parsePackageJson(content: string): PackageTarget[] {
   const parsed = JSON.parse(content) as {
     dependencies?: Record<string, string>;
@@ -184,7 +263,7 @@ async function explain(args: string[], dependencies: CliDependencies): Promise<n
 
 async function scan(args: string[], dependencies: CliDependencies): Promise<number> {
   const path = firstPositionalArg(args);
-  if (!path) throw new Error("Usage: anvil scan package-lock.json|pnpm-lock.yaml [--queue-analysis]");
+  if (!path) throw new Error("Usage: anvil scan package-lock.json|pnpm-lock.yaml|yarn.lock [--queue-analysis]");
   const shouldQueueAnalysis = hasFlag(args, "--queue-analysis");
   const targets = await parseLockfile(path, dependencies.readFile);
   const results = await Promise.all(targets.map((target) => explainTarget(target, dependencies)));
@@ -209,7 +288,7 @@ async function scan(args: string[], dependencies: CliDependencies): Promise<numb
 
 async function warm(args: string[], dependencies: CliDependencies): Promise<number> {
   const path = args[0];
-  if (!path) throw new Error("Usage: anvil warm package-lock.json|pnpm-lock.yaml");
+  if (!path) throw new Error("Usage: anvil warm package-lock.json|pnpm-lock.yaml|yarn.lock");
   const targets = await parseLockfile(path, dependencies.readFile);
   const packages = [...new Set(targets.map((target) => target.packageName))].sort();
   const registryUrl = registryBaseUrl(dependencies.env);
@@ -1022,7 +1101,9 @@ function usage() {
   anvil explain package@version
   anvil scan package-lock.json [--queue-analysis]
   anvil scan pnpm-lock.yaml [--queue-analysis]
+  anvil scan yarn.lock [--queue-analysis]
   anvil warm package-lock.json
+  anvil warm yarn.lock
   anvil smoke [package]
   anvil approve package@version --reason "intentional dependency" [--expires-at 2026-06-20T00:00:00Z]
   anvil revoke package@version [--revoked-by reviewer]

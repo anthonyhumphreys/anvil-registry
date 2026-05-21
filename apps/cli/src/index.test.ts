@@ -72,6 +72,37 @@ importers:
     ]);
   });
 
+  it("parses Yarn lock package entries", async () => {
+    const targets = await parseLockfile(
+      "yarn.lock",
+      async () => `# yarn lockfile v1
+
+"@scope/pkg@^1.0.0", "@scope/pkg@~1.2.0":
+  version "1.2.3"
+  resolved "https://registry.yarnpkg.com/@scope/pkg/-/pkg-1.2.3.tgz"
+
+left-pad@^1.3.0:
+  version "1.3.0"
+
+alias-left-pad@npm:left-pad@^1.3.0:
+  version "1.3.0"
+
+"@tooling/bundler@npm:^6.0.0":
+  version: 6.3.5
+  resolution: "@tooling/bundler@npm:6.3.5"
+
+"workspace-pkg@workspace:*":
+  version: 0.0.0-use.local
+`
+    );
+
+    expect(targets).toEqual([
+      { packageName: "@scope/pkg", version: "1.2.3" },
+      { packageName: "@tooling/bundler", version: "6.3.5" },
+      { packageName: "left-pad", version: "1.3.0" }
+    ]);
+  });
+
   it("explains a package using the gateway", async () => {
     const writes: string[] = [];
     const dependencies = fakeDependencies({
