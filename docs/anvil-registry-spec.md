@@ -206,6 +206,7 @@ POST /-/anvil/llm-review
 POST /-/anvil/override
 POST /-/anvil/node-base/reports
 GET  /-/anvil/policy
+GET  /-/anvil/queue
 ```
 
 `GET /-/health` is a liveness check and should only prove the gateway process can answer HTTP. `GET /-/ready` is a traffic-readiness check and must fail with HTTP 503 when required runtime dependencies are unavailable. At minimum, readiness should report component status for persistence, object storage, and the analysis queue so load balancers and deploy scripts do not route npm install traffic into a service that can only provide interpretive dance.
@@ -217,6 +218,8 @@ GET  /-/anvil/policy
 `POST /-/anvil/override` and `POST /-/anvil/override/revoke` are token-gated mutation routes. Create requests must include a non-empty `packageName` and `reason`, default `action` to `allow`, trim string fields, reject unknown actions, and validate payloads before writing overrides or audit events.
 
 `POST /-/anvil/node-base/reports` accepts token-gated Anvil Node Base JSON reports for Admin visibility. The body is validated with Zod, requires a simple report type and JSON object report, and may include `source`, `projectName`, and `summary`. If `summary` is omitted, the gateway can lift `report.summary` into the persisted report summary.
+
+`GET /-/anvil/queue` is a token-gated operator endpoint that returns analysis queue depth for the configured queue driver. BullMQ reports waiting, active, delayed, failed, completed, and total pending counts. SQS reports approximate waiting, in-flight, and delayed counts from queue attributes because AWS enjoys putting "approximate" in the one place operators want a number.
 
 Actual npm scoped package paths can be quirky, so route handling must be tested against real npm, pnpm, and yarn requests.
 
@@ -320,6 +323,8 @@ The command must exit `0` only when the worker can reach required runtime depend
 
 The gateway exposes `POST /-/anvil/analyze` so developer tools can enqueue explicit package analysis without waiting for a blocked metadata or tarball request. It accepts either a single `packageName`/`version` pair or a `targets` array, deduplicates exact package/version pairs, and enqueues `AnalysisJob` messages with `manual_review` by default. CLI lockfile warming uses `reason: "lockfile_scan"` so worker output can be traced back to preinstall review rather than install-path enforcement. `anvil scan --queue-analysis` uses the same route for risky or not-yet-reviewed lockfile targets after printing the policy verdict.
 
+`anvil queue status` calls `GET /-/anvil/queue` with the admin token and prints current queue depth so local operators can see backlog before blaming policy, npm, or whatever else is closest to hand.
+
 The gateway also exposes token-gated `POST /-/anvil/llm-review` for reviewer-requested model context when LLM review is enabled. It accepts the same single-target or `targets` array shape as `/analyze`, deduplicates exact package/version pairs, enqueues high-priority `manual_review` jobs with `runLlmReview: true`, and records `llm_review.enqueued` audit events. The worker must still respect the private-package opt-in; this route is a review trigger, not a permission slip to leak private source because someone got enthusiastic.
 
 The Admin package review action validates its `requestedBy` and `priority` fields before forwarding to the gateway, and defaults empty form submissions to `admin-ui`/`high`.
@@ -378,6 +383,7 @@ anvil warm package-lock.json
 anvil approve package@version --reason "intentional dependency" --expires-at 2026-06-20T00:00:00Z
 anvil revoke package@version --revoked-by reviewer
 anvil llm-review package@version --requested-by reviewer
+anvil queue status
 anvil popular-index show
 anvil popular-index upload popular-index.json --generated-at 2026-05-20T00:00:00Z
 anvil policy test package.json
