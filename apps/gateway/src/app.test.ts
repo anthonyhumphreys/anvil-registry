@@ -476,6 +476,42 @@ describe("gateway policy enforcement", () => {
     await app.close();
   });
 
+  it("bypasses tarball object caching when upstream metadata lacks immutable integrity", async () => {
+    const metadata = packageMetadata("mutable-package", "2020-01-01T00:00:00.000Z");
+    delete metadata.versions?.["1.0.0"]?.dist?.integrity;
+    delete metadata.versions?.["1.0.0"]?.dist?.shasum;
+    const persistence = new MemoryPersistence();
+    let tarballFetchCount = 0;
+    const fetchTarball = vi.fn(async () => new Uint8Array([1, ++tarballFetchCount]));
+    const app = buildGateway({
+      config: testConfig("development"),
+      persistence,
+      objectStore: new TestObjectStore(),
+      queue: new MemoryJobQueue(),
+      registry: {
+        fetchMetadata: vi.fn(async () => metadata),
+        fetchTarball
+      },
+      downloadStats: noDownloadStats()
+    });
+
+    const first = await app.inject({ method: "GET", url: "/mutable-package/-/mutable-package-1.0.0.tgz" });
+    const second = await app.inject({ method: "GET", url: "/mutable-package/-/mutable-package-1.0.0.tgz" });
+
+    expect(first.statusCode).toBe(200);
+    expect(first.headers["x-anvil-cache"]).toBe("bypass");
+    expect([...first.rawPayload]).toEqual([1, 1]);
+    expect(second.statusCode).toBe(200);
+    expect(second.headers["x-anvil-cache"]).toBe("bypass");
+    expect([...second.rawPayload]).toEqual([1, 2]);
+    expect(fetchTarball).toHaveBeenCalledTimes(2);
+    expect(await persistence.getPackageVersion("mutable-package", "1.0.0")).not.toMatchObject({
+      cachedTarballKey: expect.any(String)
+    });
+
+    await app.close();
+  });
+
   it("quarantines CI tarball requests until static analysis exists", async () => {
     const metadata = packageMetadata("stable-package", "2020-01-01T00:00:00.000Z");
     const queue = new MemoryJobQueue();

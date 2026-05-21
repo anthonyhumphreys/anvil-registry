@@ -376,19 +376,24 @@ export function buildGateway(dependencies: GatewayDependencies = {}): FastifyIns
     const versionMetadata = toVersionMetadata(metadata, version);
     if (!versionMetadata?.tarballUrl) return reply.code(502).send({ error: "ANVIL_UPSTREAM_TARBALL_MISSING", package: packageName, version });
 
-    const cacheKey = tarballCacheKey(packageName, version, versionMetadata.integrity ?? versionMetadata.shasum ?? tarballName);
-    const cached = await objectStore.get(cacheKey);
-    if (cached) {
-      reply.header("content-type", "application/octet-stream");
-      reply.header("x-anvil-cache", "hit");
-      return reply.send(Buffer.from(cached));
+    const cacheIdentity = versionMetadata.integrity ?? versionMetadata.shasum;
+    const cacheKey = cacheIdentity ? tarballCacheKey(packageName, version, cacheIdentity) : undefined;
+    if (cacheKey) {
+      const cached = await objectStore.get(cacheKey);
+      if (cached) {
+        reply.header("content-type", "application/octet-stream");
+        reply.header("x-anvil-cache", "hit");
+        return reply.send(Buffer.from(cached));
+      }
     }
 
     const tarball = await registry.fetchTarball(versionMetadata.tarballUrl);
-    await objectStore.put(cacheKey, tarball);
-    await persistence.putPackageVersion({ packageName, version, cachedTarballKey: cacheKey });
+    if (cacheKey) {
+      await objectStore.put(cacheKey, tarball);
+      await persistence.putPackageVersion({ packageName, version, cachedTarballKey: cacheKey });
+    }
     reply.header("content-type", "application/octet-stream");
-    reply.header("x-anvil-cache", "miss");
+    reply.header("x-anvil-cache", cacheKey ? "miss" : "bypass");
     return reply.send(Buffer.from(tarball));
   }
 
