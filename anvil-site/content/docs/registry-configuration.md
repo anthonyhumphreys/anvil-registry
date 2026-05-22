@@ -81,6 +81,20 @@ Anvil Registry caches:
 
 Metadata cache TTL can be short. Tarball, analysis, and policy cache identity must be immutable. Never reuse an allow decision across a different tarball hash.
 
+## Seed lockfiles before rollout
+
+For a smoother first rollout, seed Anvil with lockfiles from popular repositories in the organisation before developers or CI switch their registry config:
+
+```bash
+ANVIL_REGISTRY_URL=http://localhost:4873 \
+ANVIL_ADMIN_TOKEN=local-dev-token \
+  anvil warm ./seed-lockfiles/package-lock.api.json
+```
+
+Use representative `package-lock.json`, `pnpm-lock.yaml`, and `yarn.lock` files from high-traffic apps, shared packages, and production builds. This warms metadata and tarball cache paths and queues analysis for exact resolved versions. It does not approve anything by itself; policy decisions still come from the normal deterministic pipeline.
+
+See [Registry seeding](/docs/registry-seeding) for collection guidance, commands, queue monitoring, and safety notes.
+
 ## Readiness
 
 Use readiness before routing install traffic:

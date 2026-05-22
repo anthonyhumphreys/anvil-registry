@@ -12,11 +12,11 @@ export function SiteHeader() {
           <span className="flex size-9 items-center justify-center rounded-md bg-foreground text-background">
             <Hammer className="size-5" aria-hidden="true" />
           </span>
-          <span className="text-lg">ANVIL REGISTRY</span>
+          <span className="text-lg" aria-hidden="true">ANVIL REGISTRY</span>
         </Link>
         <nav className="hidden items-center gap-8 text-sm font-medium text-muted-foreground md:flex" aria-label="Main navigation">
           {navItems.map((item) => (
-            <Link key={item.href} href={item.href} className="transition-colors hover:text-foreground">
+            <Link key={item.href} href={item.href} className="rounded-sm transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
               {item.label}
             </Link>
           ))}

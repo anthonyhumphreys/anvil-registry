@@ -51,6 +51,12 @@ When a client requests a tarball, the gateway:
 
 Tarball cache identity should include the package name, version, integrity or hash, analysis engine version, and policy version.
 
+## Lockfile seeding
+
+Anvil can be warmed before it sits in front of real install traffic. Operators should use `anvil warm` with lockfiles from representative organisation repositories to populate metadata cache entries and queue analysis for exact package versions.
+
+Seeding is not a separate trust model. It uses the same gateway, queue, worker, and deterministic policy path as normal installs, just earlier. The practical benefit is that common packages are reviewed before developers or CI discover them mid-install.
+
 ## Scoped registries
 
 Scoped package traffic is easy to get wrong. Anvil Registry needs to support scoped package metadata and tarball paths:

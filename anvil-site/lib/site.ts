@@ -14,7 +14,7 @@ import {
   Terminal
 } from "lucide-react";
 
-export const repositoryUrl = process.env.NEXT_PUBLIC_GIT_REPO_URL || "#";
+export const repositoryUrl = process.env.NEXT_PUBLIC_GIT_REPO_URL || "https://github.com/anthonyhumphreys/anvil-registry";
 
 export const navItems = [
   { label: "Product", href: "/#product" },
@@ -98,10 +98,10 @@ export const docsHighlights = [
 ];
 
 export const decisionTimeline = [
-  { status: "allow", title: "Metadata fetched", detail: "Package metadata is cached and normalized." },
-  { status: "review", title: "Static analysis queued", detail: "Unknown tarball identity gets a worker job." },
-  { status: "block", title: "Policy signal found", detail: "Lifecycle script changed in a patch release." },
-  { status: "allow", title: "Audited override", detail: "Reviewer approves with reason and expiry." }
+  { status: "allow", label: "Allow", title: "Metadata fetched", detail: "Package metadata is cached and normalized." },
+  { status: "review", label: "Review", title: "Static analysis queued", detail: "Unknown tarball identity gets a worker job." },
+  { status: "block", label: "Block", title: "Policy signal found", detail: "Lifecycle script changed in a patch release." },
+  { status: "allow", label: "Override", title: "Audited override", detail: "Reviewer approves with reason and expiry." }
 ];
 
 export const launchCopy = [
