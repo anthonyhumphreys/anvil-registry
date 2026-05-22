@@ -707,8 +707,8 @@ function decisionTable(decisions: PolicyDecisionRecord[]) {
         (record) => `<tr>
           <td><a href="${reviewUrl(record.packageName, record.version)}">${escapeHtml(record.packageName)}@${escapeHtml(record.version)}</a></td>
           <td><span class="pill ${escapeHtml(record.decision.action)}">${escapeHtml(record.decision.action)}</span></td>
-          <td>${record.decision.score}</td>
-          <td>${escapeHtml(record.decision.reasons[0]?.message ?? record.decision.explanation)}</td>
+          <td>${scoreMeter(record.decision.score)}</td>
+          <td>${decisionReasonSummary(record.decision.reasons, record.decision.explanation)}</td>
           <td>${decisionIdentityDetails(record)}</td>
           <td>${escapeHtml(formatDate(record.createdAt))}</td>
         </tr>`
@@ -726,11 +726,11 @@ function decisionHistoryTable(decisions: PolicyDecisionRecord[]) {
         (record) => `<tr>
           <td>${escapeHtml(formatDate(record.createdAt))}</td>
           <td><span class="pill ${escapeHtml(record.decision.action)}">${escapeHtml(record.decision.action)}</span></td>
-          <td>${record.decision.score}</td>
-          <td>${escapeHtml(record.tarballIntegrity ?? "")}</td>
-          <td>${escapeHtml(record.tarballShasum ?? "")}</td>
-          <td>${escapeHtml(record.analyserVersion ?? "")}</td>
-          <td>${escapeHtml(record.decision.reasons[0]?.message ?? record.decision.explanation)}</td>
+          <td>${scoreMeter(record.decision.score)}</td>
+          <td>${hashValue(record.tarballIntegrity)}</td>
+          <td>${hashValue(record.tarballShasum)}</td>
+          <td>${codeValue(record.analyserVersion)}</td>
+          <td>${decisionReasonSummary(record.decision.reasons, record.decision.explanation)}</td>
         </tr>`
       )
       .join("")}</tbody>
@@ -752,20 +752,20 @@ function packageVersionDetails(version: PackageVersionRecord | undefined) {
 
 function decisionIdentityDetails(record: PolicyDecisionRecord) {
   const parts = [
-    record.tarballIntegrity ? `integrity: ${record.tarballIntegrity}` : undefined,
-    record.tarballShasum ? `shasum: ${record.tarballShasum}` : undefined,
-    record.analyserVersion ? `analyser: ${record.analyserVersion}` : undefined
-  ].filter((part): part is string => Boolean(part));
-  return parts.length ? `<span>${escapeHtml(parts.join(" | "))}</span>` : `<span class="empty">legacy</span>`;
+    record.tarballIntegrity ? ["integrity", record.tarballIntegrity] : undefined,
+    record.tarballShasum ? ["shasum", record.tarballShasum] : undefined,
+    record.analyserVersion ? ["analyser", record.analyserVersion] : undefined
+  ].filter((part): part is [string, string] => Boolean(part));
+  return identityStack(parts);
 }
 
 function analysisReportIdentityDetails(record: AnalysisReportRecord) {
   const parts = [
-    record.tarballIntegrity ? `integrity: ${record.tarballIntegrity}` : undefined,
-    record.tarballShasum ? `shasum: ${record.tarballShasum}` : undefined,
-    record.analyserVersion ? `analyser: ${record.analyserVersion}` : undefined
-  ].filter((part): part is string => Boolean(part));
-  return parts.length ? `<span>${escapeHtml(parts.join(" | "))}</span>` : `<span class="empty">legacy</span>`;
+    record.tarballIntegrity ? ["integrity", record.tarballIntegrity] : undefined,
+    record.tarballShasum ? ["shasum", record.tarballShasum] : undefined,
+    record.analyserVersion ? ["analyser", record.analyserVersion] : undefined
+  ].filter((part): part is [string, string] => Boolean(part));
+  return identityStack(parts);
 }
 
 function reportTable(reports: AnalysisReportRecord[]) {
@@ -778,7 +778,7 @@ function reportTable(reports: AnalysisReportRecord[]) {
           <td><a href="${escapeHtml(analysisReportUrl(record))}">${escapeHtml(record.packageName)}@${escapeHtml(record.version)}</a></td>
           <td>${escapeHtml(record.report.analyserVersion)}</td>
           <td>${record.report.signals.length}</td>
-          <td>${record.report.score}</td>
+          <td>${scoreMeter(record.report.score)}</td>
           <td>${analysisReportIdentityDetails(record)}</td>
           <td>${analysisReportObjectKeyDetails(record.report, analysisReportArtifactUrl(record))}</td>
           <td>${escapeHtml(formatDate(record.createdAt))}</td>
@@ -792,8 +792,8 @@ function analysisReportObjectKeyDetails(report: { objectKey?: string }, artifact
   if (!report.objectKey) return `<span class="empty">not stored</span>`;
   return analysisReportArtifactLinks(report, artifactUrl)
     .map(({ label, objectKey, href }) => {
-      const key = `<code>${escapeHtml(objectKey)}</code>`;
-      return href ? `<span>${escapeHtml(label)}: <a href="${escapeHtml(href)}">${key}</a></span>` : `<span>${escapeHtml(label)}: ${key}</span>`;
+      const key = `<code title="${escapeHtml(objectKey)}">${escapeHtml(shortMiddle(objectKey, 42))}</code>`;
+      return href ? `<span class="identity-row"><span>${escapeHtml(label)}</span><a href="${escapeHtml(href)}">${key}</a></span>` : `<span class="identity-row"><span>${escapeHtml(label)}</span>${key}</span>`;
     })
     .join("<br>");
 }
@@ -1493,19 +1493,35 @@ function adminSessionPanel(isAdmin: boolean, invalidToken: boolean, tokenRequire
 
 function signalList(signals: Array<{ code: string; message: string; severity: string }>) {
   if (signals.length === 0) return `<p class="empty">No signals.</p>`;
-  return `<ul>${signals.map((signal) => `<li><strong>${escapeHtml(signal.code)}</strong> ${escapeHtml(signal.message)} <span>${escapeHtml(signal.severity)}</span></li>`).join("")}</ul>`;
+  return `<ul class="signal-list">${signals
+    .map(
+      (signal) => `<li>
+        <div>
+          <strong>${escapeHtml(signal.code)}</strong>
+          <p>${escapeHtml(signal.message)}</p>
+        </div>
+        <span class="pill ${severityTone(signal.severity)}">${escapeHtml(signal.severity)}</span>
+      </li>`
+    )
+    .join("")}</ul>`;
 }
 
 function provenanceDetails(provenance: AnalysisReportRecord["report"]["provenance"]) {
   if (!provenance) return `<p class="empty">No provenance metadata captured.</p>`;
-  return `<dl>
+  const verification = provenance.verification;
+  const verified = verification?.verified === true;
+  return `${verification ? `<div class="callout ${verified ? "allow" : "warn"}">
+    <strong>${verified ? "Provenance verified" : "Provenance needs review"}</strong>
+    <p>${escapeHtml(verification.summary ?? (verified ? "The attestation matches the analysed package identity." : "The attestation did not verify cleanly."))}</p>
+  </div>` : ""}
+  <dl>
     <dt>Status</dt><dd>${escapeHtml(provenance.status)}</dd>
     <dt>Target Present</dt><dd>${escapeHtml(provenance.target?.present ?? false)}</dd>
     <dt>Target Source</dt><dd>${escapeHtml(provenance.target?.source ?? "")}</dd>
-    <dt>Target Attestation</dt><dd>${escapeHtml(provenance.target?.attestationUrl ?? "")}</dd>
+    <dt>Target Attestation</dt><dd>${linkOrText(provenance.target?.attestationUrl)}</dd>
     <dt>Previous Present</dt><dd>${escapeHtml(provenance.previous?.present ?? false)}</dd>
     <dt>Previous Source</dt><dd>${escapeHtml(provenance.previous?.source ?? "")}</dd>
-    <dt>Previous Attestation</dt><dd>${escapeHtml(provenance.previous?.attestationUrl ?? "")}</dd>
+    <dt>Previous Attestation</dt><dd>${linkOrText(provenance.previous?.attestationUrl)}</dd>
     <dt>Verification Status</dt><dd>${escapeHtml(provenance.verification?.status ?? "")}</dd>
     <dt>Verified</dt><dd>${escapeHtml(provenance.verification?.verified ?? false)}</dd>
     <dt>Verifier</dt><dd>${escapeHtml(provenance.verification?.verifier ?? "")}</dd>
@@ -1547,6 +1563,67 @@ function formatEvidenceValue(value: unknown) {
   if (Array.isArray(value)) return value.join(", ");
   if (value && typeof value === "object") return JSON.stringify(value);
   return String(value);
+}
+
+function decisionReasonSummary(reasons: Array<{ code: string; message: string; severity: string }>, fallback: string) {
+  if (reasons.length === 0) return `<span>${escapeHtml(fallback)}</span>`;
+  const [primary, ...rest] = reasons;
+  return `<div class="reason-stack">
+    <div class="reason-primary">
+      <span class="pill ${severityTone(primary.severity)}">${escapeHtml(primary.severity)}</span>
+      <span>${escapeHtml(primary.message)}</span>
+    </div>
+    ${rest.length > 0 ? `<details>
+      <summary>${rest.length} more ${rest.length === 1 ? "reason" : "reasons"}</summary>
+      <ul>${rest
+        .map(
+          (reason) => `<li>
+            <span class="pill ${severityTone(reason.severity)}">${escapeHtml(reason.severity)}</span>
+            <span><strong>${escapeHtml(reason.code)}</strong> ${escapeHtml(reason.message)}</span>
+          </li>`
+        )
+        .join("")}</ul>
+    </details>` : ""}
+  </div>`;
+}
+
+function scoreMeter(score: number) {
+  const tone = score >= 95 ? "block" : score >= 70 ? "quarantine" : score >= 35 ? "warn" : "allow";
+  return `<span class="score ${tone}"><span>${escapeHtml(score)}</span></span>`;
+}
+
+function severityTone(severity: string) {
+  if (severity === "critical") return "block";
+  if (severity === "high") return "quarantine";
+  if (severity === "medium") return "warn";
+  if (severity === "low") return "muted";
+  return "info";
+}
+
+function identityStack(parts: Array<[string, string]>) {
+  if (parts.length === 0) return `<span class="empty">legacy</span>`;
+  return `<span class="identity-stack">${parts.map(([label, value]) => `<span class="identity-row"><span>${escapeHtml(label)}</span>${codeValue(value)}</span>`).join("")}</span>`;
+}
+
+function codeValue(value: string | undefined) {
+  if (!value) return `<span class="empty">none</span>`;
+  return `<code title="${escapeHtml(value)}">${escapeHtml(shortMiddle(value, 34))}</code>`;
+}
+
+function hashValue(value: string | undefined) {
+  if (!value) return `<span class="empty">none</span>`;
+  return `<code title="${escapeHtml(value)}">${escapeHtml(shortMiddle(value, 44))}</code>`;
+}
+
+function shortMiddle(value: string, maxLength: number) {
+  if (value.length <= maxLength) return value;
+  const edge = Math.max(8, Math.floor((maxLength - 3) / 2));
+  return `${value.slice(0, edge)}...${value.slice(-edge)}`;
+}
+
+function linkOrText(value: string | undefined) {
+  if (!value) return `<span class="empty">none</span>`;
+  return `<a href="${escapeHtml(value)}">${escapeHtml(shortMiddle(value, 64))}</a>`;
 }
 
 function summaryTile(label: string, value: unknown, tone: string) {
@@ -1615,45 +1692,172 @@ function page(title: string, body: string) {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${escapeHtml(title)}</title>
   <style>
-    :root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f7f7f4; color: #1d2525; }
-    body { margin: 0; }
-    header { padding: 24px 32px 16px; border-bottom: 1px solid #d8ddd7; background: #ffffff; }
-    main { max-width: 1180px; margin: 0 auto; padding: 24px 24px 48px; }
-    h1 { margin: 0; font-size: 28px; letter-spacing: 0; }
-    h2 { margin: 28px 0 12px; font-size: 18px; }
-    h3 { margin: 22px 0 8px; font-size: 15px; }
-    .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
-    .tile { border: 1px solid #d8ddd7; background: #fff; border-radius: 8px; padding: 14px; }
-    .tile span { display: block; color: #66706c; font-size: 13px; }
-    .tile strong { display: block; margin-top: 6px; font-size: 28px; }
+    :root {
+      color-scheme: light;
+      --bg: oklch(98.7% 0.004 190);
+      --surface: oklch(99.3% 0.003 190);
+      --surface-muted: oklch(95.7% 0.006 190);
+      --surface-warm: oklch(96.8% 0.012 78);
+      --text: oklch(20.5% 0.013 190);
+      --muted: oklch(45% 0.018 190);
+      --border: oklch(88.7% 0.012 190);
+      --border-strong: oklch(78% 0.018 190);
+      --accent: oklch(72% 0.15 61);
+      --danger: oklch(48% 0.18 27);
+      --danger-bg: oklch(95.5% 0.035 27);
+      --warn: oklch(53% 0.13 62);
+      --warn-bg: oklch(96.2% 0.04 74);
+      --ok: oklch(48% 0.11 156);
+      --ok-bg: oklch(95.8% 0.035 156);
+      --info: oklch(43% 0.075 220);
+      --info-bg: oklch(95.8% 0.028 220);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 18px 28px;
+      border-bottom: 1px solid var(--border);
+      background: color-mix(in oklch, var(--surface) 94%, transparent);
+      backdrop-filter: blur(12px);
+    }
+    nav { display: flex; flex-wrap: wrap; gap: 6px; }
+    nav a {
+      min-height: 36px;
+      display: inline-flex;
+      align-items: center;
+      border-radius: 6px;
+      padding: 0 10px;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 650;
+    }
+    nav a:hover { background: var(--surface-muted); color: var(--text); }
+    main { max-width: 1240px; margin: 0 auto; padding: 26px 24px 56px; }
+    section { margin-top: 28px; }
+    section:first-child { margin-top: 0; }
+    h1 { margin: 0; font-size: 24px; line-height: 1.15; letter-spacing: 0; }
+    h2 { margin: 0 0 12px; font-size: 18px; line-height: 1.2; letter-spacing: 0; }
+    h3 { margin: 22px 0 8px; font-size: 15px; line-height: 1.25; letter-spacing: 0; }
+    p { max-width: 72ch; line-height: 1.6; }
+    .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 10px; }
+    .tile { min-height: 88px; border: 1px solid var(--border); background: var(--surface); border-radius: 8px; padding: 14px; }
+    .tile span { display: block; color: var(--muted); font-size: 12px; font-weight: 650; }
+    .tile strong { display: block; margin-top: 8px; font-size: 24px; line-height: 1.1; overflow-wrap: anywhere; }
     .tile-link { color: inherit; text-decoration: none; }
-    .tile-link.active .tile { border-color: #285e61; box-shadow: inset 0 0 0 1px #285e61; }
-    .danger strong, .block { color: #b42318; }
-    .warn strong, .quarantine { color: #ad5b00; }
-    .ok strong, .allow { color: #1d7f4f; }
-    .warn { color: #705f00; }
-    table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #d8ddd7; border-radius: 8px; overflow: hidden; }
-    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #e8ebe7; vertical-align: top; font-size: 14px; }
-    th { color: #4f5b57; background: #f0f2ef; font-weight: 650; }
+    .tile-link:hover .tile { border-color: var(--border-strong); }
+    .tile-link.active .tile { border-color: var(--text); box-shadow: inset 0 0 0 1px var(--text); }
+    .danger strong, .block { color: var(--danger); }
+    .warn strong, .quarantine { color: var(--warn); }
+    .ok strong, .allow { color: var(--ok); }
+    .info { color: var(--info); }
+    table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    th, td { text-align: left; padding: 11px 12px; border-bottom: 1px solid var(--border); vertical-align: top; font-size: 13px; line-height: 1.45; }
+    th { color: var(--muted); background: var(--surface-muted); font-size: 12px; font-weight: 750; }
     tr:last-child td { border-bottom: 0; }
-    a { color: #285e61; }
-    pre { overflow: auto; background: #101414; color: #e9f1ee; padding: 14px; border-radius: 8px; }
-    dl { display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; }
-    dt { color: #66706c; }
-    dd { margin: 0; }
-    .pill { display: inline-block; border-radius: 999px; padding: 2px 8px; background: #eef1ef; font-size: 12px; font-weight: 700; }
-    .empty { color: #66706c; }
+    tr:hover td { background: color-mix(in oklch, var(--surface-muted) 55%, transparent); }
+    a { color: oklch(38% 0.076 190); text-underline-offset: 3px; }
+    a:hover { color: var(--text); }
+    code {
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+      background: var(--surface-muted);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 5px;
+      overflow-wrap: anywhere;
+    }
+    pre { overflow: auto; background: oklch(20% 0.012 190); color: oklch(93% 0.006 190); padding: 14px; border-radius: 8px; }
+    dl { display: grid; grid-template-columns: minmax(160px, max-content) minmax(0, 1fr); gap: 8px 18px; }
+    dt { color: var(--muted); font-weight: 650; }
+    dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 22px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 2px 8px;
+      background: var(--surface-muted);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 750;
+      white-space: nowrap;
+    }
+    .pill.block, .pill.critical { color: var(--danger); background: var(--danger-bg); border-color: color-mix(in oklch, var(--danger) 35%, var(--border)); }
+    .pill.quarantine, .pill.high { color: var(--warn); background: var(--warn-bg); border-color: color-mix(in oklch, var(--warn) 35%, var(--border)); }
+    .pill.warn, .pill.medium { color: var(--warn); background: var(--warn-bg); border-color: color-mix(in oklch, var(--warn) 24%, var(--border)); }
+    .pill.allow { color: var(--ok); background: var(--ok-bg); border-color: color-mix(in oklch, var(--ok) 28%, var(--border)); }
+    .pill.info { color: var(--info); background: var(--info-bg); border-color: color-mix(in oklch, var(--info) 25%, var(--border)); }
+    .empty { color: var(--muted); }
+    .identity-stack { display: grid; gap: 5px; min-width: 220px; }
+    .identity-row { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 8px; align-items: baseline; }
+    .identity-row > span:first-child { color: var(--muted); font-size: 12px; font-weight: 650; }
+    .reason-stack { display: grid; gap: 6px; max-width: 58ch; }
+    .reason-primary { display: flex; align-items: flex-start; gap: 8px; }
+    details summary { cursor: pointer; color: var(--muted); font-weight: 650; }
+    details ul { display: grid; gap: 6px; margin: 8px 0 0; padding: 0; list-style: none; }
+    details li { display: flex; gap: 8px; align-items: flex-start; }
+    .score { display: inline-flex; align-items: center; justify-content: center; min-width: 42px; min-height: 28px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-muted); font-weight: 800; }
+    .score.block { background: var(--danger-bg); border-color: color-mix(in oklch, var(--danger) 35%, var(--border)); }
+    .score.quarantine, .score.warn { background: var(--warn-bg); border-color: color-mix(in oklch, var(--warn) 28%, var(--border)); }
+    .score.allow { background: var(--ok-bg); border-color: color-mix(in oklch, var(--ok) 28%, var(--border)); }
+    .signal-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+    .signal-list li { display: flex; justify-content: space-between; gap: 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); padding: 12px; }
+    .signal-list p { margin: 4px 0 0; color: var(--muted); }
+    .callout { border: 1px solid var(--border); border-radius: 8px; background: var(--surface-warm); padding: 14px; margin-bottom: 14px; }
+    .callout.allow { background: var(--ok-bg); border-color: color-mix(in oklch, var(--ok) 26%, var(--border)); }
+    .callout.warn { background: var(--warn-bg); border-color: color-mix(in oklch, var(--warn) 26%, var(--border)); }
+    .callout p { margin: 6px 0 0; color: var(--muted); }
     .override-form { display: grid; grid-template-columns: 1.2fr .7fr .7fr 1.5fr 1fr 1fr auto; gap: 8px; margin-bottom: 12px; }
     .llm-review-form { display: grid; grid-template-columns: minmax(180px, 320px) minmax(120px, 160px) auto; gap: 8px; margin-bottom: 12px; max-width: 680px; }
     .token-form { display: grid; grid-template-columns: minmax(220px, 360px) auto; gap: 8px; max-width: 540px; }
     .inline-form { margin: 0; }
-    input, select, button { min-height: 36px; border: 1px solid #c7ceca; border-radius: 6px; padding: 0 10px; background: #fff; font: inherit; }
-    button { background: #1d2525; color: white; border-color: #1d2525; font-weight: 700; }
-    @media (max-width: 760px) { header { padding: 20px; } main { padding: 16px; } .override-form, .llm-review-form { grid-template-columns: 1fr; } table { display: block; overflow-x: auto; } }
+    input, select, button { min-height: 38px; border: 1px solid var(--border-strong); border-radius: 6px; padding: 0 10px; background: var(--surface); color: var(--text); font: inherit; }
+    button { background: var(--text); color: var(--bg); border-color: var(--text); font-weight: 750; cursor: pointer; }
+    button:hover { background: color-mix(in oklch, var(--text) 88%, var(--accent)); }
+    input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    @media (max-width: 860px) {
+      header { align-items: flex-start; flex-direction: column; padding: 16px; }
+      main { padding: 18px 14px 42px; }
+      .override-form, .llm-review-form, .token-form { grid-template-columns: 1fr; }
+      table { display: block; overflow-x: auto; }
+      dl { grid-template-columns: 1fr; gap: 4px; }
+      .signal-list li { flex-direction: column; }
+      .identity-stack { min-width: 180px; }
+    }
   </style>
 </head>
 <body>
-  <header><h1>${escapeHtml(title)}</h1></header>
+  <header>
+    <h1>${escapeHtml(title)}</h1>
+    <nav aria-label="Admin navigation">
+      <a href="/">Dashboard</a>
+      <a href="/decisions/blocked">Blocked</a>
+      <a href="/decisions/quarantined">Quarantined</a>
+      <a href="/policy">Policy</a>
+      <a href="/node-base/reports">Node Base</a>
+      <a href="/popular-package-index">Index</a>
+    </nav>
+  </header>
   <main>${body}</main>
 </body>
 </html>`;
