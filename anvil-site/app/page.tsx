@@ -266,7 +266,7 @@ function DocsSection() {
     <section className="py-16">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <SectionHeading title="Start with the docs that match the job" description="Each guide is written for a concrete moment: trying the gateway, understanding policy, inspecting unknown repos, or preparing a deployment." />
-        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {docsHighlights.map((doc) => (
             <Link
               key={doc.href}

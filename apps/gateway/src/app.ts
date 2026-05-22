@@ -1,8 +1,8 @@
 import { createGunzip } from "node:zlib";
 import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
-import type { AnvilConfig } from "@anvil/config";
-import { loadConfig } from "@anvil/config";
-import { detectNameSquatting, loadActivePopularPackageIndex } from "@anvil/name-squatting";
+import type { AnvilConfig } from "@anvilstack/config";
+import { loadConfig } from "@anvilstack/config";
+import { detectNameSquatting, loadActivePopularPackageIndex } from "@anvilstack/name-squatting";
 import {
   calculatePackageAgeDays,
   decodeRoutePackageName,
@@ -16,11 +16,11 @@ import {
   filterMetadataVersions,
   toVersionMetadata,
   type NpmPackageMetadata
-} from "@anvil/npm-registry";
-import { createObjectStore, type ObjectStore } from "@anvil/object-store";
-import { createPersistence, type AnvilPersistence } from "@anvil/persistence";
-import { evaluatePolicy } from "@anvil/policy-engine";
-import { createJobQueue, type JobQueue } from "@anvil/queue";
+} from "@anvilstack/npm-registry";
+import { createObjectStore, type ObjectStore } from "@anvilstack/object-store";
+import { createPersistence, type AnvilPersistence } from "@anvilstack/persistence";
+import { evaluatePolicy } from "@anvilstack/policy-engine";
+import { createJobQueue, type JobQueue } from "@anvilstack/queue";
 import {
   buildAnvilError,
   buildPolicyDecisionAuditEvent,
@@ -33,7 +33,7 @@ import {
   type AnalysisJob,
   type PackageTargetRequest,
   type PolicyDecision
-} from "@anvil/shared";
+} from "@anvilstack/shared";
 
 const metadataPolicyAnalyserVersion = "metadata-policy-2026-05-20.1";
 const installPolicyAnalyserVersion = "install-policy-2026-05-21.1";

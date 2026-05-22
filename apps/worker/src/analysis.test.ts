@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { gzipSync } from "node:zlib";
-import { loadConfig } from "@anvil/config";
-import type { LlmRiskReviewProvider } from "@anvil/llm-risk-review";
-import type { NpmPackageMetadata } from "@anvil/npm-registry";
-import { MemoryPersistence } from "@anvil/persistence";
-import { MetadataProvenanceVerifier } from "@anvil/provenance";
-import type { LlmRiskReview } from "@anvil/shared";
+import { loadConfig } from "@anvilstack/config";
+import type { LlmRiskReviewProvider } from "@anvilstack/llm-risk-review";
+import type { NpmPackageMetadata } from "@anvilstack/npm-registry";
+import { MemoryPersistence } from "@anvilstack/persistence";
+import { MetadataProvenanceVerifier } from "@anvilstack/provenance";
+import type { LlmRiskReview } from "@anvilstack/shared";
 import { analyseAnalysisJob, analysePackageTarget, analysisReportObjectKeyForReport, parsePackageTarget } from "./analysis.js";
 
 describe("worker analysis", () => {

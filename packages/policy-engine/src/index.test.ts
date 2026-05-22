@@ -1,4 +1,4 @@
-import { defaultPolicyConfig } from "@anvil/config";
+import { defaultPolicyConfig } from "@anvilstack/config";
 import { describe, expect, it } from "vitest";
 import { evaluatePolicy } from "./index.js";
 

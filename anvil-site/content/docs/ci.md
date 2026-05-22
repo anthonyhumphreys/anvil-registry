@@ -41,6 +41,8 @@ jobs:
 
       - run: corepack enable
 
+      - run: npm install --global @anvilstack/cli
+
       - name: Install through Anvil Registry
         run: |
           npm config set registry "${ANVIL_REGISTRY_URL}"
@@ -50,6 +52,9 @@ jobs:
 
       - name: Explain lockfile changes
         run: anvil scan package-lock.json --queue-analysis
+        env:
+          ANVIL_REGISTRY_URL: https://npm.example.com
+          ANVIL_ADMIN_TOKEN: ${{ secrets.ANVIL_ADMIN_TOKEN }}
 
       - name: Run Node Base safe mode
         run: anvil-npm-ci-safe
@@ -62,6 +67,8 @@ jobs:
 ```
 
 Adapt this to your container strategy. If your job already runs inside Anvil Node Base, call the helper scripts directly. If not, run the image with the repository mounted.
+
+The CLI needs `ANVIL_REGISTRY_URL` for gateway calls and `ANVIL_ADMIN_TOKEN` for queueing analysis or other protected operations. See [CLI](/docs/cli) for installation and command usage.
 
 ## Main branch gate
 

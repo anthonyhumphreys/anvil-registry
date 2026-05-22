@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { type PolicyConfig, runtimeModeSchema } from "@anvil/shared";
+import { type PolicyConfig, runtimeModeSchema } from "@anvilstack/shared";
 
 const booleanEnv = z.preprocess((value) => {
   if (typeof value !== "string") return value;

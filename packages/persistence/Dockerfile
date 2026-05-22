@@ -11,6 +11,6 @@ RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store pnpm i
 
 COPY packages packages
 
-RUN pnpm --filter @anvil/persistence... build
+RUN pnpm --filter @anvilstack/persistence... build
 
-CMD ["pnpm", "--filter", "@anvil/persistence", "db:migrate"]
+CMD ["pnpm", "--filter", "@anvilstack/persistence", "db:migrate"]

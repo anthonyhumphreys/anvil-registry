@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import pg from "pg";
-import { resolveDatabaseUrl } from "@anvil/config";
+import { resolveDatabaseUrl } from "@anvilstack/config";
 import * as schema from "./schema.js";
 
 const databaseUrl = resolveDatabaseUrl({

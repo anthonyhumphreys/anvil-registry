@@ -1,5 +1,5 @@
 {
-  "name": "@anvil/infra-sst",
+  "name": "@anvilstack/infra-sst",
   "version": "0.1.0",
   "private": true,
   "type": "module",

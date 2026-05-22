@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { loadConfig } from "@anvil/config";
+import { loadConfig } from "@anvilstack/config";
 import {
   BullMqJobQueue,
   MemoryJobQueue,

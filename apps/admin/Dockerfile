@@ -15,7 +15,7 @@ RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store pnpm i
 FROM deps AS build
 COPY packages packages
 COPY apps/admin apps/admin
-RUN pnpm --filter @anvil/admin... build
+RUN pnpm --filter @anvilstack/admin... build
 
 FROM node:22-bookworm-slim
 WORKDIR /app

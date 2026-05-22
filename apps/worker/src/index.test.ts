@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { healthCheckWorkerDependencies, runWorkerCli } from "./index.js";
-import { loadConfig } from "@anvil/config";
+import { loadConfig } from "@anvilstack/config";
 
 describe("worker entrypoint", () => {
   it("runs dependency health checks in memory mode", async () => {

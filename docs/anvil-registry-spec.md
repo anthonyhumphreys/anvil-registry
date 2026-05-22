@@ -1346,7 +1346,7 @@ pnpm sst:migrate
 The migration runner starts `Resource.DatabaseMigration`, polls ECS until the task stops, and fails if the migration container exits non-zero. For local command validation without touching AWS:
 
 ```bash
-pnpm --filter @anvil/infra-sst migrate:run -- --dry-run
+pnpm --filter @anvilstack/infra-sst migrate:run -- --dry-run
 ```
 
 ---

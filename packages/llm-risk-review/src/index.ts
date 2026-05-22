@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { LlmRiskReview, LlmRiskReviewInput } from "@anvil/shared";
+import type { LlmRiskReview, LlmRiskReviewInput } from "@anvilstack/shared";
 
 export const llmRiskTypeSchema = z.enum([
   "typosquatting",

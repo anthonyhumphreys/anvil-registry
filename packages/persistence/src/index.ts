@@ -1,5 +1,5 @@
-import type { AnalysisReport, LlmRiskReview, Override, PolicyDecision } from "@anvil/shared";
-import type { AnvilConfig } from "@anvil/config";
+import type { AnalysisReport, LlmRiskReview, Override, PolicyDecision } from "@anvilstack/shared";
+import type { AnvilConfig } from "@anvilstack/config";
 import { PostgresPersistence } from "./postgres.js";
 
 export { PostgresPersistence } from "./postgres.js";

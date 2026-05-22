@@ -1,4 +1,4 @@
-import type { PolicyDecision, PolicyInput, PolicyReason } from "@anvil/shared";
+import type { PolicyDecision, PolicyInput, PolicyReason } from "@anvilstack/shared";
 
 const severityScore = {
   info: 0,

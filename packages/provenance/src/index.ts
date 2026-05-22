@@ -1,4 +1,4 @@
-import type { PackageVersionMetadata, ProvenanceVerificationResult } from "@anvil/shared";
+import type { PackageVersionMetadata, ProvenanceVerificationResult } from "@anvilstack/shared";
 
 export type ProvenanceVerificationInput = {
   packageName: string;

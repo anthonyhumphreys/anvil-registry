@@ -26,64 +26,54 @@ importers:
 
   apps/admin:
     dependencies:
-      '@anvil/config':
+      '@anvilstack/config':
         specifier: workspace:*
         version: link:../../packages/config
-      '@anvil/name-squatting':
+      '@anvilstack/name-squatting':
         specifier: workspace:*
         version: link:../../packages/name-squatting
-      '@anvil/object-store':
+      '@anvilstack/object-store':
         specifier: workspace:*
         version: link:../../packages/object-store
-      '@anvil/persistence':
+      '@anvilstack/persistence':
         specifier: workspace:*
         version: link:../../packages/persistence
-      '@anvil/shared':
+      '@anvilstack/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       fastify:
         specifier: ^5.3.3
         version: 5.8.5
 
-  apps/cli:
-    dependencies:
-      '@anvil/config':
-        specifier: workspace:*
-        version: link:../../packages/config
-      '@anvil/name-squatting':
-        specifier: workspace:*
-        version: link:../../packages/name-squatting
-      '@anvil/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
+  apps/cli: {}
 
   apps/gateway:
     dependencies:
-      '@anvil/config':
+      '@anvilstack/config':
         specifier: workspace:*
         version: link:../../packages/config
-      '@anvil/logger':
+      '@anvilstack/logger':
         specifier: workspace:*
         version: link:../../packages/logger
-      '@anvil/name-squatting':
+      '@anvilstack/name-squatting':
         specifier: workspace:*
         version: link:../../packages/name-squatting
-      '@anvil/npm-registry':
+      '@anvilstack/npm-registry':
         specifier: workspace:*
         version: link:../../packages/npm-registry
-      '@anvil/object-store':
+      '@anvilstack/object-store':
         specifier: workspace:*
         version: link:../../packages/object-store
-      '@anvil/persistence':
+      '@anvilstack/persistence':
         specifier: workspace:*
         version: link:../../packages/persistence
-      '@anvil/policy-engine':
+      '@anvilstack/policy-engine':
         specifier: workspace:*
         version: link:../../packages/policy-engine
-      '@anvil/queue':
+      '@anvilstack/queue':
         specifier: workspace:*
         version: link:../../packages/queue
-      '@anvil/shared':
+      '@anvilstack/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       fastify:
@@ -92,40 +82,40 @@ importers:
 
   apps/worker:
     dependencies:
-      '@anvil/config':
+      '@anvilstack/config':
         specifier: workspace:*
         version: link:../../packages/config
-      '@anvil/llm-risk-review':
+      '@anvilstack/llm-risk-review':
         specifier: workspace:*
         version: link:../../packages/llm-risk-review
-      '@anvil/logger':
+      '@anvilstack/logger':
         specifier: workspace:*
         version: link:../../packages/logger
-      '@anvil/name-squatting':
+      '@anvilstack/name-squatting':
         specifier: workspace:*
         version: link:../../packages/name-squatting
-      '@anvil/npm-registry':
+      '@anvilstack/npm-registry':
         specifier: workspace:*
         version: link:../../packages/npm-registry
-      '@anvil/object-store':
+      '@anvilstack/object-store':
         specifier: workspace:*
         version: link:../../packages/object-store
-      '@anvil/package-analysis':
+      '@anvilstack/package-analysis':
         specifier: workspace:*
         version: link:../../packages/package-analysis
-      '@anvil/persistence':
+      '@anvilstack/persistence':
         specifier: workspace:*
         version: link:../../packages/persistence
-      '@anvil/policy-engine':
+      '@anvilstack/policy-engine':
         specifier: workspace:*
         version: link:../../packages/policy-engine
-      '@anvil/provenance':
+      '@anvilstack/provenance':
         specifier: workspace:*
         version: link:../../packages/provenance
-      '@anvil/queue':
+      '@anvilstack/queue':
         specifier: workspace:*
         version: link:../../packages/queue
-      '@anvil/shared':
+      '@anvilstack/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       semver:
@@ -144,7 +134,7 @@ importers:
 
   packages/config:
     dependencies:
-      '@anvil/shared':
+      '@anvilstack/shared':
         specifier: workspace:*
         version: link:../shared
       zod:
@@ -153,7 +143,7 @@ importers:
 
   packages/llm-risk-review:
     dependencies:
-      '@anvil/shared':
+      '@anvilstack/shared':
         specifier: workspace:*
         version: link:../shared
       zod:
@@ -168,7 +158,7 @@ importers:
 
   packages/name-squatting:
     dependencies:
-      '@anvil/shared':
+      '@anvilstack/shared':
         specifier: workspace:*
         version: link:../shared
     devDependencies:
@@ -178,7 +168,7 @@ importers:
 
   packages/npm-registry:
     dependencies:
-      '@anvil/shared':
+      '@anvilstack/shared':
         specifier: workspace:*
         version: link:../shared
       semver:
@@ -191,7 +181,7 @@ importers:
 
   packages/object-store:
     dependencies:
-      '@anvil/config':
+      '@anvilstack/config':
         specifier: workspace:*
         version: link:../config
       '@aws-sdk/client-s3':
@@ -204,7 +194,7 @@ importers:
 
   packages/package-analysis:
     dependencies:
-      '@anvil/shared':
+      '@anvilstack/shared':
         specifier: workspace:*
         version: link:../shared
       semver:
@@ -220,10 +210,10 @@ importers:
 
   packages/persistence:
     dependencies:
-      '@anvil/config':
+      '@anvilstack/config':
         specifier: workspace:*
         version: link:../config
-      '@anvil/shared':
+      '@anvilstack/shared':
         specifier: workspace:*
         version: link:../shared
       drizzle-orm:
@@ -239,10 +229,10 @@ importers:
 
   packages/policy-engine:
     dependencies:
-      '@anvil/config':
+      '@anvilstack/config':
         specifier: workspace:*
         version: link:../config
-      '@anvil/shared':
+      '@anvilstack/shared':
         specifier: workspace:*
         version: link:../shared
     devDependencies:
@@ -252,7 +242,7 @@ importers:
 
   packages/provenance:
     dependencies:
-      '@anvil/shared':
+      '@anvilstack/shared':
         specifier: workspace:*
         version: link:../shared
     devDependencies:
@@ -262,10 +252,10 @@ importers:
 
   packages/queue:
     dependencies:
-      '@anvil/config':
+      '@anvilstack/config':
         specifier: workspace:*
         version: link:../config
-      '@anvil/shared':
+      '@anvilstack/shared':
         specifier: workspace:*
         version: link:../shared
       '@aws-sdk/client-sqs':

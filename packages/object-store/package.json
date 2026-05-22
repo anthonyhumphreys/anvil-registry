@@ -1,5 +1,5 @@
 {
-  "name": "@anvil/object-store",
+  "name": "@anvilstack/object-store",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -14,7 +14,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@anvil/config": "workspace:*",
+    "@anvilstack/config": "workspace:*",
     "@aws-sdk/client-s3": "^3.848.0"
   },
   "devDependencies": {

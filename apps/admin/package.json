@@ -1,5 +1,5 @@
 {
-  "name": "@anvil/admin",
+  "name": "@anvilstack/admin",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -11,11 +11,11 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@anvil/config": "workspace:*",
-    "@anvil/name-squatting": "workspace:*",
-    "@anvil/object-store": "workspace:*",
-    "@anvil/persistence": "workspace:*",
-    "@anvil/shared": "workspace:*",
+    "@anvilstack/config": "workspace:*",
+    "@anvilstack/name-squatting": "workspace:*",
+    "@anvilstack/object-store": "workspace:*",
+    "@anvilstack/persistence": "workspace:*",
+    "@anvilstack/shared": "workspace:*",
     "fastify": "^5.3.3"
   }
 }

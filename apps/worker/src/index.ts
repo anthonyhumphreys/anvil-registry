@@ -1,11 +1,11 @@
-import { loadConfig } from "@anvil/config";
-import { createLogger } from "@anvil/logger";
-import { loadActivePopularPackageIndex } from "@anvil/name-squatting";
-import { NpmDownloadsClient, NpmRegistryRouter } from "@anvil/npm-registry";
-import { createObjectStore } from "@anvil/object-store";
-import { createPersistence } from "@anvil/persistence";
-import { createBullMqAnalysisWorker, createJobQueue, createSqsAnalysisWorker, type AnalysisWorkerHandle } from "@anvil/queue";
-import type { AnalysisJob } from "@anvil/shared";
+import { loadConfig } from "@anvilstack/config";
+import { createLogger } from "@anvilstack/logger";
+import { loadActivePopularPackageIndex } from "@anvilstack/name-squatting";
+import { NpmDownloadsClient, NpmRegistryRouter } from "@anvilstack/npm-registry";
+import { createObjectStore } from "@anvilstack/object-store";
+import { createPersistence } from "@anvilstack/persistence";
+import { createBullMqAnalysisWorker, createJobQueue, createSqsAnalysisWorker, type AnalysisWorkerHandle } from "@anvilstack/queue";
+import type { AnalysisJob } from "@anvilstack/shared";
 import { analyseAnalysisJob, analysePackageTarget } from "./analysis.js";
 
 const logger = createLogger("anvil-worker");

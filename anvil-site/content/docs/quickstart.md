@@ -54,9 +54,20 @@ The gateway rewrites tarball URLs so package bytes continue through Anvil Regist
 
 ## Explain a package
 
+Install the CLI from npm:
+
 ```bash
-anvil explain react@latest
+npm install --global @anvilstack/cli
+ANVIL_REGISTRY_URL=http://localhost:4873 anvil explain react@latest
 ```
+
+Or run it without a global install:
+
+```bash
+npx @anvilstack/cli explain react@latest
+```
+
+The CLI requires the gateway you started above. See [CLI](/docs/cli) for endpoint configuration, admin tokens, command reference, and CI examples.
 
 The explain route resolves dist-tags, evaluates policy, and returns the current decision plus analysis and review context when available.
 

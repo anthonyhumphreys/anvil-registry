@@ -7,8 +7,8 @@ import {
   SQSClient
 } from "@aws-sdk/client-sqs";
 import { Queue, type Job, type WorkerOptions } from "bullmq";
-import type { AnvilConfig } from "@anvil/config";
-import { analysisJobSchema, type AnalysisJob } from "@anvil/shared";
+import type { AnvilConfig } from "@anvilstack/config";
+import { analysisJobSchema, type AnalysisJob } from "@anvilstack/shared";
 
 export type AnalysisQueueStats = {
   driver: "memory" | "bullmq" | "sqs";

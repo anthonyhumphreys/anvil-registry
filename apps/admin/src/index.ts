@@ -1,4 +1,4 @@
-import { loadConfig } from "@anvil/config";
+import { loadConfig } from "@anvilstack/config";
 import { buildAdmin } from "./app.js";
 
 const config = loadConfig();

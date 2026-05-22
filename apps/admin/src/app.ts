@@ -1,6 +1,6 @@
 import Fastify, { type FastifyInstance } from "fastify";
-import type { AnvilConfig } from "@anvil/config";
-import { loadConfig } from "@anvil/config";
+import type { AnvilConfig } from "@anvilstack/config";
+import { loadConfig } from "@anvilstack/config";
 import {
   defaultPopularPackageIndexObjectKey,
   encodePopularPackageIndex,
@@ -8,8 +8,8 @@ import {
   parsePopularPackageIndex,
   popularPackageIndexDatedObjectKey,
   type PopularPackageIndex
-} from "@anvil/name-squatting";
-import { createObjectStore, type ObjectStore } from "@anvil/object-store";
+} from "@anvilstack/name-squatting";
+import { createObjectStore, type ObjectStore } from "@anvilstack/object-store";
 import {
   createPersistence,
   type AnalysisReportRecord,
@@ -22,8 +22,8 @@ import {
   type PackageVersionRecord,
   type PolicyConfigRecord,
   type PolicyDecisionRecord
-} from "@anvil/persistence";
-import { llmReviewRequestBodySchema, overrideCreateRequestSchema, overrideRevokeRequestSchema, resolveOverrideExpiry, type Override } from "@anvil/shared";
+} from "@anvilstack/persistence";
+import { llmReviewRequestBodySchema, overrideCreateRequestSchema, overrideRevokeRequestSchema, resolveOverrideExpiry, type Override } from "@anvilstack/shared";
 
 export type AdminDependencies = {
   config?: AnvilConfig;

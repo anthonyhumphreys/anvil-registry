@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { loadConfig } from "@anvil/config";
+import { loadConfig } from "@anvilstack/config";
 import { FileObjectStore, createObjectStore, S3ObjectStore } from "./index.js";
 
 describe("FileObjectStore", () => {

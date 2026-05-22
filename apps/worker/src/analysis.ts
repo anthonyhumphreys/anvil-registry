@@ -1,14 +1,14 @@
 import semver from "semver";
-import type { AnvilConfig } from "@anvil/config";
-import { createLlmRiskReviewProvider, type LlmRiskReviewProvider } from "@anvil/llm-risk-review";
-import { detectNameSquatting, loadPopularPackageIndex, type PopularPackageIndex } from "@anvil/name-squatting";
-import type { NpmRegistryClient } from "@anvil/npm-registry";
-import { calculatePackageAgeDays, resolveMetadataVersion, toVersionMetadata } from "@anvil/npm-registry";
-import type { ObjectStore } from "@anvil/object-store";
-import { analyseFileTree, analyseManifestChange, mergeAnalysisReports, parseNpmTarball } from "@anvil/package-analysis";
-import type { AnvilPersistence } from "@anvil/persistence";
-import { evaluatePolicy } from "@anvil/policy-engine";
-import { FetchingProvenanceVerifier, type ProvenanceVerifier } from "@anvil/provenance";
+import type { AnvilConfig } from "@anvilstack/config";
+import { createLlmRiskReviewProvider, type LlmRiskReviewProvider } from "@anvilstack/llm-risk-review";
+import { detectNameSquatting, loadPopularPackageIndex, type PopularPackageIndex } from "@anvilstack/name-squatting";
+import type { NpmRegistryClient } from "@anvilstack/npm-registry";
+import { calculatePackageAgeDays, resolveMetadataVersion, toVersionMetadata } from "@anvilstack/npm-registry";
+import type { ObjectStore } from "@anvilstack/object-store";
+import { analyseFileTree, analyseManifestChange, mergeAnalysisReports, parseNpmTarball } from "@anvilstack/package-analysis";
+import type { AnvilPersistence } from "@anvilstack/persistence";
+import { evaluatePolicy } from "@anvilstack/policy-engine";
+import { FetchingProvenanceVerifier, type ProvenanceVerifier } from "@anvilstack/provenance";
 import {
   buildPolicyDecisionAuditEvent,
   type AnalysisJob,
@@ -19,7 +19,7 @@ import {
   type LlmRiskReviewInput,
   type PackageVersionMetadata,
   type PolicyReason
-} from "@anvil/shared";
+} from "@anvilstack/shared";
 
 export type WorkerAnalysisDependencies = {
   config: AnvilConfig;

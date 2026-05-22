@@ -1,5 +1,5 @@
 {
-  "name": "@anvil/logger",
+  "name": "@anvilstack/logger",
   "version": "0.1.0",
   "private": true,
   "type": "module",

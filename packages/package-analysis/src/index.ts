@@ -1,6 +1,6 @@
 import semver from "semver";
 import { gunzipSync } from "node:zlib";
-import type { AnalysisReport, PackageVersionMetadata, PolicyReason } from "@anvil/shared";
+import type { AnalysisReport, PackageVersionMetadata, PolicyReason } from "@anvilstack/shared";
 
 const lifecycleScripts = new Set(["preinstall", "install", "postinstall", "prepare", "prepublish", "prepublishOnly"]);
 type DependencyGroup = "runtime" | "dev" | "optional" | "peer";

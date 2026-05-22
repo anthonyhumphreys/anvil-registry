@@ -1,5 +1,5 @@
 {
-  "name": "@anvil/name-squatting",
+  "name": "@anvilstack/name-squatting",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -14,7 +14,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@anvil/shared": "workspace:*"
+    "@anvilstack/shared": "workspace:*"
   },
   "devDependencies": {
     "vitest": "^3.1.4"

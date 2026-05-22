@@ -1,11 +1,11 @@
 import { gzipSync } from "node:zlib";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { loadConfig } from "@anvil/config";
-import type { NpmPackageMetadata } from "@anvil/npm-registry";
-import type { ObjectStore } from "@anvil/object-store";
-import type { AnalysisReport } from "@anvil/shared";
-import { MemoryPersistence } from "@anvil/persistence";
-import { MemoryJobQueue } from "@anvil/queue";
+import { loadConfig } from "@anvilstack/config";
+import type { NpmPackageMetadata } from "@anvilstack/npm-registry";
+import type { ObjectStore } from "@anvilstack/object-store";
+import type { AnalysisReport } from "@anvilstack/shared";
+import { MemoryPersistence } from "@anvilstack/persistence";
+import { MemoryJobQueue } from "@anvilstack/queue";
 import { buildGateway } from "./app.js";
 
 function testConfig(runtimeMode: "development" | "ci" | "production" = "ci") {

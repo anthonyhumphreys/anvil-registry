@@ -2,6 +2,7 @@ import {
   BookOpen,
   Boxes,
   ClipboardCheck,
+  Command,
   Database,
   FileWarning,
   GitBranch,
@@ -19,6 +20,7 @@ export const repositoryUrl = process.env.NEXT_PUBLIC_GIT_REPO_URL || "https://gi
 export const navItems = [
   { label: "Product", href: "/#product" },
   { label: "Docs", href: "/docs/introduction" },
+  { label: "CLI", href: "/docs/cli" },
   { label: "Architecture", href: "/#architecture" },
   { label: "Deploy", href: "/docs/deploy" }
 ];
@@ -76,6 +78,12 @@ export const docsHighlights = [
     href: "/docs/quickstart",
     icon: BookOpen,
     description: "Run the gateway locally, route npm-compatible clients through it, and try Node Base safe mode."
+  },
+  {
+    label: "CLI",
+    href: "/docs/cli",
+    icon: Command,
+    description: "Install the published CLI, configure endpoints and admin tokens, scan lockfiles, warm caches, and manage review workflows."
   },
   {
     label: "Anvil Registry",

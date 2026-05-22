@@ -1,5 +1,5 @@
 import semver from "semver";
-import type { PackageVersionMetadata, PolicyDecision } from "@anvil/shared";
+import type { PackageVersionMetadata, PolicyDecision } from "@anvilstack/shared";
 
 export type NpmPackageMetadata = {
   name: string;

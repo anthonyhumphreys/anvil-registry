@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import pg from "pg";
-import type { AnalysisReport, LlmRiskReview, Override, PolicyAction, PolicyDecision, PolicyReason } from "@anvil/shared";
+import type { AnalysisReport, LlmRiskReview, Override, PolicyAction, PolicyDecision, PolicyReason } from "@anvilstack/shared";
 import type {
   AnalysisReportRecord,
   AnalysisReportIdentity,

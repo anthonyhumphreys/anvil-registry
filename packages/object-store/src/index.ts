@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { GetObjectCommand, HeadBucketCommand, PutObjectCommand, S3Client, type S3ClientConfig } from "@aws-sdk/client-s3";
-import type { AnvilConfig } from "@anvil/config";
+import type { AnvilConfig } from "@anvilstack/config";
 
 export interface ObjectStore {
   healthCheck?(): Promise<void>;

@@ -1,11 +1,69 @@
 #!/usr/bin/env node
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
-import { loadConfig } from "@anvil/config";
-import { parsePopularPackageIndex, type PopularPackageIndex } from "@anvil/name-squatting";
-import type { AnalysisReport, LlmRiskReview, Override, PolicyDecision } from "@anvil/shared";
 
 type ReadTextFile = (path: string) => Promise<string>;
+
+type PolicyAction = "allow" | "warn" | "quarantine" | "block";
+
+type PolicyReason = {
+  code: string;
+  message: string;
+  severity: "info" | "low" | "medium" | "high" | "critical";
+  evidence?: Record<string, unknown>;
+};
+
+type PolicyDecision = {
+  action: PolicyAction;
+  score: number;
+  reasons: PolicyReason[];
+  explanation: string;
+  expiresAt?: string;
+};
+
+type Override = {
+  packageName: string;
+  version?: string;
+  action: PolicyAction;
+  reason: string;
+  approvedBy?: string;
+  expiresAt?: string;
+};
+
+type AnalysisReport = {
+  packageName: string;
+  version: string;
+  analyserVersion: string;
+  policyVersion: string;
+  tarballIntegrity?: string;
+  tarballShasum?: string;
+  score: number;
+  signals: PolicyReason[];
+  dependencyDiff?: Record<string, unknown>;
+  fileFindings?: Array<{ path: string; code: string; reason: string; severity: PolicyReason["severity"]; evidence?: Record<string, unknown> }>;
+  createdAt: string;
+};
+
+type LlmRiskReview = {
+  riskLevel: "low" | "medium" | "high" | "critical";
+  confidence: "low" | "medium" | "high";
+  summary: string;
+  suspectedRiskTypes: string[];
+  recommendedAction: PolicyAction;
+};
+
+type PopularPackage = {
+  name: string;
+  weeklyDownloads?: number;
+  aliases?: string[];
+};
+
+type PopularPackageIndex = {
+  generatedAt?: string;
+  source: string;
+  popularPackages: PopularPackage[];
+  knownConfusions: Record<string, string>;
+};
 
 export type CliDependencies = {
   fetch: typeof fetch;
@@ -499,11 +557,10 @@ async function popularIndexUpload(args: string[], dependencies: CliDependencies)
 async function policyTest(args: string[], dependencies: CliDependencies): Promise<number> {
   const path = args[0] ?? "package.json";
   const targets = await parseLockfile(path, dependencies.readFile);
-  const config = loadConfig(dependencies.env);
   const results = await Promise.all(targets.map((target) => explainTarget(target, dependencies)));
   const risky = results.filter((result) => result.decision.action !== "allow");
 
-  dependencies.stdout.write(`Policy ${config.policy.version} loaded in ${config.RUNTIME_MODE} mode.\n`);
+  dependencies.stdout.write(`Policy ${dependencies.env.POLICY_VERSION ?? "2026-05-20.1"} loaded in ${dependencies.env.RUNTIME_MODE ?? "development"} mode.\n`);
   dependencies.stdout.write(`Tested ${results.length} dependency names from ${path} using latest resolvable versions.\n`);
   dependencies.stdout.write("Use lockfile scan for exact installed versions.\n");
 
@@ -1072,6 +1129,34 @@ function arrayField(value: unknown) {
 function formatList(value: unknown) {
   const items = arrayField(value).map((item) => String(item));
   return items.length > 0 ? items.join(", ") : "(none)";
+}
+
+function parsePopularPackageIndex(value: unknown, source = "inline"): PopularPackageIndex {
+  if (!isRecord(value)) throw new Error("Popular package index must be a JSON object.");
+  const popularPackages = value.popularPackages ?? value.packages;
+  if (!Array.isArray(popularPackages)) throw new Error("Popular package index requires a popularPackages array.");
+  const knownConfusions = value.knownConfusions ?? value.knownEcosystemConfusions ?? {};
+  if (!isRecord(knownConfusions)) throw new Error("Popular package index knownConfusions must be an object.");
+
+  return {
+    generatedAt: typeof value.generatedAt === "string" ? value.generatedAt : undefined,
+    source,
+    popularPackages: popularPackages.map(parsePopularPackage),
+    knownConfusions: Object.fromEntries(
+      Object.entries(knownConfusions).map(([requested, suggested]) => {
+        if (typeof suggested !== "string" || !suggested) throw new Error(`Known confusion for ${requested} must be a package name.`);
+        return [requested.toLowerCase(), suggested];
+      })
+    )
+  };
+}
+
+function parsePopularPackage(value: unknown): PopularPackage {
+  if (typeof value === "string") return { name: value };
+  if (!isRecord(value) || typeof value.name !== "string" || !value.name) throw new Error("Popular package entries require a name.");
+  const weeklyDownloads = typeof value.weeklyDownloads === "number" ? value.weeklyDownloads : undefined;
+  const aliases = Array.isArray(value.aliases) ? value.aliases.map((alias) => String(alias)).filter(Boolean) : undefined;
+  return { name: value.name, ...(weeklyDownloads !== undefined ? { weeklyDownloads } : {}), ...(aliases?.length ? { aliases } : {}) };
 }
 
 function dependencyDiffRows(diff: Record<string, unknown> | undefined) {

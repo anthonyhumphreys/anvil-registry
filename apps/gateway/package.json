@@ -1,5 +1,5 @@
 {
-  "name": "@anvil/gateway",
+  "name": "@anvilstack/registry",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -11,15 +11,15 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@anvil/config": "workspace:*",
-    "@anvil/logger": "workspace:*",
-    "@anvil/name-squatting": "workspace:*",
-    "@anvil/npm-registry": "workspace:*",
-    "@anvil/object-store": "workspace:*",
-    "@anvil/persistence": "workspace:*",
-    "@anvil/policy-engine": "workspace:*",
-    "@anvil/queue": "workspace:*",
-    "@anvil/shared": "workspace:*",
+    "@anvilstack/config": "workspace:*",
+    "@anvilstack/logger": "workspace:*",
+    "@anvilstack/name-squatting": "workspace:*",
+    "@anvilstack/npm-registry": "workspace:*",
+    "@anvilstack/object-store": "workspace:*",
+    "@anvilstack/persistence": "workspace:*",
+    "@anvilstack/policy-engine": "workspace:*",
+    "@anvilstack/queue": "workspace:*",
+    "@anvilstack/shared": "workspace:*",
     "fastify": "^5.3.3"
   }
 }

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { loadConfig } from "@anvil/config";
-import type { ObjectStore } from "@anvil/object-store";
-import { MemoryPersistence } from "@anvil/persistence";
+import { loadConfig } from "@anvilstack/config";
+import type { ObjectStore } from "@anvilstack/object-store";
+import { MemoryPersistence } from "@anvilstack/persistence";
 import { buildAdmin } from "./app.js";
 
 class TestObjectStore implements ObjectStore {

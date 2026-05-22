@@ -1,5 +1,5 @@
 {
-  "name": "@anvil/queue",
+  "name": "@anvilstack/queue",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -14,8 +14,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@anvil/config": "workspace:*",
-    "@anvil/shared": "workspace:*",
+    "@anvilstack/config": "workspace:*",
+    "@anvilstack/shared": "workspace:*",
     "@aws-sdk/client-sqs": "^3.1050.0",
     "bullmq": "^5.58.5"
   },

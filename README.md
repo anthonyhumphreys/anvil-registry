@@ -80,6 +80,14 @@ Then install as usual. Scoped packages, tarballs, and npm audit requests should 
 
 ## CLI
 
+Install the published CLI:
+
+```bash
+npm install --global @anvilstack/cli
+```
+
+The CLI is a client. It requires a running gateway for package decision commands, and Admin plus `ANVIL_ADMIN_TOKEN` for protected operations.
+
 Common commands:
 
 ```bash
@@ -94,6 +102,8 @@ ANVIL_ADMIN_URL=http://localhost:3000 anvil node-base reports --limit 20
 ```
 
 Admin-gated mutations read `ANVIL_ADMIN_TOKEN`, falling back to `ADMIN_TOKEN`.
+
+See `anvil-site/content/docs/cli.md` for installation, gateway setup, command usage, and publish instructions.
 
 ## Policy Configuration
 
