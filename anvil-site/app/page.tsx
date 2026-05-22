@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Check, Copy, Github, ShieldCheck } from "lucide-react";
+import { ArrowRight, Check, ChevronRight, Copy, Github, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -89,12 +89,12 @@ function HeroSection() {
 
 function ProductSection() {
   return (
-    <section id="product" className="border-b py-16">
+    <section id="product" className="border-b bg-muted/20 py-16">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <SectionHeading title="Two tools, one install path" description="Use the registry gateway for enforcement and the Node base image when you need a safer local harness." />
         <div className="mt-8 grid gap-5 lg:grid-cols-2">
           {productCards.map((item) => (
-            <Card key={item.title} className="overflow-hidden">
+            <Card key={item.title} className="overflow-hidden transition-colors hover:bg-muted/20">
               <CardHeader className="gap-4">
                 <div className="flex size-11 items-center justify-center rounded-md border bg-background">
                   <item.icon className="size-5 text-accent" aria-hidden="true" />
@@ -113,7 +113,7 @@ function ProductSection() {
                     </li>
                   ))}
                 </ul>
-                <div className="flex items-center justify-between rounded-md border bg-muted/40 px-3 py-3 font-mono text-xs text-muted-foreground">
+                <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/40 px-3 py-3 font-mono text-xs text-muted-foreground">
                   <span className="truncate">{item.command}</span>
                   <Copy className="size-4" aria-hidden="true" />
                 </div>
@@ -131,14 +131,17 @@ function ArchitectureSection() {
     <section id="architecture" className="border-b py-16">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <SectionHeading title="Architecture that fits the toolchain" description="Anvil Registry sits between package managers and upstream registries, then pushes expensive work out to the analysis worker." />
-        <div className="mt-8 grid gap-4 lg:grid-cols-4">
-          {architectureNodes.map((node) => (
-            <div key={node.label} className="rounded-lg border bg-card p-5 shadow-sm">
-              <div className="flex items-center gap-3">
-                <span className="flex size-10 items-center justify-center rounded-md bg-muted">
+        <ol className="mt-8 grid gap-3 lg:grid-cols-4">
+          {architectureNodes.map((node, index) => (
+            <li key={node.label} className="relative rounded-lg border bg-card p-5 shadow-sm">
+              <div className="flex items-start gap-3">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted">
                   <node.icon className="size-5" aria-hidden="true" />
                 </span>
-                <h3 className="font-semibold">{node.label}</h3>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-muted-foreground">Step {index + 1}</p>
+                  <h3 className="mt-1 font-semibold">{node.label}</h3>
+                </div>
               </div>
               <Separator className="my-4" />
               <ul className="flex flex-col gap-2 text-sm text-muted-foreground">
@@ -146,9 +149,12 @@ function ArchitectureSection() {
                   <li key={detail}>{detail}</li>
                 ))}
               </ul>
-            </div>
+              {index < architectureNodes.length - 1 ? (
+                <ChevronRight className="absolute -right-4 top-1/2 hidden size-5 -translate-y-1/2 text-border lg:block" aria-hidden="true" />
+              ) : null}
+            </li>
           ))}
-        </div>
+        </ol>
       </div>
     </section>
   );
@@ -158,7 +164,7 @@ function WorkflowSection() {
   const active = codeTabs[0];
 
   return (
-    <section className="border-b py-16">
+    <section className="border-b bg-muted/20 py-16">
       <div className="mx-auto grid max-w-7xl gap-8 px-4 sm:px-6 lg:grid-cols-[1.15fr_0.85fr] lg:px-8">
         <div>
           <SectionHeading title="CLI in your workflow" description="Fast, deterministic, and scriptable enough for local review, CI, and release gates." />
@@ -178,7 +184,7 @@ function WorkflowSection() {
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
             Decisions are useful in terminals, but they also need to be boringly machine-readable.
           </p>
-          <pre className="mt-5 overflow-x-auto rounded-lg border bg-muted p-5 font-mono text-xs leading-6">
+          <pre className="mt-5 overflow-x-auto rounded-lg border bg-muted p-5 font-mono text-xs leading-6 text-foreground">
             <code>{`{
   "package": "left-pad@1.3.0",
   "decision": "allow",
@@ -217,8 +223,10 @@ function PolicySection() {
             <h3 className="font-semibold">Policy decision timeline</h3>
             <div className="mt-6 flex flex-col gap-5">
               {decisionTimeline.map((event) => (
-                <div key={event.title} className="grid grid-cols-[1.75rem_1fr_auto] gap-3">
-                  <span className={event.status === "block" ? "mt-1 size-3 rounded-full bg-destructive" : event.status === "review" ? "mt-1 size-3 rounded-full bg-accent" : "mt-1 size-3 rounded-full bg-foreground"} />
+                <div key={event.title} className="grid grid-cols-[4.5rem_1fr_auto] gap-3">
+                  <Badge variant={event.status === "block" ? "destructive" : event.status === "review" ? "secondary" : "default"} className="h-6 justify-center">
+                    {event.label}
+                  </Badge>
                   <div>
                     <p className="text-sm font-medium">{event.title}</p>
                     <p className="mt-1 text-sm text-muted-foreground">{event.detail}</p>
@@ -260,7 +268,11 @@ function DocsSection() {
         <SectionHeading title="Start with the docs that match the job" description="Each guide is written for a concrete moment: trying the gateway, understanding policy, inspecting unknown repos, or preparing a deployment." />
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {docsHighlights.map((doc) => (
-            <Link key={doc.href} href={doc.href} className="rounded-lg border bg-card p-5 shadow-sm transition-colors hover:bg-muted/40">
+            <Link
+              key={doc.href}
+              href={doc.href}
+              className="rounded-lg border bg-card p-5 shadow-sm transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
               <doc.icon className="size-5 text-accent" aria-hidden="true" />
               <h3 className="mt-4 font-semibold">{doc.label}</h3>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">{doc.description}</p>

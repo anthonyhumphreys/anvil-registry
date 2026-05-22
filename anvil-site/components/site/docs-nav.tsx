@@ -20,7 +20,7 @@ export function DocsNav({
                 key={entry.slug}
                 href={`/docs/${entry.slug}`}
                 className={cn(
-                  "rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+                  "rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                   activeSlug === entry.slug && "bg-muted font-medium text-foreground"
                 )}
               >

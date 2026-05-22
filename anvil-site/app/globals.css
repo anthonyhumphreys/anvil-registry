@@ -4,14 +4,14 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
+    --background: 190 20% 99%;
     --foreground: 190 14% 9%;
-    --card: 0 0% 100%;
+    --card: 190 20% 99%;
     --card-foreground: 190 14% 9%;
-    --popover: 0 0% 100%;
+    --popover: 190 20% 99%;
     --popover-foreground: 190 14% 9%;
     --primary: 190 14% 9%;
-    --primary-foreground: 0 0% 100%;
+    --primary-foreground: 190 20% 99%;
     --secondary: 190 8% 95%;
     --secondary-foreground: 190 14% 9%;
     --muted: 190 8% 95%;
@@ -19,7 +19,7 @@
     --accent: 31 91% 54%;
     --accent-foreground: 190 14% 9%;
     --destructive: 0 72% 51%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive-foreground: 190 20% 99%;
     --border: 190 12% 88%;
     --input: 190 12% 88%;
     --ring: 31 91% 54%;
@@ -43,7 +43,7 @@
     --accent: 31 91% 58%;
     --accent-foreground: 190 16% 7%;
     --destructive: 0 70% 55%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive-foreground: 190 10% 94%;
     --border: 190 11% 20%;
     --input: 190 11% 20%;
     --ring: 31 91% 58%;
@@ -56,6 +56,21 @@
 
   html {
     scroll-behavior: smooth;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 
   body {
@@ -113,15 +128,15 @@
   }
 
   .doc-markdown pre {
-    @apply mt-5 overflow-x-auto rounded-lg border bg-[#081011] p-5 text-sm text-white shadow-anvil;
+    @apply mt-5 overflow-x-auto rounded-lg border bg-[#081011] p-5 text-sm text-[#f7faf9] shadow-anvil;
   }
 
   .doc-markdown pre code {
-    @apply border-0 bg-transparent p-0 text-white;
+    @apply border-0 bg-transparent p-0 text-[#f7faf9];
   }
 
   .doc-markdown blockquote {
-    @apply mt-5 border-l-2 border-accent pl-4 text-muted-foreground;
+    @apply mt-5 rounded-md border bg-muted/50 px-4 py-3 text-muted-foreground;
   }
 
   .doc-markdown table {

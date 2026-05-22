@@ -16,13 +16,13 @@ export function SiteFooter() {
           </div>
         </div>
         <nav className="flex flex-wrap gap-5 text-sm text-muted-foreground" aria-label="Footer navigation">
-          <Link href={repositoryUrl} className="hover:text-foreground">
+          <Link href={repositoryUrl} className="rounded-sm hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
             GitHub
           </Link>
-          <Link href="/docs/policy" className="hover:text-foreground">
+          <Link href="/docs/policy" className="rounded-sm hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
             Security
           </Link>
-          <Link href="/docs/deploy" className="hover:text-foreground">
+          <Link href="/docs/deploy" className="rounded-sm hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
             Deploy
           </Link>
         </nav>

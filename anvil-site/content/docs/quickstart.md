@@ -68,6 +68,18 @@ anvil scan pnpm-lock.yaml --queue-analysis
 
 Lockfile warming uses `reason: "lockfile_scan"` so worker output can be traced back to preinstall review rather than request-path enforcement.
 
+## Seed common org dependencies
+
+Before routing a team through Anvil Registry, warm it with lockfiles from representative repositories:
+
+```bash
+ANVIL_REGISTRY_URL=http://localhost:4873 \
+ANVIL_ADMIN_TOKEN=local-dev-token \
+  anvil warm ./seed-lockfiles/package-lock.web.json
+```
+
+Use real `package-lock.json`, `pnpm-lock.yaml`, or `yarn.lock` files from high-traffic repos. Seeding uses the same warm and analysis queue path as normal lockfile review; it just does the work before someone is waiting on `npm install`. See [Registry seeding](/docs/registry-seeding) for the full rollout flow.
+
 ## Try Anvil Node Base
 
 Use Node Base when you want the install itself to happen inside a safer container:
