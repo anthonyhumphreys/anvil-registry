@@ -1,0 +1,198 @@
+---
+title: API reference
+description: Gateway, Admin, health, readiness, explain, policy, override, report, and package endpoint reference for alpha operators.
+section: Operations
+order: 10.5
+---
+
+# API reference
+
+This page summarizes the alpha HTTP surface that operators, CI jobs, and the CLI use. The CLI wraps most of these routes; call the API directly when you are debugging or integrating a custom workflow.
+
+Local defaults:
+
+| Service | URL |
+| --- | --- |
+| Gateway | `http://localhost:4873` |
+| Admin | `http://localhost:3000` |
+| Local admin token | `local-dev-token` |
+
+Protected routes require the admin token. The local stack sets `ADMIN_TOKEN`; client tools also recognize `ANVIL_ADMIN_TOKEN`.
+
+## Health
+
+```http
+GET /-/health
+```
+
+Use this for process liveness. A healthy response means the HTTP service can answer.
+
+Example:
+
+```bash
+curl http://localhost:4873/-/health
+```
+
+## Readiness
+
+```http
+GET /-/ready
+```
+
+Use this before routing install traffic. Readiness should check runtime dependencies such as persistence, object storage, queueing, and upstream registry configuration.
+
+Example:
+
+```bash
+curl http://localhost:4873/-/ready
+```
+
+Health can pass while readiness fails. That is useful, not a contradiction.
+
+## Metadata
+
+```http
+GET /:packageName
+GET /@:scope/:packageName
+```
+
+Metadata routes return npm-compatible package metadata after Anvil has applied cheap policy checks, filtered versions where configured, rewritten dist-tags, and rewritten tarball URLs through the gateway.
+
+Examples:
+
+```bash
+curl http://localhost:4873/react
+curl http://localhost:4873/@types/node
+```
+
+Package managers encode scoped names differently across requests, so test scoped metadata with real npm-compatible clients as well as `curl`.
+
+## Tarballs
+
+```http
+GET /:packageName/-/:tarballName
+GET /@:scope/:packageName/-/:tarballName
+```
+
+Tarball routes check policy decisions for the resolved package identity, serve cached allowed tarballs when possible, and fetch from upstream when needed.
+
+Blocked or quarantined tarball requests should return useful JSON rather than a mystery failure dressed as package-manager misery.
+
+## Explain
+
+```http
+POST /-/anvil/explain
+```
+
+Explain returns the current decision and evidence for a package version.
+
+Example payload:
+
+```json
+{
+  "name": "react",
+  "version": "latest"
+}
+```
+
+Use the CLI for the normal path:
+
+```bash
+ANVIL_REGISTRY_URL=http://localhost:4873 anvil explain react@latest
+```
+
+Explain output should include the decision action, policy version, triggering signals, analysis state, override state, and any review context that is enabled.
+
+## Policy
+
+```http
+GET /-/anvil/policy
+```
+
+Returns the active policy view for operators and CI tools. Use this to confirm the runtime mode and policy version a decision is using.
+
+CLI example:
+
+```bash
+ANVIL_REGISTRY_URL=http://localhost:4873 anvil policy
+```
+
+## Overrides
+
+```http
+POST /-/anvil/override
+```
+
+Creates an explicit override for a package decision. Overrides should be version-specific, reasoned, audited, and preferably expiring.
+
+Required concepts:
+
+- Package name.
+- Version.
+- Desired action.
+- Human reason.
+- Reviewer identity when available.
+- Expiry when the override is temporary.
+
+CLI example:
+
+```bash
+ANVIL_REGISTRY_URL=http://localhost:4873 \
+ANVIL_ADMIN_TOKEN=local-dev-token \
+  anvil override approve react@18.3.1 --reason "Reviewed package identity and reports"
+```
+
+Do not use overrides as a junk drawer for making CI green. That drawer fills up fast, then catches fire.
+
+## Reports
+
+Node Base reports can be submitted to Admin so reviewers can inspect local install evidence with registry decisions.
+
+CLI example:
+
+```bash
+ANVIL_REGISTRY_URL=http://localhost:4873 \
+ANVIL_ADMIN_TOKEN=local-dev-token \
+ANVIL_PROJECT_NAME=my-project \
+ANVIL_REPORT_SOURCE=ci \
+  anvil-submit-report .anvil/reports/ioc-report.json ioc
+```
+
+Report types include:
+
+| Type | Meaning |
+| --- | --- |
+| `lifecycle` | Safe-mode lifecycle script report. |
+| `dependency` | Dependency tree report. |
+| `ioc` | Observed install indicators of compromise report. |
+| `network` | Network monitor report. |
+
+## Queue operations
+
+Queue operations are normally driven through the CLI.
+
+Examples:
+
+```bash
+ANVIL_REGISTRY_URL=http://localhost:4873 \
+ANVIL_ADMIN_TOKEN=local-dev-token \
+  anvil queue status
+
+ANVIL_REGISTRY_URL=http://localhost:4873 \
+ANVIL_ADMIN_TOKEN=local-dev-token \
+  anvil warm ./pnpm-lock.yaml
+```
+
+`anvil warm` queues exact package versions from lockfiles and records the reason as `lockfile_scan`.
+
+## Authentication model
+
+The alpha admin surface uses an environment admin token where protected operations need it. Full auth is intentionally not described as finished.
+
+Use:
+
+```bash
+export ANVIL_ADMIN_TOKEN=local-dev-token
+```
+
+For hosted deployments, set a real secret. Do not expose admin tokens through `NEXT_PUBLIC_*`, client-side code, logs, readiness output, or screenshots in issues. Future you deserves at least this much kindness.

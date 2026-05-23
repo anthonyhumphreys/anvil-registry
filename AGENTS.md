@@ -14,6 +14,8 @@ The source specifications are:
 
 Treat those docs as product intent. If implementation details conflict with the docs, prefer the docs unless the code proves the docs are stale. If the docs are vague, make the smallest reasonable choice and state the assumption.
 
+This repo is the first public version of Anvil and should be treated as a rough alpha release. Do not describe the project as mature, production-hardened, or complete unless the code and docs genuinely support that claim. Alpha does not mean sloppy; it means be explicit about what is working, what is still sharp, and what should be piloted before broad rollout.
+
 ## Goal-Driven Working Style
 
 The user does **not** want milestone theatre. Do not stop after carving the work into phases unless explicitly asked for planning only.
@@ -70,6 +72,7 @@ When a task spans many pieces, maintain a working checklist internally or in the
 - Use BullMQ locally and SQS on AWS behind a queue abstraction.
 - Use Docker Compose for local deployment.
 - Use SST for AWS deployment.
+- Keep the standalone public docs site in `anvil-site` aligned with product behaviour.
 
 Recommended package boundaries from the spec:
 
@@ -99,6 +102,22 @@ Recommended package boundaries from the spec:
 - Do not implement auth until explicitly asked.
 - The admin MVP may use an environment admin token when requested by the docs or task, but do not build full auth early.
 - Approved overrides must be explicit, audited, reasoned, and preferably expiring.
+
+## Documentation Rules
+
+The repository documentation surface includes:
+
+- `README.md` for top-level orientation, alpha status, setup, local stack, CLI, policy, smokes, Node Base, and deployment.
+- `CONTRIBUTING.md` for contributor workflow and review expectations.
+- `SECURITY.md` for vulnerability reporting and security design expectations.
+- `docs/README.md` for the documentation map.
+- `docs/anvil-registry-spec.md` and `docs/anvil-node-base-spec.md` as product intent.
+- `anvil-site/content/docs/*.md` for public operator/user docs.
+- `apps/cli/README.md` and `devcontainer-base/README.md` for component-specific command references.
+
+When behaviour changes, update the relevant docs in the same task. Keep docs extensive enough for alpha users to run the stack, configure clients, understand policy decisions, use the CLI, use Node Base, review reports, seed caches, troubleshoot failures, and understand known limitations.
+
+Documentation must be operational and concrete: commands, endpoints, environment variables, policy decisions, report names, failure modes, and validation steps. Avoid vague launch copy, unsupported security guarantees, and the sort of "enterprise-ready" language that tends to arrive wearing a borrowed blazer.
 
 ## npm Registry Behaviour
 

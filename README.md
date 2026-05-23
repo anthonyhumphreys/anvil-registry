@@ -2,12 +2,16 @@
 
 Anvil Registry is a TypeScript npm registry gateway and companion Node devcontainer base image for safer dependency installs.
 
+This repository is the first public version of Anvil, and it should be treated as a rough **alpha** release. It is suitable for local trials, security review, early CI experiments, and contribution work. It is not yet a polished production security platform, and the docs call out that reality because pretending alpha software is finished is how projects become haunted.
+
 The gateway proxies npm metadata and tarballs, rewrites tarball URLs through itself, caches artefacts, runs deterministic package policy, queues static analysis outside the install path, and exposes review/override surfaces through the admin app and CLI. Anvil Node Base is the local harness: it defaults npm toward safer installs, reports lifecycle scripts, and provides explicit observed mode for packages that need install scripts.
 
-The source-of-truth specs live in:
+The source-of-truth specs and public docs live in:
 
 - `docs/anvil-registry-spec.md`
 - `docs/anvil-node-base-spec.md`
+- `docs/README.md`
+- `anvil-site/content/docs`
 
 ## Workspace
 
@@ -19,13 +23,30 @@ The source-of-truth specs live in:
 - `infra/docker`: local Docker Compose stack.
 - `infra/sst`: AWS/SST infrastructure.
 - `devcontainer-base`: hardened Node 22 devcontainer base image and helper scripts.
+- `anvil-site`: standalone Next.js documentation and launch site.
+- `docs`: product specs and repo-level documentation map.
+
+## Documentation
+
+Start here:
+
+- `docs/README.md`: repo documentation map and coverage notes.
+- `anvil-site/content/docs/introduction.md`: public docs introduction.
+- `anvil-site/content/docs/alpha-status.md`: current alpha posture and recommended rollout.
+- `anvil-site/content/docs/quickstart.md`: local registry and client setup.
+- `anvil-site/content/docs/architecture.md`: system architecture.
+- `anvil-site/content/docs/api-reference.md`: alpha HTTP/operator surface.
+- `devcontainer-base/README.md`: Node Base helper scripts and image validation.
+- `apps/cli/README.md`: CLI install and command summary.
+
+When behaviour changes, update the relevant docs in the same pull request. A security gateway with stale docs is just a puzzle box with ports.
 
 ## Local Development
 
-Install dependencies:
+Install dependencies with lifecycle scripts disabled unless you explicitly need otherwise:
 
 ```bash
-pnpm install
+pnpm install --ignore-scripts
 ```
 
 Run the main checks:
