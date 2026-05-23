@@ -115,7 +115,7 @@ jobs:
         run: pnpm smoke:llm-review
 
       - name: Validate SST migration command
-        run: pnpm --filter @anvil/infra-sst migrate:run -- --dry-run
+        run: pnpm --filter @anvilstack/infra-sst migrate:run -- --dry-run
 
       - name: Validate SST deploy preflight
         run: PUBLIC_BASE_URL=https://npm.anvil-ci.test pnpm sst:preflight
