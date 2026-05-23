@@ -85,6 +85,7 @@ The install should fail clearly, not with a mystery 500 and vibes.
 
 The Admin service and CLI exist to make decisions reviewable:
 
+- Use a Next.js Admin console for dashboard review, package details, analysis reports, Node Base reports, policy, overrides, audit events, LLM review requests, and popular package index uploads.
 - Explain a package decision.
 - Request analysis.
 - View queue state.
@@ -92,4 +93,4 @@ The Admin service and CLI exist to make decisions reviewable:
 - Create or revoke audited overrides.
 - Inspect policy version and runtime mode.
 
-The CLI should be scriptable enough for CI and readable enough for local review.
+The CLI should be scriptable enough for CI and readable enough for local review. It uses the Admin service JSON route handlers for review data such as overrides, audit events, analysis reports, Node Base reports, and the popular package index.

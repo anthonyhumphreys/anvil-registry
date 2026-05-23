@@ -105,7 +105,7 @@ export ANVIL_REGISTRY_URL=http://localhost:4873
 
 If `ANVIL_REGISTRY_URL` is not set, the CLI falls back to `PUBLIC_BASE_URL`, then `http://localhost:4873`.
 
-Admin-facing commands use the Admin service URL:
+Admin-facing commands use the Next.js Admin service URL:
 
 ```bash
 export ANVIL_ADMIN_URL=http://localhost:3000
@@ -290,7 +290,7 @@ anvil reports compare package@1.2.3 \
   --right-integrity sha512-new
 ```
 
-Report commands use `ANVIL_ADMIN_URL` and require an admin token.
+Report commands use `ANVIL_ADMIN_URL` and require an admin token. They read the Admin service JSON route handlers; the browser console shows the same evidence with friendlier tables and package detail pages.
 
 ## Review Node Base reports
 
@@ -327,6 +327,7 @@ anvil popular-index upload popular-index.json \
 ```
 
 The popular package index helps name-squatting checks compare low-adoption package names against known popular packages.
+You can inspect and upload the same index through the Admin console at `/popular-package-index`.
 
 ## Test policy against package.json
 

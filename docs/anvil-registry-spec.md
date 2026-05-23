@@ -86,7 +86,7 @@ If the analyser changes, previous decisions can be invalidated or marked stale.
 - **Runtime:** Node.js 22 LTS.
 - **Package manager:** pnpm.
 - **Monorepo:** Turborepo.
-- **HTTP server:** Fastify.
+- **HTTP server:** Fastify for the registry gateway; Next.js route handlers for Admin.
 - **Validation:** Zod.
 - **Logging:** Pino.
 - **Testing:** Vitest.
@@ -338,11 +338,11 @@ The Admin package review action validates its `requestedBy` and `priority` field
 
 ## 5.3 `apps/admin`
 
-The admin UI provides human review and policy management.
+The admin app is a Next.js service that provides human review, policy management, and the JSON API used by the CLI for review data.
 
 ### Features
 
-- Dashboard.
+- ShadCN/Tailwind dashboard.
 - Blocked package list.
 - Quarantined package list.
 - Package version detail page.
@@ -352,8 +352,10 @@ The admin UI provides human review and policy management.
 - Effective policy configuration viewer.
 - Audit log.
 - Popular package index viewer.
+- Popular package index upload workflow.
+- JSON route handlers for CLI-facing review data: decisions, overrides, audit events, analysis reports, Node Base reports, policy, package review, LLM review requests, and popular package index operations.
 
-Admin exposes `GET /api/policy` and `/policy` so reviewers can inspect the runtime mode and effective deterministic policy. Policy editing is intentionally not part of this slice; config still comes from environment and deployment configuration. When `ADMIN_TOKEN` is configured, Admin pages and API routes require the bearer token or the local admin session cookie.
+Admin exposes `GET /api/policy` and `/policy` so reviewers can inspect the runtime mode and effective deterministic policy. Policy editing is intentionally not part of this slice; config still comes from environment and deployment configuration. When `ADMIN_TOKEN` is configured, Admin pages and API route handlers require the bearer token or the local admin session cookie.
 
 Admin package review URLs must preserve scoped package names with URL encoding, for example `/packages/%40scope%2Fpkg/1.0.0`.
 
@@ -674,7 +676,7 @@ The gateway, worker, and admin UI load the popular package index from object sto
 }
 ```
 
-If no object or path is configured, Anvil uses the built-in seed index. Admin exposes the active index at `GET /api/popular-package-index` and `/popular-package-index` so reviewers can inspect which package names and known confusion pairs are driving deterministic typo-squatting evidence. Admin also accepts `POST /api/popular-package-index` with the same JSON shape, validates it, writes it to `popular-index/npm/{date}.json`, updates the active object key, and records an audit event.
+If no object or path is configured, Anvil uses the built-in seed index. Admin exposes the active index at `GET /api/popular-package-index` and `/popular-package-index` so reviewers can inspect which package names and known confusion pairs are driving deterministic typo-squatting evidence. Admin also accepts uploads from the `/popular-package-index` page and `POST /api/popular-package-index` with the same JSON shape, validates the index, writes it to `popular-index/npm/{date}.json`, updates the active object key, and records an audit event.
 
 ### Example detection
 
@@ -1163,7 +1165,7 @@ pnpm smoke:node-base-image-report
 - ECS cluster.
 - Fargate service: gateway.
 - Fargate service: worker.
-- Fargate service: admin, or SST Next.js app.
+- Fargate service: admin Next.js app.
 - Application Load Balancer.
 - RDS Postgres.
 - S3 package cache bucket.
@@ -1325,7 +1327,7 @@ The `DatabaseMigration` task uses the same Drizzle migration runner as local Doc
 
 The gateway service uses `/-/health` for the ECS container health check and `/-/ready` for the load-balancer target health check. The process can stay alive while a dependency is unavailable, but traffic should not be routed to a target that cannot reach Postgres, object storage, or the analysis queue.
 
-The SST deployment also creates an admin Fargate service using `apps/admin/Dockerfile`, exposes `/-/health` as its load-balancer health check, and links an `AdminToken` secret into both gateway and admin as `ADMIN_TOKEN`. That keeps override creation, index uploads, and manual analysis enqueueing token-gated in production.
+The SST deployment also creates an admin Fargate service using the Next.js standalone build from `apps/admin/Dockerfile`, exposes `/-/health` as its load-balancer health check, and links an `AdminToken` secret into both gateway and admin as `ADMIN_TOKEN`. That keeps override creation, index uploads, and manual analysis enqueueing token-gated in production.
 
 Set `PUBLIC_BASE_URL` or `ANVIL_GATEWAY_DOMAIN` before deployment so npm metadata rewrites tarball URLs to the real HTTPS gateway endpoint. SST fails fast when neither is configured, rather than emitting package metadata that points installers at a placeholder host. Set `ANVIL_GATEWAY_DOMAIN` and `ANVIL_ADMIN_DOMAIN` to attach custom load-balancer domains to the gateway or admin services. Route 53-hosted domains use SST's default DNS and certificate handling; externally managed DNS can set `ANVIL_GATEWAY_CERT_ARN` or `ANVIL_ADMIN_CERT_ARN` to a validated ACM certificate ARN, which disables automated DNS for that service and leaves the DNS record in the operator's hands.
 

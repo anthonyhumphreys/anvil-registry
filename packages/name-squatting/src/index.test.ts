@@ -74,6 +74,17 @@ describe("detectNameSquatting", () => {
     expect(detectNameSquatting("fastfy", [{ name: "fastify" }])[0]?.reasons).toContain("high_jaro_winkler_similarity");
   });
 
+  it("does not flag legitimate scoped declaration packages as squats of their runtime package", () => {
+    expect(detectNameSquatting("@types/isarray", [{ name: "isarray", weeklyDownloads: 1_000_000 }])).toEqual([]);
+    expect(detectNameSquatting("@types/call-bind", [{ name: "call-bind", weeklyDownloads: 1_000_000 }])).toEqual([]);
+    expect(detectNameSquatting("@types/array.prototype.every", [{ name: "array.prototype.every", weeklyDownloads: 1_000_000 }])).toEqual([]);
+  });
+
+  it("does not treat longer prefix names as typos without typo-like evidence", () => {
+    expect(detectNameSquatting("vitepress", [{ name: "vite", weeklyDownloads: 20_000_000 }])).toEqual([]);
+    expect(detectNameSquatting("eslint-plugin-react", [{ name: "eslint", weeklyDownloads: 20_000_000 }])).toEqual([]);
+  });
+
   it("loads a configurable popular package index", () => {
     const directory = mkdtempSync(join(tmpdir(), "anvil-popular-index-"));
     const indexPath = join(directory, "latest.json");

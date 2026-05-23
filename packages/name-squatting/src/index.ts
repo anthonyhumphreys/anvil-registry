@@ -29,6 +29,8 @@ export type NameSquattingSignal = {
   suggestedPackage: string;
 };
 
+const trustedMirrorScopes = new Set(["@types"]);
+
 export const defaultPopularPackages: PopularPackage[] = [
   { name: "lodash", weeklyDownloads: 60_000_000 },
   { name: "react", weeklyDownloads: 30_000_000 },
@@ -219,8 +221,9 @@ export function detectNameSquatting(
 
   return index.popularPackages
     .filter((candidate) => candidate.name !== packageName)
-    .map((candidate) => {
+    .flatMap((candidate) => {
       const candidateParts = splitPackageName(candidate.name);
+      if (isTrustedScopeMirror(requested, candidateParts)) return [];
       const candidateNames = [candidate.name, ...(candidate.aliases ?? [])];
       const scores = candidateNames.map((name) => ({
         name,
@@ -239,8 +242,8 @@ export function detectNameSquatting(
       const distance = damerauLevenshtein(normaliseName(packageName), normaliseName(candidate.name));
       const reasons: string[] = [];
 
-      if (score >= 0.82) reasons.push("high_name_similarity");
-      if (best.jaroWinkler >= 0.9) reasons.push("high_jaro_winkler_similarity");
+      if (scopeConfusion || (best.editSimilarity >= 0.82 && hasComparableLength(packageName, best.name))) reasons.push("high_name_similarity");
+      if (best.jaroWinkler >= 0.9 && best.distance <= 2) reasons.push("high_jaro_winkler_similarity");
       if (knownCandidate === candidate.name || candidate.aliases?.some((alias) => alias.toLowerCase() === packageName.toLowerCase())) {
         reasons.push("known_ecosystem_confusion");
       }
@@ -258,7 +261,7 @@ export function detectNameSquatting(
       }
       if (distance <= 2) reasons.push("short_edit_distance");
 
-      return {
+      return [{
         candidate: candidate.name,
         similarity: Number(score.toFixed(3)),
         jaroWinklerSimilarity: best.jaroWinkler,
@@ -266,10 +269,28 @@ export function detectNameSquatting(
         weeklyDownloads: candidate.weeklyDownloads,
         reasons: [...new Set(reasons)],
         suggestedPackage: candidate.name
-      };
+      }];
     })
     .filter((signal) => signal.reasons.length > 0)
     .sort((a, b) => b.similarity - a.similarity);
+}
+
+function isTrustedScopeMirror(requested: { scope?: string; name: string }, candidate: { scope?: string; name: string }) {
+  return Boolean(
+    requested.scope &&
+      trustedMirrorScopes.has(requested.scope) &&
+      !candidate.scope &&
+      requested.name &&
+      normaliseSegment(requested.name) === normaliseSegment(candidate.name)
+  );
+}
+
+function hasComparableLength(a: string, b: string) {
+  const left = normaliseName(a);
+  const right = normaliseName(b);
+  const shorter = Math.min(left.length, right.length);
+  const longer = Math.max(left.length, right.length, 1);
+  return shorter / longer >= 0.72;
 }
 
 function commonPrefixLength(a: string, b: string, maxLength: number): number {
@@ -290,6 +311,10 @@ function stripPlural(value: string): string {
   if (value.endsWith("es") && value.length > 2) return value.slice(0, -2);
   if (value.endsWith("s") && value.length > 1) return value.slice(0, -1);
   return value;
+}
+
+function normaliseSegment(value: string): string {
+  return value.toLowerCase().replace(/[-_]/g, "");
 }
 
 function editPatternReasons(requested: string, candidate: string): string[] {
