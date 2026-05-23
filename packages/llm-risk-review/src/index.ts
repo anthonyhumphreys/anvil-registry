@@ -45,34 +45,53 @@ export class HttpLlmRiskReviewProvider implements LlmRiskReviewProvider {
   private readonly endpoint: string;
   private readonly apiKey?: string;
   private readonly model?: string;
+  private readonly retryAttempts: number;
+  private readonly retryDelayMs: number;
 
-  constructor(options: { endpoint: string; apiKey?: string; model?: string; fetch?: typeof fetch }) {
+  constructor(options: { endpoint: string; apiKey?: string; model?: string; fetch?: typeof fetch; retryAttempts?: number; retryDelayMs?: number }) {
     this.endpoint = options.endpoint;
     this.apiKey = options.apiKey;
     this.model = options.model;
     this.fetch = options.fetch ?? globalThis.fetch;
+    this.retryAttempts = options.retryAttempts ?? 3;
+    this.retryDelayMs = options.retryDelayMs ?? 250;
   }
 
   async review(input: LlmRiskReviewInput): Promise<LlmRiskReview | undefined> {
-    const response = await this.fetch(this.endpoint, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        ...(this.apiKey ? { authorization: `Bearer ${this.apiKey}` } : {})
-      },
-      body: JSON.stringify({
-        model: this.model,
-        input,
-        instructions:
-          "Return only JSON matching the Anvil LlmRiskReview schema. Do not recommend allow solely because evidence is inconclusive."
-      })
-    });
+    for (let attempt = 1; attempt <= this.retryAttempts; attempt += 1) {
+      try {
+        const response = await this.fetch(this.endpoint, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            ...(this.apiKey ? { authorization: `Bearer ${this.apiKey}` } : {})
+          },
+          body: JSON.stringify({
+            model: this.model,
+            input,
+            instructions:
+              "Return only JSON matching the Anvil LlmRiskReview schema. Do not recommend allow solely because evidence is inconclusive."
+          })
+        });
 
-    if (!response.ok) return undefined;
-    const body = await safeResponseJson(response);
-    const candidate = extractReviewCandidate(body);
-    const parsed = llmRiskReviewSchema.safeParse(candidate);
-    return parsed.success ? parsed.data : undefined;
+        if (!response.ok) {
+          if (isRetriableStatus(response.status) && attempt < this.retryAttempts) {
+            await delay(this.retryDelayMs * attempt);
+            continue;
+          }
+          return undefined;
+        }
+
+        const body = await safeResponseJson(response);
+        const candidate = extractReviewCandidate(body);
+        const parsed = llmRiskReviewSchema.safeParse(candidate);
+        return parsed.success ? parsed.data : undefined;
+      } catch {
+        if (attempt >= this.retryAttempts) return undefined;
+        await delay(this.retryDelayMs * attempt);
+      }
+    }
+    return undefined;
   }
 }
 
@@ -134,4 +153,12 @@ function arrayValue(value: unknown): unknown[] {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isRetriableStatus(status: number) {
+  return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
+async function delay(ms: number) {
+  await new Promise((resolve) => setTimeout(resolve, ms));
 }

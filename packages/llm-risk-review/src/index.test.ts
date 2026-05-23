@@ -1,5 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { createServer } from "node:http";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { DisabledLlmRiskReviewProvider, HttpLlmRiskReviewProvider, createLlmRiskReviewProvider, llmRiskReviewSchema } from "./index.js";
+
+const servers: Array<ReturnType<typeof createServer>> = [];
+
+afterEach(async () => {
+  await Promise.all(servers.splice(0).map((server) => new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))));
+});
 
 describe("llmRiskReviewSchema", () => {
   it("accepts spec-shaped structured risk reviews", () => {
@@ -84,6 +91,63 @@ describe("llmRiskReviewSchema", () => {
     });
   });
 
+  it("retries transient HTTP provider failures", async () => {
+    const fetchProvider = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("provider warming up"))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ review: mockReview() }), { status: 200 }));
+    const provider = new HttpLlmRiskReviewProvider({
+      endpoint: "https://llm.example.test/review",
+      fetch: fetchProvider as unknown as typeof fetch,
+      retryDelayMs: 1
+    });
+
+    await expect(
+      provider.review({
+        packageName: "pkg",
+        version: "1.0.0",
+        similarPopularPackages: [],
+        deterministicSignals: []
+      })
+    ).resolves.toMatchObject({ riskLevel: "high", recommendedAction: "quarantine" });
+    expect(fetchProvider).toHaveBeenCalledTimes(2);
+  });
+
+  it("accepts the local smoke-test mock provider contract over HTTP", async () => {
+    const server = createServer(async (request, response) => {
+      if (request.method !== "POST" || request.url !== "/review") {
+        response.writeHead(404, { "content-type": "application/json" });
+        response.end(JSON.stringify({ error: "ANVIL_LLM_REVIEW_MOCK_NOT_FOUND" }));
+        return;
+      }
+
+      let body = "";
+      for await (const chunk of request) body += chunk;
+      expect(JSON.parse(body)).toMatchObject({ model: "smoke-test", input: { packageName: "is-number", version: "7.0.0" } });
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ review: mockReview() }));
+    });
+    servers.push(server);
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("Expected TCP server address");
+
+    const provider = new HttpLlmRiskReviewProvider({
+      endpoint: `http://127.0.0.1:${address.port}/review`,
+      model: "smoke-test",
+      retryDelayMs: 1
+    });
+
+    await expect(
+      provider.review({
+        packageName: "is-number",
+        version: "7.0.0",
+        similarPopularPackages: [],
+        deterministicSignals: ["PROVENANCE_MISSING"]
+      })
+    ).resolves.toMatchObject({ riskLevel: "high", recommendedAction: "quarantine" });
+  });
+
   it("ignores malformed HTTP provider output", async () => {
     const provider = new HttpLlmRiskReviewProvider({
       endpoint: "https://llm.example.test/review",
@@ -129,3 +193,20 @@ describe("llmRiskReviewSchema", () => {
     ).resolves.toBeUndefined();
   });
 });
+
+function mockReview() {
+  return {
+    riskLevel: "high",
+    confidence: "medium",
+    summary: "Mock LLM review requested by the local smoke test.",
+    suspectedRiskTypes: ["unknown"],
+    evidence: [
+      {
+        signal: "MANUAL_REVIEW",
+        explanation: "The local smoke test forced model review for a known package target.",
+        source: "metadata"
+      }
+    ],
+    recommendedAction: "quarantine"
+  };
+}

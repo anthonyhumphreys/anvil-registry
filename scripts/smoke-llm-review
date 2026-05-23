@@ -49,6 +49,25 @@ async function waitFor(url, label) {
 }
 NODE
 
+docker compose -f "$COMPOSE_FILE" --profile llm-review exec -T worker node - "http://llm-review-mock:8787/-/health" <<'NODE'
+const [healthUrl] = process.argv.slice(2);
+const deadline = Date.now() + 60_000;
+let lastError;
+
+while (Date.now() < deadline) {
+  try {
+    const response = await fetch(healthUrl);
+    if (response.ok) process.exit(0);
+    lastError = `${response.status} ${response.statusText}`;
+  } catch (error) {
+    lastError = error instanceof Error ? error.message : String(error);
+  }
+  await new Promise((resolve) => setTimeout(resolve, 1_000));
+}
+
+throw new Error(`[anvil] Timed out waiting for worker-to-LLM-mock connectivity: ${lastError ?? "no response"}`);
+NODE
+
 echo "[anvil] Queueing forced LLM review for $PACKAGE_TARGET"
 ANVIL_REGISTRY_URL="$REGISTRY_URL" \
 ANVIL_ADMIN_TOKEN="$ADMIN_TOKEN" \
