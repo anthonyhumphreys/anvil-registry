@@ -92,6 +92,12 @@ export const docsHighlights = [
     description: "Understand metadata proxying, tarball rewriting, scoped upstreams, caching, analysis, and explain output."
   },
   {
+    label: "LLM integration",
+    href: "/docs/llm-integration",
+    icon: Sparkles,
+    description: "Configure optional model review context, provider contracts, and private-package controls."
+  },
+  {
     label: "Anvil Node Base",
     href: "/docs/node-base",
     icon: LockKeyhole,

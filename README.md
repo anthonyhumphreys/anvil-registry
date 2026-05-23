@@ -139,6 +139,8 @@ Deterministic policy defaults are conservative and can be tuned from environment
 
 Additional policy knobs use the same `POLICY_` prefix for install scripts, provenance, override behaviour, analyser comparison depth, and policy versioning. The gateway records the effective policy at `GET /-/anvil/policy`, because guessing production policy from vibes is how incident reviews get spicy.
 
+SST forwards any configured `POLICY_*` values into gateway, worker, and admin so deployed enforcement, worker analysis, and policy inspection stay on the same version of reality.
+
 ## LLM Review
 
 LLM risk review is optional and never the enforcement authority. Deterministic policy still makes the final decision; LLM output is schema-validated context that can add quarantine-level risk signals.
@@ -204,8 +206,10 @@ Docker Compose is the local path. SST is the AWS path and defines gateway, worke
 Set `PUBLIC_BASE_URL` or `ANVIL_GATEWAY_DOMAIN` for the npm-facing gateway URL before deploying so tarball rewrites point at the real HTTPS endpoint. SST fails fast when neither is configured, because quietly publishing tarball URLs to a placeholder domain is how you build a very small outage machine. Set `ANVIL_API_BASE_URL` only when the admin service should call a different gateway URL; otherwise it inherits `PUBLIC_BASE_URL` or the gateway domain.
 Set `ANVIL_GATEWAY_DOMAIN` or `ANVIL_ADMIN_DOMAIN` to attach custom SST load-balancer domains. Route 53 hosted domains use SST's default DNS/certificate handling; for externally managed DNS, also set `ANVIL_GATEWAY_CERT_ARN` or `ANVIL_ADMIN_CERT_ARN` to a validated ACM certificate ARN.
 When `UPSTREAM_NPM_REGISTRIES_JSON` entries use `authTokenSecretName`, SST creates linked secrets for those names and passes them to gateway, worker, and admin; set the secret values before routing installs through private upstreams.
+The SST `AdminToken` secret is exposed as `ANVIL_ADMIN_TOKEN` and the legacy `ADMIN_TOKEN` alias for gateway and admin. New client/operator commands should use `ANVIL_ADMIN_TOKEN`; the alias is kept so older local scripts do not faceplant.
+Deployment policy overrides use the same `POLICY_*` environment variables described above. `pnpm sst:preflight` validates boolean and non-negative integer policy values before deployment, which is cheaper than discovering `POLICY_MINIMUM_PACKAGE_AGE_DAYS=banana` in ECS logs.
 
-Run the local deploy preflight before `sst deploy` to catch missing gateway URLs, domain/certificate mismatches, malformed private upstream config, and partially enabled LLM review:
+Run the local deploy preflight before `sst deploy` to catch missing gateway URLs, domain/certificate mismatches, malformed private upstream config, invalid policy overrides, and partially enabled LLM review:
 
 ```bash
 PUBLIC_BASE_URL=https://npm.your-domain.com pnpm sst:preflight

@@ -14,6 +14,28 @@ type PreflightResult = {
 };
 
 const placeholderHosts = new Set(["example.com", "example.test", "localhost", "127.0.0.1", "::1"]);
+const booleanPolicyEnvNames = [
+  "POLICY_BLOCK_SIMILAR_LOW_DOWNLOAD_PACKAGES",
+  "POLICY_BLOCK_NEW_INSTALL_SCRIPTS",
+  "POLICY_QUARANTINE_CHANGED_INSTALL_SCRIPTS",
+  "POLICY_BLOCK_UNEXPECTED_BINARIES",
+  "POLICY_QUARANTINE_OBFUSCATED_CODE",
+  "POLICY_HIDE_QUARANTINED_METADATA",
+  "POLICY_PROVENANCE_ENABLED",
+  "POLICY_QUARANTINE_CHANGED_PROVENANCE",
+  "POLICY_QUARANTINE_MISSING_PROVENANCE_HIGH_DOWNLOAD",
+  "POLICY_OVERRIDES_ENABLED",
+  "POLICY_OVERRIDE_REQUIRE_REASON"
+];
+const nonNegativeIntegerPolicyEnvNames = [
+  "POLICY_MINIMUM_PACKAGE_AGE_DAYS",
+  "POLICY_COMPARE_PREVIOUS_VERSIONS",
+  "POLICY_LOW_DOWNLOAD_THRESHOLD",
+  "POLICY_STRICT_LOW_DOWNLOAD_THRESHOLD",
+  "POLICY_PROVENANCE_HIGH_DOWNLOAD_THRESHOLD",
+  "POLICY_TRUSTED_PUBLISHING_SCORE_REDUCTION",
+  "POLICY_OVERRIDE_DEFAULT_EXPIRY_DAYS"
+];
 
 export function validateSstDeployPreflight(env: NodeJS.ProcessEnv = process.env): PreflightResult {
   const errors: PreflightIssue[] = [];
@@ -49,6 +71,7 @@ export function validateSstDeployPreflight(env: NodeJS.ProcessEnv = process.env)
 
   validateUpstreamRegistryJson(env.UPSTREAM_NPM_REGISTRIES_JSON, errors, warnings);
   validateLlmReview(env, errors, warnings);
+  validatePolicyEnvironment(env, errors);
 
   return {
     ok: errors.length === 0,
@@ -154,8 +177,33 @@ function validateLlmReview(env: NodeJS.ProcessEnv, errors: PreflightIssue[], war
   }
 }
 
+function validatePolicyEnvironment(env: NodeJS.ProcessEnv, errors: PreflightIssue[]) {
+  for (const name of booleanPolicyEnvNames) {
+    const value = optionalEnv(env[name]);
+    if (value && !isBooleanString(value)) {
+      errors.push(issue(`${name}_INVALID`, `${name} must be a boolean value: true, false, 1, 0, yes, no, on, or off.`));
+    }
+  }
+
+  for (const name of nonNegativeIntegerPolicyEnvNames) {
+    const value = optionalEnv(env[name]);
+    if (value && !isNonNegativeInteger(value)) {
+      errors.push(issue(`${name}_INVALID`, `${name} must be a non-negative integer.`));
+    }
+  }
+}
+
 function isTruthy(value: string | undefined) {
   return ["1", "true", "yes", "on"].includes(value?.trim().toLowerCase() ?? "");
+}
+
+function isBooleanString(value: string) {
+  return ["1", "true", "yes", "on", "0", "false", "no", "off"].includes(value.trim().toLowerCase());
+}
+
+function isNonNegativeInteger(value: string) {
+  if (!/^\d+$/.test(value.trim())) return false;
+  return Number.isSafeInteger(Number(value));
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

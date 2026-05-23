@@ -117,6 +117,37 @@ CLI example:
 ANVIL_REGISTRY_URL=http://localhost:4873 anvil policy
 ```
 
+## LLM review
+
+```http
+POST /-/anvil/llm-review
+Authorization: Bearer <admin-token>
+Content-Type: application/json
+```
+
+Queues optional model review context for one package version or a deduplicated set of targets. The route is available only when LLM review is enabled, and it does not approve packages or bypass deterministic policy.
+
+Example payload:
+
+```json
+{
+  "name": "react",
+  "version": "18.3.1",
+  "requestedBy": "security-review",
+  "priority": "high"
+}
+```
+
+CLI example:
+
+```bash
+ANVIL_REGISTRY_URL=http://localhost:4873 \
+ANVIL_ADMIN_TOKEN=local-dev-token \
+  anvil llm-review react@18.3.1 --requested-by security-review --priority high
+```
+
+See [LLM integration](/docs/llm-integration) for provider setup, schema expectations, and privacy controls.
+
 ## Overrides
 
 ```http

@@ -1327,13 +1327,15 @@ The `DatabaseMigration` task uses the same Drizzle migration runner as local Doc
 
 The gateway service uses `/-/health` for the ECS container health check and `/-/ready` for the load-balancer target health check. The process can stay alive while a dependency is unavailable, but traffic should not be routed to a target that cannot reach Postgres, object storage, or the analysis queue.
 
-The SST deployment also creates an admin Fargate service using the Next.js standalone build from `apps/admin/Dockerfile`, exposes `/-/health` as its load-balancer health check, and links an `AdminToken` secret into both gateway and admin as `ADMIN_TOKEN`. That keeps override creation, index uploads, and manual analysis enqueueing token-gated in production.
+The SST deployment also creates an admin Fargate service using the Next.js standalone build from `apps/admin/Dockerfile`, exposes `/-/health` as its load-balancer health check, and links an `AdminToken` secret into both gateway and admin as `ANVIL_ADMIN_TOKEN` plus the legacy `ADMIN_TOKEN` alias. That keeps override creation, index uploads, report submission, and manual analysis enqueueing token-gated in production while matching the current config package preference for `ANVIL_ADMIN_TOKEN`.
 
 Set `PUBLIC_BASE_URL` or `ANVIL_GATEWAY_DOMAIN` before deployment so npm metadata rewrites tarball URLs to the real HTTPS gateway endpoint. SST fails fast when neither is configured, rather than emitting package metadata that points installers at a placeholder host. Set `ANVIL_GATEWAY_DOMAIN` and `ANVIL_ADMIN_DOMAIN` to attach custom load-balancer domains to the gateway or admin services. Route 53-hosted domains use SST's default DNS and certificate handling; externally managed DNS can set `ANVIL_GATEWAY_CERT_ARN` or `ANVIL_ADMIN_CERT_ARN` to a validated ACM certificate ARN, which disables automated DNS for that service and leaves the DNS record in the operator's hands.
 
 SST passes deploy-time `LLM_REVIEW_ENABLED`, `LLM_REVIEW_PROVIDER`, `LLM_REVIEW_MODEL`, `LLM_REVIEW_ENDPOINT`, `LLM_REVIEW_RUN_ON_UNKNOWN_PACKAGES`, `LLM_REVIEW_RUN_ON_QUARANTINE`, and `LLM_REVIEW_INCLUDE_PRIVATE_PACKAGES` values into gateway, worker, and admin. The provider credential is the `LlmReviewApiKey` secret and is linked only to the worker, because the gateway enqueues review jobs and should not need the model key.
 
-Run the SST deploy preflight before `sst deploy` to catch missing gateway URLs, domain/certificate mismatches, malformed private upstream config, and partially enabled LLM review without touching AWS:
+SST also forwards configured `POLICY_*` environment overrides into gateway, worker, and admin so install-path enforcement, worker analysis, and Admin policy inspection use the same deterministic policy settings. The deploy preflight validates boolean policy overrides and non-negative integer thresholds before `sst deploy`.
+
+Run the SST deploy preflight before `sst deploy` to catch missing gateway URLs, domain/certificate mismatches, malformed private upstream config, invalid policy overrides, and partially enabled LLM review without touching AWS:
 
 ```bash
 PUBLIC_BASE_URL=https://npm.your-domain.com pnpm sst:preflight

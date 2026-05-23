@@ -84,4 +84,18 @@ describe("SST deploy preflight", () => {
     expect(result.errors.map((error) => error.code)).toEqual(expect.arrayContaining(["LLM_REVIEW_PROVIDER_REQUIRED", "LLM_REVIEW_ENDPOINT_REQUIRED"]));
     expect(result.warnings.map((warning) => warning.code)).toContain("LLM_REVIEW_MODEL_EMPTY");
   });
+
+  it("rejects malformed policy overrides before deploy", () => {
+    const result = validateSstDeployPreflight({
+      PUBLIC_BASE_URL: "https://npm.anvil.test",
+      POLICY_BLOCK_NEW_INSTALL_SCRIPTS: "sometimes",
+      POLICY_MINIMUM_PACKAGE_AGE_DAYS: "-1",
+      POLICY_LOW_DOWNLOAD_THRESHOLD: "100.5"
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.errors.map((error) => error.code)).toEqual(
+      expect.arrayContaining(["POLICY_BLOCK_NEW_INSTALL_SCRIPTS_INVALID", "POLICY_MINIMUM_PACKAGE_AGE_DAYS_INVALID", "POLICY_LOW_DOWNLOAD_THRESHOLD_INVALID"])
+    );
+  });
 });

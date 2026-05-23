@@ -265,6 +265,8 @@ anvil llm-review package@1.2.3 --requested-by security-review --priority high
 
 This queues review work. It does not allow a package, and deterministic policy remains the enforcement authority.
 
+For provider setup, local smoke testing, and private-package controls, see [LLM integration](/docs/llm-integration).
+
 ## Inspect analysis reports
 
 Fetch the latest matching analysis report:

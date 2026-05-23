@@ -88,6 +88,27 @@ export function createAnvilSstConfig(
         LLM_REVIEW_RUN_ON_QUARANTINE: env.LLM_REVIEW_RUN_ON_QUARANTINE ?? "false",
         LLM_REVIEW_INCLUDE_PRIVATE_PACKAGES: env.LLM_REVIEW_INCLUDE_PRIVATE_PACKAGES ?? "false"
       };
+      const policyEnvironment = optionalEnvironment(env, [
+        "POLICY_VERSION",
+        "POLICY_MINIMUM_PACKAGE_AGE_DAYS",
+        "POLICY_COMPARE_PREVIOUS_VERSIONS",
+        "POLICY_LOW_DOWNLOAD_THRESHOLD",
+        "POLICY_STRICT_LOW_DOWNLOAD_THRESHOLD",
+        "POLICY_BLOCK_SIMILAR_LOW_DOWNLOAD_PACKAGES",
+        "POLICY_BLOCK_NEW_INSTALL_SCRIPTS",
+        "POLICY_QUARANTINE_CHANGED_INSTALL_SCRIPTS",
+        "POLICY_BLOCK_UNEXPECTED_BINARIES",
+        "POLICY_QUARANTINE_OBFUSCATED_CODE",
+        "POLICY_HIDE_QUARANTINED_METADATA",
+        "POLICY_PROVENANCE_ENABLED",
+        "POLICY_PROVENANCE_HIGH_DOWNLOAD_THRESHOLD",
+        "POLICY_TRUSTED_PUBLISHING_SCORE_REDUCTION",
+        "POLICY_QUARANTINE_CHANGED_PROVENANCE",
+        "POLICY_QUARANTINE_MISSING_PROVENANCE_HIGH_DOWNLOAD",
+        "POLICY_OVERRIDES_ENABLED",
+        "POLICY_OVERRIDE_REQUIRE_REASON",
+        "POLICY_OVERRIDE_DEFAULT_EXPIRY_DAYS"
+      ]);
       const cloudWatchLogging = {
         retention: "1 month"
       };
@@ -142,7 +163,9 @@ export function createAnvilSstConfig(
         environment: {
           ...commonServiceEnvironment,
           ...llmReviewEnvironment,
+          ...policyEnvironment,
           PUBLIC_BASE_URL: publicBaseUrl,
+          ANVIL_ADMIN_TOKEN: adminToken.value,
           ADMIN_TOKEN: adminToken.value
         },
         logging: cloudWatchLogging,
@@ -179,7 +202,9 @@ export function createAnvilSstConfig(
         environment: {
           ...commonServiceEnvironment,
           ...llmReviewEnvironment,
+          ...policyEnvironment,
           ANVIL_API_BASE_URL: adminApiBaseUrl,
+          ANVIL_ADMIN_TOKEN: adminToken.value,
           ADMIN_TOKEN: adminToken.value
         },
         logging: cloudWatchLogging,
@@ -202,6 +227,7 @@ export function createAnvilSstConfig(
         environment: {
           ...commonServiceEnvironment,
           ...llmReviewEnvironment,
+          ...policyEnvironment,
           LLM_REVIEW_API_KEY: llmReviewApiKey.value
         },
         logging: cloudWatchLogging,
@@ -282,4 +308,11 @@ function validatePublicBaseUrl(value: string) {
 function optionalEnv(value: string | undefined) {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
+}
+
+function optionalEnvironment(env: Pick<NodeJS.ProcessEnv, string>, names: string[]) {
+  return Object.fromEntries(names.flatMap((name) => {
+    const value = optionalEnv(env[name]);
+    return value ? [[name, value]] : [];
+  }));
 }
