@@ -12,6 +12,6 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
-    "sst": "^3.17.10"
+    "sst": "^4.14.3"
   }
 }
