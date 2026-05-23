@@ -177,6 +177,24 @@ Do not use overrides as a junk drawer for making CI green. That drawer fills up 
 
 ## Reports
 
+Analysis reports are available through the Admin API:
+
+```http
+GET /api/reports?limit=100
+GET /api/reports?packageName=react&version=18.3.1
+GET /api/reports/:packageName/:version
+```
+
+The list route is useful for smokes and operator checks after worker queue processing. The package route returns the latest matching immutable report identity, with optional `integrity`, `shasum`, and `analyser` query filters.
+
+CLI example:
+
+```bash
+ANVIL_ADMIN_URL=http://localhost:3000 \
+ANVIL_ADMIN_TOKEN=local-dev-token \
+  anvil reports react@18.3.1
+```
+
 Node Base reports can be submitted to Admin so reviewers can inspect local install evidence with registry decisions.
 
 CLI example:
