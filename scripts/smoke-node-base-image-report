@@ -13,6 +13,11 @@ REPORT_DIR="$(mktemp -d)"
 REPORT_PATH="$REPORT_DIR/network-report.json"
 trap 'rm -rf "$REPORT_DIR"' EXIT
 
+# The image runs as the non-root node user. Linux bind mounts preserve the
+# mktemp directory's 0700 permissions, so make the scratch directory writable
+# before mounting it into the container.
+chmod 0777 "$REPORT_DIR"
+
 cat > "$REPORT_PATH" <<JSON
 {
   "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
