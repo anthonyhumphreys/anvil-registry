@@ -1,0 +1,143 @@
+name: Anvil Registry CI
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/anvil-registry-ci.yml"
+      - "apps/**"
+      - "docs/anvil-registry-spec.md"
+      - "infra/docker/**"
+      - "infra/sst/**"
+      - "package.json"
+      - "packages/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "scripts/smoke-analysis-queue"
+      - "scripts/smoke-llm-review"
+      - "scripts/smoke-node-base-report"
+      - "scripts/smoke-npm-clients"
+      - "scripts/smoke-scoped-upstream.ts"
+      - "turbo.json"
+      - "tsconfig.base.json"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/anvil-registry-ci.yml"
+      - "apps/**"
+      - "docs/anvil-registry-spec.md"
+      - "infra/docker/**"
+      - "infra/sst/**"
+      - "package.json"
+      - "packages/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "scripts/smoke-analysis-queue"
+      - "scripts/smoke-llm-review"
+      - "scripts/smoke-node-base-report"
+      - "scripts/smoke-npm-clients"
+      - "scripts/smoke-scoped-upstream.ts"
+      - "turbo.json"
+      - "tsconfig.base.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: anvil-registry-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: true
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
+
+jobs:
+  validate:
+    name: Validate registry workspace
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Show tool versions
+        run: |
+          node --version
+          pnpm --version
+          docker version
+          docker compose version
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Typecheck smoke scripts
+        run: pnpm typecheck:smokes
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Validate Docker Compose config
+        run: docker compose -f infra/docker/docker-compose.yml config
+
+      - name: Start local registry stack
+        run: docker compose -f infra/docker/docker-compose.yml up -d --build gateway worker admin
+
+      - name: Smoke npm clients through gateway
+        run: pnpm smoke:clients
+
+      - name: Smoke analysis queue processing
+        run: pnpm smoke:analysis
+
+      - name: Smoke Node Base report submission
+        run: pnpm smoke:node-base-report
+
+      - name: Smoke LLM review processing
+        run: pnpm smoke:llm-review
+
+      - name: Validate SST migration command
+        run: pnpm --filter @anvilstack/infra-sst migrate:run -- --dry-run
+
+      - name: Validate SST deploy preflight
+        run: PUBLIC_BASE_URL=https://npm.anvil-ci.test pnpm sst:preflight
+
+      - name: Smoke scoped upstream routing
+        run: pnpm smoke:scoped-upstream
+
+      - name: Capture Docker Compose logs
+        if: failure()
+        run: |
+          mkdir -p .ci-artifacts
+          docker compose -f infra/docker/docker-compose.yml ps > .ci-artifacts/docker-compose-ps.txt || true
+          docker compose -f infra/docker/docker-compose.yml logs --no-color > .ci-artifacts/docker-compose.log || true
+
+      - name: Upload failure logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: anvil-registry-ci-logs
+          path: .ci-artifacts
+          if-no-files-found: ignore
+
+      - name: Stop local registry stack
+        if: always()
+        run: docker compose -f infra/docker/docker-compose.yml down --volumes --remove-orphans
